@@ -75,7 +75,10 @@ namespace tio
 		// can happen if client send binary data
 		//
 		if(str.empty())
+		{
+			ReadCommand();
 			return;
+		}
 
 		//
 		// delete last \r if any

@@ -1179,7 +1179,11 @@ namespace logdb
 
 				DWORD index = GetByIndex(tableInfo, a, &keyFromDb, NULL, NULL);
 
-				ASSERT(index == a);
+				ASSERT(index == a && keyFromDb.GetSize() == key.GetSize());
+
+				// should not happen
+				if(keyFromDb.GetSize() != key.GetSize())
+					continue;
 
 				bool isEqual = (memcmp(key.GetBuffer(), keyFromDb.GetBuffer(), key.GetSize()) == 0);
 
@@ -1287,6 +1291,8 @@ namespace logdb
 
 			const LDB_LOG_RECORD& logRecord = tableInfo->records[index];
 
+			if(key && logRecord.key.dataSize)
+				ReadField(&logRecord.key, key);
 			if(value && logRecord.value.dataSize)
 				ReadField(&logRecord.value, value);
 			if(metadata && logRecord.metadata.dataSize)

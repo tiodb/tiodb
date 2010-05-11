@@ -48,6 +48,8 @@ namespace tio
 			throw std::invalid_argument("not a command");
 		}
 
+		source_ = source;
+
 		command_ = params_[0];
 		params_.erase(params_.begin());
 	}
@@ -55,6 +57,11 @@ namespace tio
 	const string& Command::GetCommand() const
 	{
 		return command_;
+	}
+
+	const string& Command::GetSource() const
+	{
+		return source_;
 	}
 
 	const vector<string>& Command::GetParameters() const

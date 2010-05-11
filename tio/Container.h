@@ -386,10 +386,11 @@ namespace tio
 				size_t len = strlen(v) + 1;
 				sz_ = new char[len];
 				memcpy(const_cast<char*>(sz_), v, len);
-				bufferOwnership_ = true;
 			}
 			else
 				sz_ = v;
+
+			bufferOwnership_ = copy;
 			
 			type_ = Sz;
 		}

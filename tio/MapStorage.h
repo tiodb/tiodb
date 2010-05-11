@@ -21,7 +21,7 @@ private:
 	{
 		if(key.GetDataType() == TioData::Int)
 		{
-			int offset = key.AsInt();
+			int offset = NormalizeIndex(key.AsInt(), data_.size());
 
 			if(static_cast<size_t>(offset) > data_.size() - 1)
 				throw std::invalid_argument("invalid offset");

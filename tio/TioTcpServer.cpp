@@ -59,7 +59,7 @@ namespace tio
 #ifdef _DEBUG
 		cout << "disconnect" << endl;
 #endif
-		metaContainers_.sessions->Delete((int)i->get(), TIONULL, TIONULL);
+		metaContainers_.sessions->Delete(lexical_cast<string>((int)client.get()), TIONULL, TIONULL);
 		sessions_.erase(i);
 
 #if 0
@@ -117,6 +117,10 @@ namespace tio
 		// sessions
 		//
 		metaContainers_.sessions = containerManager_.CreateContainer("volatile/map", "meta/sessions");
+
+		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile/map", "meta/session_last_command");
+
+
 	}
 
 	Auth& TioTcpServer::GetAuth()
@@ -177,6 +181,29 @@ namespace tio
 		{
 			MakeAnswer(error, answer, "invalid command");
 		}
+
+		if(*moreDataSize == 0)
+		{
+			char buffer[sizeof("0xFFFFFFFFFFFFFFFF")];
+
+			*buffer = '\0';
+			
+			//
+			// TODO: not 64bits compatible, assuming pointer is 4 bytes long
+			//
+			itoa(reinterpret_cast<int>(session.get()), buffer, 16);
+
+			//
+			// TODO: data on the metadata field will be truncated if it's binary,
+			// we're handling it as string
+			//
+			metaContainers_.sessionLastCommand->Set(
+				TioData(buffer, false),
+				TioData(cmd.GetSource().c_str(), false),
+				cmd.GetDataBuffer()->GetSize() ? 
+					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :
+					TIONULL);
+		}
 	}
 
 	//
@@ -187,9 +214,9 @@ namespace tio
 		dispatchMap_["ping"] = boost::bind(&TioTcpServer::OnCommand_Ping, this, _1, _2, _3, _4);
 		dispatchMap_["ver"] = boost::bind(&TioTcpServer::OnCommand_Version, this, _1, _2, _3, _4);
 		
-		dispatchMap_["create_container"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["open_container"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["close_container"] = boost::bind(&TioTcpServer::OnCommand_CloseContainer, this, _1, _2, _3, _4);
+		dispatchMap_["create"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
+		dispatchMap_["open"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
+		dispatchMap_["close"] = boost::bind(&TioTcpServer::OnCommand_CloseContainer, this, _1, _2, _3, _4);
 
 		dispatchMap_["delete_container"] = boost::bind(&TioTcpServer::OnCommand_DeleteContainer, this, _1, _2, _3, _4);
 
@@ -688,10 +715,9 @@ namespace tio
 
 	void TioTcpServer::OnCommand_CreateContainer_OpenContainer(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		BOOST_ASSERT(cmd.GetCommand() == "create_container" || cmd.GetCommand() == "open_container");
 		//
-		// create_container name type [params]
-		// open_container name [type] [params]
+		// create name type [params]
+		// open name [type] [params]
 		//
 		if(!CheckParameterCount(cmd, 1, at_least))
 		{
@@ -709,7 +735,7 @@ namespace tio
 		{
 			shared_ptr<ITioContainer> container;
 
-			if(cmd.GetCommand() == "create_container")
+			if(cmd.GetCommand() == "create")
 			{
 				if(!CheckCommandAccess(cmd.GetCommand(), answer, session))
 					return;

@@ -14,12 +14,14 @@ namespace tio
 	private:
 		Parameters params_;
 		string command_;
+		string source_;
 		const char* separators_;
 		shared_ptr<tio::Buffer> data_;
 
 	public:
 		Command();
 		void Parse(const char* source);
+		const string& GetSource() const;
 		const string& GetCommand() const;
 		const Parameters& GetParameters() const;
 

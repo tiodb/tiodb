@@ -27,6 +27,7 @@ namespace tio
 		{
 			shared_ptr<ITioContainer> users;
 			shared_ptr<ITioContainer> sessions;
+			shared_ptr<ITioContainer> sessionLastCommand;
 		};
 
 		struct KeyPopperInfo

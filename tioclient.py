@@ -19,8 +19,8 @@ class RemoteContainer(object):
         self.type = type
         self.name = name
         
-        self.__dict__['Insert'] = functools.partial(self.send_data_command, 'insert')
-        self.__dict__['Set'] = functools.partial(self.send_data_command, 'set')
+        self.__dict__['insert'] = functools.partial(self.send_data_command, 'insert')
+        self.__dict__['set'] = functools.partial(self.send_data_command, 'set')
 
         self.__dict__['SetProperty'] = functools.partial(self.send_data_command, 'set_property')
         self.__dict__['GetProperty'] = functools.partial(self.send_data_command, 'get_property')
@@ -58,7 +58,7 @@ class RemoteContainer(object):
         else:
             value, metadata = valueOrValueAndMetadata, None
             
-        return self.Set(key, value, metadata)
+        return self.set(key, value, metadata)
 
     def extend(self, iterable):
         for x in iterable:
@@ -391,13 +391,13 @@ class TioServerConnection(object):
         return RemoteContainer(self, self.SendCommand(command, name if type == '' else name + ' ' + type)['handle'], type, name)
 
     def CloseContainer(self, handle):
-        self.SendCommand('close_container', handle)
+        self.SendCommand('close', handle)
 
     def CreateContainer(self, name, type):
-        return self.__CreateOrOpenContainer('create_container', name, type)
+        return self.__CreateOrOpenContainer('create', name, type)
 
     def OpenContainer(self, name, type = ''):
-        return self.__CreateOrOpenContainer('open_container', name, type)
+        return self.__CreateOrOpenContainer('open', name, type)
 
 class FieldParser:
     def __init__(self):
