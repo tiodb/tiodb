@@ -124,6 +124,7 @@ class TioServerConnection(object):
         self.poppers = {}
         self.dontWaitForAnswers = False
         self.pendingAnswerCount = 0
+        self.containers = {}
 
         self.log_sends = False        
 
@@ -152,18 +153,18 @@ class TioServerConnection(object):
                 key = e.data[0]
                 f = self.poppers[int(handle)]['wnp_key'][key].pop()
                 if f:
-                    f(e.name, *e.data)
+                    f(self.containers[e.handle], e.name, *e.data)
             elif e.name == 'wnp_next':
                 f = self.poppers[int(handle)]['wnp_next'].pop()
                 if f:
-                    f(e.name, *e.data)
+                    f(self.containers[e.handle], e.name, *e.data)
             else:
                 handle = int(handle)
                 sinks = self.sinks[handle].get(e.name)
                 if sinks is None:
                     sinks = self.sinks[handle].get('*', [])
                 for sink in sinks:
-                    sink(e.name, *e.data)
+                    sink(self.containers[e.handle], e.name, *e.data)
            
 
         self.pendingEvents[handle] = []            
@@ -222,7 +223,7 @@ class TioServerConnection(object):
                 event = Event()
                 
                 currentParam += 1
-                event.handle = params[currentParam]
+                event.handle = int(params[currentParam])
 
                 currentParam += 1
                 event.name = params[currentParam]
@@ -381,15 +382,15 @@ class TioServerConnection(object):
     def Connect(self, host, port):
         self.s.connect((host, port))
 
-
     def Disconnect(self):
         self.s.close()
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
-
     def __CreateOrOpenContainer(self, command, name, type):
         handle = self.SendCommand(command, name if type == '' else name + ' ' + type)['handle']
-        return RemoteContainer(self, handle, type, name)
+        container = RemoteContainer(self, handle, type, name)
+        self.containers[int(handle)] = container
+        return container
 
     def CloseContainer(self, handle):
         self.SendCommand('close', handle)
@@ -537,8 +538,8 @@ def DoTest():
     man = Connect('tio://127.0.0.1:6666')
     container = man.CreateContainer('name', 'volatile/list')
     
-    def f(event_name, *args):
-        print((event_name, args))
+    def f(container, event_name, *args):
+        print(container, event_name, args)
 
     container.subscribe(f)
 
