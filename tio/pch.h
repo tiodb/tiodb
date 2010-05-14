@@ -5,8 +5,8 @@
 #define _SCL_SECURE_NO_WARNINGS
 //#define _SECURE_SCL 0
 
-
-#define BOOST_ALL_DYN_LINK
+//#define BOOST_ALL_DYN_LINK
+//#define BOOST_ALL_NO_LIB
 
 #define _WIN32_WINNT 0x0500
 #define WIN32_LEAN_AND_MEAN

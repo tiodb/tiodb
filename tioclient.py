@@ -1,3 +1,4 @@
+from __future__ import print_function
 import socket
 import functools
 from cStringIO import StringIO
@@ -10,7 +11,7 @@ class TestSink:
         return functools.partial(self.EventHandler, name)
     
     def EventHandler(self, eventName, key, value, metadata):
-        print '%s - %s, %s, %s' % (eventName, key, value, metadata)
+        print ('%s - %s, %s, %s' % (eventName, key, value, metadata))
 
 class RemoteContainer(object):
     def __init__(self, manager, handle, type, name):
@@ -22,8 +23,8 @@ class RemoteContainer(object):
         self.__dict__['insert'] = functools.partial(self.send_data_command, 'insert')
         self.__dict__['set'] = functools.partial(self.send_data_command, 'set')
 
-        self.__dict__['SetProperty'] = functools.partial(self.send_data_command, 'set_property')
-        self.__dict__['GetProperty'] = functools.partial(self.send_data_command, 'get_property')
+        self.__dict__['set_property'] = functools.partial(self.send_data_command, 'set_property')
+        self.__dict__['get_property'] = functools.partial(self.send_data_command, 'get_property')
 
     def __repr__(self):
         return '<tioclient.RemoteContainer name="%s", type="%s">' % (self.name, self.type)
@@ -92,8 +93,8 @@ class RemoteContainer(object):
     def clear(self):
         return self.manager.SendCommand('clear', self.handle)
     
-    def subscribe(self, sink, start = None):
-        self.manager.Subscribe(self.handle, sink, start)
+    def subscribe(self, sink, event_filter='*', start = None):
+        self.manager.Subscribe(self.handle, sink, event_filter, start)
 
     def unsubscribe(self, sink):
         self.manager.Unsubscribe(self.handle)
@@ -113,15 +114,6 @@ class RemoteContainer(object):
     def wait_and_pop_next(self, sink):
         return self.manager.WaitAndPop(self.handle, 'wnp_next', sink)
   
-'''
-class Answer:
-    def __init__(self):
-        self.isAnswer = False
-        self.type = None
-        self.result = None
-        self.parameterType = None
-        self.parameter = None
-'''
 
 class TioServerConnection(object):
     def __init__(self, host = None, port = None):
@@ -159,14 +151,20 @@ class TioServerConnection(object):
             if e.name == 'wnp_key':
                 key = e.data[0]
                 f = self.poppers[int(handle)]['wnp_key'][key].pop()
+                if f:
+                    f(e.name, *e.data)
             elif e.name == 'wnp_next':
                 f = self.poppers[int(handle)]['wnp_next'].pop()
+                if f:
+                    f(e.name, *e.data)
             else:
-                sink = self.sinks[handle]
-                f = getattr(sink, e.name)
-
-            if f:
-                f(*e.data)
+                handle = int(handle)
+                sinks = self.sinks[handle].get(e.name)
+                if sinks is None:
+                    sinks = self.sinks[handle].get('*', [])
+                for sink in sinks:
+                    sink(e.name, *e.data)
+           
 
         self.pendingEvents[handle] = []            
 
@@ -292,12 +290,14 @@ class TioServerConnection(object):
         halfCommand = ' '.join( ('set_permission', objectType, objectName, command, allowOrDeny) )
         self.SendCommand(halfCommand + (' ' + user if user != '' else ''))
 
-    def Subscribe(self, handle, sink, start = None):
+    def Subscribe(self, handle, sink, filter = '*', start = None):
         param = str(handle)
         if not start is None:
             param += ' ' + str(start)
+        
+        #self.sinks[handle][filter](event_name, key, value, metadata)
+        self.sinks.setdefault(int(handle), {}).setdefault(filter, []).append(sink)
         self.SendCommand('subscribe', param)
-        self.sinks[handle] = sink
 
     def WaitAndPop(self, handle, wnp_type, sink, key = None):
         param = str(handle)
@@ -340,7 +340,7 @@ class TioServerConnection(object):
         self.s.sendall(buffer)
 
         if self.log_sends:
-            print buffer,
+            print(buffer)
 
         if self.dontWaitForAnswers:
             self.pendingAnswerCount += 1
@@ -374,7 +374,7 @@ class TioServerConnection(object):
             buffer += metadata[0] + '\r\n'
 
         if self.log_sends:
-            print buffer,
+            print(buffer)
 
         return self.SendCommand(buffer)
 
@@ -388,7 +388,8 @@ class TioServerConnection(object):
         
 
     def __CreateOrOpenContainer(self, command, name, type):
-        return RemoteContainer(self, self.SendCommand(command, name if type == '' else name + ' ' + type)['handle'], type, name)
+        handle = self.SendCommand(command, name if type == '' else name + ' ' + type)['handle']
+        return RemoteContainer(self, handle, type, name)
 
     def CloseContainer(self, handle):
         self.SendCommand('close', handle)
@@ -432,27 +433,6 @@ class FieldParser:
 
         self.values[key] = value
 
-def DoTest():
-    man = RemoteContainerManager()
-    
-    man.Connect('localhost', 6666)
-    container = man.CreateContainer('name', 'volatile/list')
-
-    container.Subscribe(TestSink())
-
-    for x in range(100):
-        print x
-        container.PushBack(None, 10, 'metadata')
-        container.Set(0, 'Rodrigo Strauss')
-        container.Insert(0, 'test')
-        container.PushFront(None, 12334567)
-
-        key, value, metadata = container.Get(0)        
-
-        man.DispatchAllEvents();    
-
-    return
-
 def SpeedTest(func, count, bytes, useKey = False):
 
     v = '*' * bytes
@@ -465,7 +445,7 @@ def SpeedTest(func, count, bytes, useKey = False):
         func(key=str(x) if useKey else None, value=v)
         if x % log_step == 0:
             d = datetime.now() - mark
-            print "%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0))
+            print("%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)))
             mark = datetime.now()
 
        
@@ -492,14 +472,14 @@ def MasterSpeedTest():
         type = test['type']
         hasKey = test['hasKey']
         ds = man.CreateContainer(namePerfix + type, type)
-        print type
+        print(type)
         result = SpeedTest(ds.Set if hasKey else ds.PushBack, count, bytes, hasKey)
 
-        print '%s: %f msg/s' % (type, result)
+        print('%s: %f msg/s' % (type, result))
 
 def TestWaitAndPop():
     def f(key, value, metadata):
-        print (key, value, metadata)
+        print ((key, value, metadata))
         
     man = TioServerConnection('localhost', 6666)
     container = man.CreateContainer('abc', 'volatile/vector')
@@ -539,7 +519,7 @@ def ParseUrl(url):
         # data container name is optional
         return (host, port, parts[1]) if len(parts) == 2 else (host, port, None)
     except Exception, ex:
-        print ex
+        print(ex)
         raise Exception ('Not supported. Format must be "tio://host:port/[container_name]"')
 
 def OpenByUrl(url):
@@ -552,13 +532,36 @@ def Connect(url):
         raise Exception('container specified, you must inform a url with just the server/port')
     
     return TioServerConnection(address, port)
-        
+    
+def DoTest():
+    man = Connect('tio://127.0.0.1:6666')
+    container = man.CreateContainer('name', 'volatile/list')
+    
+    def f(event_name, *args):
+        print((event_name, args))
+
+    container.subscribe(f)
+
+    for x in range(1):
+        print(x)
+        container.push_back(10, 'metadata')
+        container[0] = 'Rodrigo Strauss'
+        container.insert(0, 'test')
+        container.push_front(value=12334567)
+
+        key, value, metadata = container.get(0, withKeyAndMetadata=True)        
+
+        man.DispatchAllEvents();
+
+    return
+
+       
 if __name__ == '__main__':
-    #DoTest()
+    DoTest()
     #BovTest()
     #BdbTest()
-    ParseUrl('tio://127.0.0.1:6666/xpto/asas')
-    MasterSpeedTest()
+    #ParseUrl('tio://127.0.0.1:6666/xpto/asas')
+    #MasterSpeedTest()
     #TestOrderManager()
     #TioConnectionsManager().ParseUrl('tio://localhost:6666')
     #TestWaitAndPop()
