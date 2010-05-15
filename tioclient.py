@@ -81,6 +81,9 @@ class RemoteContainer(object):
         key, value, metadata = self.send_data_command('pop_front', None, None, None)
         return value if not withKeyAndMetadata else (key, value, metadata)    
 
+    def append(self, value, metadata=None):
+        return self.push_back(value, metadata)
+    
     def push_back(self, value, metadata=None):
         return self.send_data_command('push_back', None, value, metadata)
 
@@ -238,9 +241,12 @@ class TioServerConnection(object):
 
     def RunLoop(self):
         while 1:
-            self.DispatchAllEvents()
-            self.ReceiveAnswer(False)
-            
+            self.Dispatch()
+
+    def Dispatch(self):
+        self.DispatchAllEvents()
+        self.ReceiveAnswer(False)
+                    
     def HandleEvent(self, event):
         self.pendingEvents.setdefault(event.handle, []).append(event)
             
@@ -300,6 +306,10 @@ class TioServerConnection(object):
         self.sinks.setdefault(int(handle), {}).setdefault(filter, []).append(sink)
         self.SendCommand('subscribe', param)
 
+    def Unsubscribe(self, handle):
+        self.SendCommand('unsubscribe', str(handle))
+        del self.sinks[handle]        
+
     def WaitAndPop(self, handle, wnp_type, sink, key = None):
         param = str(handle)
 
@@ -313,12 +323,7 @@ class TioServerConnection(object):
             self.poppers.setdefault(int(handle), {}).setdefault('wnp_key', {}).setdefault(key, []).append(sink)
         else:
             raise Exception('invalid wait and pop type')
-            
-
-    def Unsubscribe(self, handle):
-        self.SendCommand('unsubscribe', str(handle))
-        del self.sinks[handle]
-        
+                    
     def GetFieldSpec(self, fieldName, fieldDataAndType):
         if fieldDataAndType:
             return ' ' + fieldName + ' ' + fieldDataAndType[1] + ' ' + str(len(fieldDataAndType[0]))
@@ -523,9 +528,13 @@ def ParseUrl(url):
         print(ex)
         raise Exception ('Not supported. Format must be "tio://host:port/[container_name]"')
 
-def OpenByUrl(url):
+def OpenByUrl(url, create_container_type=None):
     address, port, container = ParseUrl(url)
-    return TioServerConnection(address, port).OpenContainer(container)
+    server = TioServerConnection(address, port)
+    if create_container_type:
+        return server.CreateContainer(container, create_container_type)
+    else:
+        return server.OpenContainer(container)
 
 def Connect(url):
     address, port, container = ParseUrl(url)
@@ -538,10 +547,7 @@ def DoTest():
     man = Connect('tio://127.0.0.1:6666')
     container = man.CreateContainer('name', 'volatile/list')
     
-    def f(container, event_name, *args):
-        print(container, event_name, args)
-
-    container.subscribe(f)
+    container.subscribe(print)
 
     for x in range(1):
         print(x)
@@ -559,11 +565,9 @@ def DoTest():
        
 if __name__ == '__main__':
     DoTest()
-    #BovTest()
     #BdbTest()
     #ParseUrl('tio://127.0.0.1:6666/xpto/asas')
     #MasterSpeedTest()
     #TestOrderManager()
     #TioConnectionsManager().ParseUrl('tio://localhost:6666')
     #TestWaitAndPop()
-

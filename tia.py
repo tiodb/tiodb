@@ -121,9 +121,9 @@ def open_formatter(f, format, is_stdstream = False):
     # not format specified, we'll assume separated by \n 
     return Separated(f, '\n', block_size)
 
-def open_stream(url, format, mode):    
+def open_stream(url, format, mode, create_container_type):    
     if url.startswith('tio://'):
-        return TioEnumerator(tioclient.OpenByUrl(url))
+        return TioEnumerator(tioclient.OpenByUrl(url, create_container_type))
 
     # From file. Need to check the format
     f = file(url, mode)
@@ -146,16 +146,16 @@ class TioEnumerator(object):
         if not isinstance(data, basestring):
             raise Exception('tia can only write strings to tio containers')
             
-        self.container.PushBack(key=None, value=data, metadata=None)
+        self.container.append(data)
 
         if self.manager.pendingAnswerCount >= self.receive_answer_step:
             self.manager.ReceivePendingAnswers()
 
     # TODO: it's slow as hell. Change to subscribe would make it better
     def __iter__(self):
-        count = self.container.GetCount()
+        count = len(self.container)
         for x in xrange(count):
-            key, value, metadata = self.container.Get(x)
+            key, value, metadata = self.container[x]
             if not isinstance(value, basestring):
                 raise Exception('tia supports only string values from tio')
             yield value
@@ -185,7 +185,10 @@ def SetupCommandLine():
                       help="resume load. Skip N input records, where N = destination record count")
 
     parser.add_option("-g", "--ignore-not-empty", action="store_true", dest="ignore_non_empty", default=False,
-                      help="write to tio container even if it's not empty. The default action is abort")     
+                      help="write to tio container even if it's not empty. The default action is abort")
+
+    parser.add_option("-c", "--create-container", action="store", dest="create_container_type", default='',
+                      help="create the Tio containers if they don't exist, using the informed type")         
 
     return parser
     
@@ -200,12 +203,12 @@ def main():
     #    return -1
 
     if options.input:
-        input = open_stream(options.input, options.input_format, 'rb')
+        input = open_stream(options.input, options.input_format, 'rb', options.create_container_type)
     else:
         input = open_formatter(sys.stdin, options.input_format, is_stdstream = True)
 
     if options.output:
-        output = open_stream(options.output, options.output_format, 'wb')
+        output = open_stream(options.output, options.output_format, 'wb', options.create_container_type)
     else:
         output = open_formatter(sys.stdout, options.output_format, is_stdstream = True)
 
@@ -221,9 +224,9 @@ def main():
             print('ERROR: option resume requires the output to be a tio container')
             return -1
 
-        skip_until = container.GetCount()
+        skip_until = len(container)
     # if it's a resume operation, we'll not check if it's non empty.
-    elif not options.ignore_non_empty and container and container.GetCount() != 0:
+    elif not options.ignore_non_empty and container and len(container) != 0:
         print ('ERROR: destination container is not empty. Use -g (--ignore-non-empty) or -r (--resume)')
         return -1
 
