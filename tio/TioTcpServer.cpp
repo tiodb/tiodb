@@ -64,7 +64,7 @@ namespace tio
 
 #if 0
 		//
-		// remove all 'wait and pop next' reference to this session
+		// remove all 'wait and pop next' references to this session
 		//
 		for(PoppersMap::iterator i = nextPoppers_.begin() ; i != nextPoppers_.end() ; ++i)
 		{
@@ -184,21 +184,17 @@ namespace tio
 
 		if(*moreDataSize == 0)
 		{
-			char buffer[sizeof("0xFFFFFFFFFFFFFFFF")];
-
-			*buffer = '\0';
-			
 			//
 			// TODO: not 64bits compatible, assuming pointer is 4 bytes long
 			//
-			itoa(reinterpret_cast<int>(session.get()), buffer, 16);
+			string buffer = lexical_cast<string>(reinterpret_cast<int>(session.get()));
 
 			//
 			// TODO: data on the metadata field will be truncated if it's binary,
 			// we're handling it as string
 			//
 			metaContainers_.sessionLastCommand->Set(
-				TioData(buffer, false),
+				TioData(buffer),
 				TioData(cmd.GetSource().c_str(), false),
 				cmd.GetDataBuffer()->GetSize() ? 
 					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :
@@ -299,7 +295,7 @@ namespace tio
 		else
 		{
 			//
-			// if there's other poppers (or no data), will go to the queue
+			// if there are other poppers (or no data), will go to the queue
 			//
 			q.push_back(NextPopperInfo(session, handle));
 			MakeAnswer(success, answer);
@@ -586,8 +582,7 @@ namespace tio
 	{
 		//
 		// examples:
-		// set_permission book running.book_buy.ibov.PETR4 __default__ deny
-		// set_permission persistent/map traders push_back allow user_name
+		// set_permission persistent/map my_map push_back allow user_name
 		// set_permission volatile/vector object_name * allow user_name
 		//
 		if(!CheckParameterCount(cmd, 4, exact) && !CheckParameterCount(cmd, 5, exact))
@@ -1059,7 +1054,7 @@ namespace tio
 			return;
 
 		//
-		// anyone one waiting this key?
+		// anyone one waiting for this key?
 		//
 		KeyPoppersByKey& thisKeyPoppers = i->second;
 		KeyPoppersByKey::iterator iByKey = thisKeyPoppers.find(key.AsSz());

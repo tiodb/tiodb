@@ -366,12 +366,21 @@ namespace tio
 		//
 		// if it's empty or no numeric, let the container deal with it
 		//
-		if(start.empty() || std::count_if(start.begin(), start.end(), &isdigit) != start.size())
+		if(!start.empty())
 		{
-			subscriptionInfo->cookie = container->Subscribe(
-				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), start);
+		try
+		{
+		lexical_cast<unsigned int>(start);
 
-			return;
+		subscriptionInfo->cookie = container->Subscribe(
+		boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), start);
+
+		return;
+		}
+		catch(std::exception&)
+		{
+
+		}
 		}
 
 		//

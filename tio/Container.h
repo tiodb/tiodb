@@ -25,7 +25,7 @@ namespace tio
 	};
 
 	//
-	// this class is used to emulate a tuple/pair attribution, somewhat like python.
+	// this class is used to emulate a tuple/pair attribution, like python.
 	// instead of
 	// 
 	// int a, b;

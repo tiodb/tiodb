@@ -142,7 +142,7 @@ public:
 		OBJECT::CommandMap::const_iterator icmd;
 
 		//
-		// we support the "*" for commands
+		// we support "*" for commands
 		//
 		if(obj.commands.size() == 1 && obj.commands.begin()->first == "*")
 			icmd = obj.commands.begin();

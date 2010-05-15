@@ -221,9 +221,9 @@ namespace MemoryStorage
 					startIndex = GetRecordNumber(lexical_cast<int>(start));
 
 					//
-					// if client asks for start at index 0, it's never
+					// if client asks to start at index 0, it's never
 					// an error, even if the vector is empty. So, we'll
-					// not test out of bound if zero
+					// not test out of bounds if zero
 					//
 					if(startIndex != 0)
 						data_.at(startIndex); 

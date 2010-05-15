@@ -377,7 +377,7 @@ namespace tio {
 				{
 					//
 					// map behavior is the opposite of vector
-					// send all record on subscription by default
+					// send all records on subscription by default
 					//
 					if(start == "__none__")
 					{

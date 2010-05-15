@@ -16,7 +16,7 @@
 #pragma warning(disable : 4100) // unreferenced local parameter
 
 //
-// lexical_cast is warning this every time, it's pissing me off
+// lexical_cast is triggering this warning every time, it's pissing me off
 //
 #pragma warning(disable: 4267)
 //
