@@ -244,7 +244,7 @@ public:
 	{
 		data_.clear();
 
-		dispatcher_.RaiseEvent("clear", NULL, NULL, NULL); 
+		dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL); 
 	}
 
 	virtual shared_ptr<ITioResultSet> Query(const TioData& query)

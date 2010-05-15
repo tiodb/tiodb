@@ -516,7 +516,7 @@ namespace tio { namespace BdbStorage
 
 			Commit();
 
-			dispatcher_.RaiseEvent("push_front", NULL, NULL, NULL);
+			dispatcher_.RaiseEvent("push_front", TIONULL, TIONULL, TIONULL);
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)
