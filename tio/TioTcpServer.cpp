@@ -59,7 +59,7 @@ namespace tio
 #ifdef _DEBUG
 		cout << "disconnect" << endl;
 #endif
-		metaContainers_.sessions->Delete(lexical_cast<string>((int)client.get()), TIONULL, TIONULL);
+		metaContainers_.sessions->Delete(lexical_cast<string>(client->GetID()), TIONULL, TIONULL);
 		sessions_.erase(i);
 
 #if 0
@@ -86,7 +86,8 @@ namespace tio
 	TioTcpServer::TioTcpServer(ContainerManager& containerManager, asio::io_service& io_service, tcp::endpoint& endpoint) :
 		containerManager_(containerManager),
 		acceptor_(io_service, endpoint),
-		io_service_(io_service)
+		io_service_(io_service),
+		lastID_(0)
 	{
 		LoadDispatchMap();
 		InitializeMetaContainers();
@@ -130,7 +131,7 @@ namespace tio
 	
 	void TioTcpServer::DoAccept()
 	{
-		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this));
+		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, ++lastID_));
 
 		acceptor_.async_accept(session->GetSocket(),
 			boost::bind(&TioTcpServer::OnAccept, this, session, asio::placeholders::error));
@@ -145,7 +146,7 @@ namespace tio
 
 		sessions_.insert(session);
 
-		metaContainers_.sessions->Insert(lexical_cast<string>((int)session.get()), TIONULL, TIONULL);
+		metaContainers_.sessions->Insert(lexical_cast<string>(session->GetID()), TIONULL, TIONULL);
 
 		session->OnAccept();
 
@@ -184,17 +185,8 @@ namespace tio
 
 		if(*moreDataSize == 0)
 		{
-			//
-			// TODO: not 64bits compatible, assuming pointer is 4 bytes long
-			//
-			string buffer = lexical_cast<string>(reinterpret_cast<int>(session.get()));
-
-			//
-			// TODO: data on the metadata field will be truncated if it's binary,
-			// we're handling it as string
-			//
 			metaContainers_.sessionLastCommand->Set(
-				TioData(buffer),
+				lexical_cast<string>(session->GetID()),
 				TioData(cmd.GetSource().c_str(), false),
 				cmd.GetDataBuffer()->GetSize() ? 
 					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :

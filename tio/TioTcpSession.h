@@ -21,6 +21,7 @@ namespace tio
 		public boost::noncopyable
 	{
 	private:
+		unsigned int id_;
 		tcp::socket socket_;
 		TioTcpServer& server_;
 
@@ -66,13 +67,15 @@ namespace tio
 
 	public:
 
-		TioTcpSession(asio::io_service& io_service, TioTcpServer& server);
+		TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id);
 		~TioTcpSession();
 		void LoadDispatchMap();
 
 		tcp::socket& GetSocket();
 		void OnAccept();
 		void ReadCommand();
+
+		unsigned int GetID();
 
 		void OnReadCommand(const error_code& err, size_t read);
 		void OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read);

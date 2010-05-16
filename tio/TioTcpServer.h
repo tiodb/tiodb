@@ -72,6 +72,8 @@ namespace tio
 			}
 		};
 
+		unsigned int lastID_;
+
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;
 

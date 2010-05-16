@@ -22,11 +22,12 @@ namespace tio
 	using namespace boost::asio::ip;
 
 	
-	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server) :
+	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
 		socket_(io_service),
 		server_(server),
 		lastHandle_(0),
-        pendingSendSize_(0)
+        pendingSendSize_(0),
+		id_(id)
 	{
 		return;
 	}
@@ -35,6 +36,12 @@ namespace tio
 	{
 		BOOST_ASSERT(subscriptions_.empty());
 		return;
+	}
+
+	unsigned int TioTcpSession::GetID()
+	{
+		return id_;
+
 	}
 
 	tcp::socket& TioTcpSession::GetSocket()
