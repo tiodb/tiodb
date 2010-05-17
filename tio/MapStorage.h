@@ -1,0 +1,228 @@
+#pragma once
+#include "Container.h"
+
+namespace tio {
+namespace MemoryStorage
+{
+class MapStorage : 
+	boost::noncopyable,
+	public ITioStorage,
+	public ITioPropertyMap
+{
+private:
+
+	typedef map<string, ValueAndMetadata> DataMap;
+
+	DataMap data_;
+	string name_, type_;
+	EventDispatcher dispatcher_;
+
+	inline pair<string, ValueAndMetadata> GetInternalRecord(const TioData& key)
+	{
+		if(key.GetDataType() == TioData::Int)
+		{
+			int offset = NormalizeIndex(key.AsInt(), data_.size());
+
+			if(static_cast<size_t>(offset) > data_.size() - 1)
+				throw std::invalid_argument("invalid offset");
+
+			DataMap::iterator i = data_.begin();
+			std::advance(i, offset);
+
+			return *i;
+		}
+		
+		DataMap::iterator i = data_.find(key.AsSz());
+
+		if(i == data_.end())
+			throw std::invalid_argument("key not found");
+
+		return *i;
+	}
+
+
+public:
+
+	MapStorage(const string& name, const string& type) :
+		name_(name),
+		type_(type)
+	  {}
+
+	  //
+	  // ITioPropertyMap
+	  //
+	  virtual void Set(const string& key, const string& value)
+	  {
+		  throw std::runtime_error("can't change special property");
+	  }
+	  virtual string Get(const string& key)
+	  {
+		  if(key == "__keys__")
+		  {
+			  if(data_.empty())
+				  return string();
+
+			  stringstream buffer;
+			  
+			  for(DataMap::const_iterator i = data_.begin() ; i != data_.end() ; ++i)
+			  {
+				  buffer << i->first << "\r\n";
+			  }
+
+			  //
+			  // delete last \r\n
+			  //
+			  string str = buffer.str();
+			  
+			  return string(str.begin(), str.end() - 2);
+		  }
+
+		  throw std::invalid_argument("key not found");
+	  }
+
+	  virtual string GetName()
+	  {
+		  return name_;
+	  }
+
+	  virtual string GetType()
+	  {
+		  return type_;
+	  }
+
+	  virtual string Command(const string& command)
+	  {
+		  throw std::invalid_argument("not supported");
+	  }
+
+	  virtual size_t GetRecordCount()
+	  {
+		  return data_.size();
+	  }
+
+	  virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
+	  {
+		  throw std::invalid_argument("not supported");
+	  }
+
+	  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
+	  {
+		  throw std::invalid_argument("not supported");
+	  }
+
+	  virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
+	  {
+		  throw std::invalid_argument("not supported");
+	  }
+
+	  virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
+	  {
+		  throw std::invalid_argument("not supported");
+	  }
+
+	  virtual void Set(const TioData& key, const TioData& value, const TioData& metadata)
+	  {
+		  if(!key)
+			  throw std::invalid_argument("invalid key");
+
+		  data_[key.AsSz()] = ValueAndMetadata(value, metadata);
+
+		  dispatcher_.RaiseEvent("set", key, value, metadata);
+	  }
+
+	  virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
+	  {
+		  if(!key)
+			  throw std::invalid_argument("invalid key");
+
+		  string keyString = key.AsSz();
+
+		  if(key_found(data_, keyString))
+			  throw std::invalid_argument("already exits");
+
+		  data_[keyString] = ValueAndMetadata(value, metadata);
+
+		  dispatcher_.RaiseEvent("insert", key, value, metadata);
+	  }
+
+	  virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
+	  {
+		  if(!key)
+			  throw std::invalid_argument("invalid key");
+
+		  string keyString = key.AsSz();
+
+		  DataMap::iterator i = data_.find(keyString);
+
+		  if(i == data_.end())
+			  throw std::invalid_argument("key not found");
+
+		  data_.erase(i);
+
+		  dispatcher_.RaiseEvent("delete", key, value, metadata);
+	  }
+
+	  virtual void Clear()
+	  {
+		  data_.clear();
+
+		  dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL);
+	  }
+
+	  virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+	  {
+		  throw std::runtime_error("not implemented");
+	  }
+
+	  virtual unsigned int Subscribe(EventSink sink, const string& start)
+	  {
+		  //
+		  // map behavior is the opposite of vector
+		  // send all record on subscription is the default option
+		  //
+		  if(start == "__none__")
+			  return dispatcher_.Subscribe(sink);
+
+		  //
+		  // we will accept 0 as start index to stay compatible
+		  // with vector
+		  //
+		  if(!start.empty() && start != "0")
+		  {
+			  throw std::invalid_argument("invalid start");
+		  }
+
+		  for(DataMap::const_iterator i = data_.begin() ; i != data_.end() ; ++i)
+		  {
+			  sink("set", i->first.c_str(), i->second.value, i->second.metadata);
+		  }
+
+		  return dispatcher_.Subscribe(sink);
+	  }
+	  virtual void Unsubscribe(unsigned int cookie)
+	  {
+		  dispatcher_.Unsubscribe(cookie);
+	  }
+
+	  virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)
+	  {
+		  pair<string, ValueAndMetadata> p = GetInternalRecord(searchKey);
+		  const ValueAndMetadata& data = p.second;
+
+		  //
+		  // value can be accessed by their numeric indexes (it's how someone
+		  // iterates over all values). In this case, the real keys will be returned
+		  //
+		  if(key)
+			*key = p.first;
+
+		  if(value)
+			  *value = data.value;
+
+		  if(metadata)
+			  *metadata = data.metadata;
+	  }
+
+};
+
+}}
