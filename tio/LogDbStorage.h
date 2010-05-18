@@ -568,7 +568,7 @@ namespace tio {
 					throw std::invalid_argument("invalid name");
 
 				string dataTableName = GenerateDataTableName("data", type, name);
-				string propertiesTableName = GenerateDataTableName("properties", type, name);;
+				string propertiesTableName = GenerateDataTableName("properties", type, name);
 
 				StorageMap::iterator i = containers_.find(dataTableName);
 

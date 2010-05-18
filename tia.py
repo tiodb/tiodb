@@ -220,7 +220,7 @@ def main():
     container = getattr(output, 'container', None)
 
     if options.resume:
-        if not container:
+        if container is None:
             print('ERROR: option resume requires the output to be a tio container')
             return -1
 

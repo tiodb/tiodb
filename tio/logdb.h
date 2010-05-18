@@ -228,7 +228,11 @@ namespace logdb
 		PagedFile()
 		{
 			_pageSize = 4096;
-			_cacheMaxPages = (20 * 1042 * 1024) / _pageSize;
+			
+			//
+			// TODO: hardcoded cache size
+			//
+			_cacheMaxPages = (128 * 1042 * 1024) / _pageSize;
 		}
 
 		~PagedFile()
@@ -928,8 +932,6 @@ namespace logdb
 			ASSERT(_nextDataOffset && _nextDataOffset < _file.GetFileSize());
 
 			DWORD size = ldbData->GetSize();
-
-			CheckUnitialized(_nextDataOffset, size);
 
 			_file.Write(_nextDataOffset, ldbData->GetBuffer(), size);
 
