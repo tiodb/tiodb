@@ -276,6 +276,7 @@ namespace tio
         {
             SendStringNow(pendingSendData_.front());
             pendingSendData_.pop();
+			return;
         }
 
 		SendPendingSnapshots();
@@ -363,67 +364,63 @@ namespace tio
 			return;
 		}
 
-		shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo = subscriptions_[handle];
-		subscriptionInfo.reset(new SUBSCRIPTION_INFO);
-
+		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO);
 		subscriptionInfo->container = container;
 
-		SendString("answer ok\r\n");
-
-		//
-		// if it's empty or no numeric, let the container deal with it
-		//
-		if(!start.empty())
-		{
 		try
 		{
-		lexical_cast<unsigned int>(start);
+			int numericStart = lexical_cast<int>(start);
+			
+			//
+			// lets try a query. Navigating a query is faster than accessing records
+			// using index. Imagine a linked list being accessed by index every time...
+			//
+			try
+			{
+				subscriptionInfo->resultSet = container->Query(numericStart);
+			}
+			catch(std::exception&)
+			{
+				//
+				// no result set, don't care. We'll carry on with the indexed access
+				//
+			}
 
-		subscriptionInfo->cookie = container->Subscribe(
-		boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), start);
+			subscriptionInfo->nextRecord = numericStart;
 
-		return;
+			pendingSnapshots_[handle] = subscriptionInfo;
+			
+			subscriptions_[handle] = subscriptionInfo;
+			SendString("answer ok\r\n");
+			
+			SendPendingSnapshots();
+
+			return;
 		}
-		catch(std::exception&)
+		catch(boost::bad_lexical_cast&)
 		{
 
 		}
-		}
 
 		//
-		// if it's numeric, we'll try to do it in a optimized way
-		// 
-		int numericStart = atoi(start.c_str());
-		unsigned int recordCount = container->GetRecordCount();
+		// if we're here, start is not numeric. We'll let the container deal with this
+		//
+		subscriptions_[handle] = subscriptionInfo;
 
-		if(recordCount == 0 || numericStart >= recordCount)
+		try
 		{
 			subscriptionInfo->cookie = container->Subscribe(
 				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), start);
-			return;
+			
+			SendString("answer ok\r\n");
 		}
-
-		//
-		// lets try a query. Navigating a query is faster than accessing records
-		// using index. Imagine a linked list being accessed by index every time...
-		//
-		//
-		try
+		catch(std::exception& ex)
 		{
-			subscriptionInfo->resultSet = container->Query(numericStart);
-		}
-		catch(std::exception&)
-		{
-			//
-			// no result set, don't care. We'll carry on with the indexed access
-			//
+			subscriptions_.erase(handle);
+			SendString(string("answer error ") + ex.what() + "\r\n");
 		}
 
-		subscriptionInfo->nextRecord = numericStart;
-
-		pendingSnapshots_[handle] = subscriptionInfo;
-
-		SendPendingSnapshots();
+		return;
 	}
 
 	void TioTcpSession::SendPendingSnapshots()
@@ -434,7 +431,7 @@ namespace tio
 		//
 		// TODO: hardcoded counter
 		//
-		for(unsigned int a = 0 ; a < 5 ; a++)
+		for(unsigned int a = 0 ; a < 64 ; a++)
 		{
 			if(pendingSnapshots_.empty())
 				return;

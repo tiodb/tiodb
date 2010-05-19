@@ -11,10 +11,15 @@ class ListResultSet : public ITioResultSet
 {
 	TioData source_;
 	ListType::const_iterator begin_, current_, end_;
+	
+	size_t currentIndex_;
 public:
 
-	ListResultSet(const TioData& source, ListType::const_iterator begin, ListType::const_iterator end)
-		: source_(source), current_(begin), begin_(begin), end_(end)
+	ListResultSet(const TioData& source, 
+		ListType::const_iterator begin, 
+		ListType::const_iterator end,
+		unsigned int beginIndex)
+		: source_(source), current_(begin), begin_(begin), end_(end), currentIndex_(beginIndex)
 	{
 	}
 
@@ -22,6 +27,9 @@ public:
 	{
 		if(current_ == end_)
 			return false;
+
+		if(key)
+			key->Set((int)currentIndex_);
 
 		if(value)
 			*value = current_->value;
@@ -38,6 +46,7 @@ public:
 			return false;
 
 		++current_;
+		++currentIndex_;
 
 		if(current_ == end_)
 			return false;
@@ -51,6 +60,7 @@ public:
 			return false;
 
 		--current_;
+		--currentIndex_;
 
 		return true;
 	}
@@ -118,9 +128,10 @@ public:
 	  virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 	  {
 		  CheckValue(value);
+		  
 		  data_.push_back(ValueAndMetadata(value, metadata));
 
-		  dispatcher_.RaiseEvent("push_back", key, value, metadata);
+		  dispatcher_.RaiseEvent("push_back", static_cast<int>(data_.size() - 1), value, metadata);
 	  }
 
 	  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -250,14 +261,14 @@ public:
 	virtual shared_ptr<ITioResultSet> Query(const TioData& query)
 	{
 		if(query.IsNull() || (query.GetDataType() == TioData::Sz && *query.AsSz() == '\0'))
-			return shared_ptr<ITioResultSet>(new ListResultSet(TIONULL, data_.begin(), data_.end()));
+			return shared_ptr<ITioResultSet>(new ListResultSet(TIONULL, data_.begin(), data_.end(), 0));
 
 		//
 		// int = start index
 		//
 		if(query.GetDataType() == TioData::Int)
 			return shared_ptr<ITioResultSet>(
-				new ListResultSet(TIONULL, GetOffset(query.AsInt()), data_.end()));
+				new ListResultSet(TIONULL, GetOffset(query.AsInt()), data_.end(), query.AsInt()));
 		
 		throw std::runtime_error("not supported");		
 	}

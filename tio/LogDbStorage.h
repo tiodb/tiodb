@@ -302,8 +302,7 @@ namespace tio {
 
 			virtual void Clear()
 			{
-				ldb_.DeleteTable(tableInfo_);
-				ldb_.CreateTable(name_);
+				ldb_.ClearAllRecords(tableInfo_);
 			}
 
 			virtual shared_ptr<ITioResultSet> Query(const TioData& query)
@@ -568,7 +567,7 @@ namespace tio {
 					throw std::invalid_argument("invalid name");
 
 				string dataTableName = GenerateDataTableName("data", type, name);
-				string propertiesTableName = GenerateDataTableName("properties", type, name);;
+				string propertiesTableName = GenerateDataTableName("properties", type, name);
 
 				StorageMap::iterator i = containers_.find(dataTableName);
 
