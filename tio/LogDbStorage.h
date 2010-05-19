@@ -302,8 +302,7 @@ namespace tio {
 
 			virtual void Clear()
 			{
-				ldb_.DeleteTable(tableInfo_);
-				ldb_.CreateTable(name_);
+				ldb_.ClearAllRecords(tableInfo_);
 			}
 
 			virtual shared_ptr<ITioResultSet> Query(const TioData& query)

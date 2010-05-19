@@ -428,6 +428,7 @@ namespace logdb
 	static const DWORD OPERATION_INSERT = 2;
 	static const DWORD OPERATION_SET = 3;
 	static const DWORD OPERATION_DELETE	= 4;
+	static const DWORD OPERATION_CLEAR	= 5;
 
 	template<typename T>
 	inline void zero(T& p)
@@ -780,6 +781,9 @@ namespace logdb
 
 			LDB_LOG_RECORD* logRecord = NULL;
 
+			//
+			// do the action specified by the log record
+			//
 			for(DWORD a = 0 ; a < tableInfo->lastBlockHeaderInfo.blockHeader.usedCount ; a++)
 			{
 				logRecord = &logRecords.get()[a];
@@ -795,6 +799,11 @@ namespace logdb
 				case OPERATION_SET:
 					if(logRecord->recordIndex < tableInfo->records.size())
 						tableInfo->records[logRecord->recordIndex] = *logRecord;
+					break;
+
+				case OPERATION_CLEAR:
+					_totalRecordCount -= tableInfo->records.size();
+					tableInfo->records.clear();
 					break;
 
 				case OPERATION_INSERT:
@@ -821,11 +830,18 @@ namespace logdb
 					ASSERT(false);
 				}
 
+				//
+				// is this the last record?
+
 				if(logRecord->recordID > _lastRecordID)
 					_lastRecordID = logRecord->recordID;
 
 				DWORD next = 0;
 
+				//
+				// find the last written field, to calculate how many bytes
+				// we must walk until the next record
+				//
 				if(logRecord->key.dataOffset > logRecord->value.dataOffset)
 					if(logRecord->key.dataOffset > logRecord->metadata.dataOffset)
 						next = logRecord->key.dataOffset + logRecord->key.dataSize;
@@ -837,7 +853,10 @@ namespace logdb
 					else
 						next = logRecord->metadata.dataOffset + logRecord->metadata.dataSize;
 
-				ASSERT(logRecord->operation == OPERATION_DELETE || next != 0);
+				ASSERT(
+					logRecord->operation == OPERATION_DELETE ||
+					logRecord->operation == OPERATION_CLEAR  ||
+					next != 0);
 
 				if(next > _nextDataOffset)
 					_nextDataOffset = next;				
@@ -945,7 +964,9 @@ namespace logdb
 			LDB_BLOCK_HEADER_INFO* blockHeaderInfo = &tableInfo->lastBlockHeaderInfo;
 			TABLE_INFO::RecordsVector& records = tableInfo->records;
 
-			ASSERT( (operation == OPERATION_INSERT && recordIndex == 0) ||
+			ASSERT(
+				operation == OPERATION_CLEAR || 
+				(operation == OPERATION_INSERT && recordIndex == 0) ||
 				operation == OPERATION_APPEND || 
 				CheckIndex(tableInfo, recordIndex));
 
@@ -1027,6 +1048,10 @@ namespace logdb
 			case OPERATION_DELETE:
 				_totalRecordCount--;
 				records.erase(records.begin() + recordIndex);
+				break;
+			case OPERATION_CLEAR:
+				_totalRecordCount-= records.size();
+				records.clear();
 				break;
 			}
 
@@ -1209,6 +1234,13 @@ namespace logdb
 			}
 
 			return index;
+		}
+
+		void ClearAllRecords(TABLE_INFO* tableInfo)
+		{
+			bool b = AppendLogRecord(tableInfo, OPERATION_CLEAR, 0, NULL, NULL, NULL);
+
+			ASSERT(b);
 		}
 
 		DWORD Set(TABLE_INFO* tableInfo, DWORD startIndex, const LdbData& key, const LdbData* value, const LdbData* metadata)
