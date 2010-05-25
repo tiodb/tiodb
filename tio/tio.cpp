@@ -145,6 +145,8 @@ int main(int argc, char* argv[])
 	using namespace std;
 	namespace po = boost::program_options;
 
+	cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
+
 	try
 	{
 		po::options_description desc("Options");
@@ -201,7 +203,7 @@ int main(int argc, char* argv[])
 			}
 		}
 		
-		cout << "Starting tio server... ";
+		cout << "Starting Tio Server... ";
 		
 		RunServer(
 			vm["data-path"].as<string>(),

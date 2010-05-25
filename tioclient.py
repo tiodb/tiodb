@@ -23,9 +23,6 @@ class RemoteContainer(object):
         self.__dict__['insert'] = functools.partial(self.send_data_command, 'insert')
         self.__dict__['set'] = functools.partial(self.send_data_command, 'set')
 
-        self.__dict__['set_property'] = functools.partial(self.send_data_command, 'set_property')
-        self.__dict__['get_property'] = functools.partial(self.send_data_command, 'get_property')
-
     def __repr__(self):
         return '<tioclient.RemoteContainer name="%s", type="%s">' % (self.name, self.type)
 
@@ -60,6 +57,13 @@ class RemoteContainer(object):
             value, metadata = valueOrValueAndMetadata, None
             
         return self.set(key, value, metadata)
+        
+    def get_property(self, key, withKeyAndMetadata=False):
+        key, value, metadata = self.send_data_command('get_property', key, None, None)
+        return value if not withKeyAndMetadata else (key, value, metadata)    
+        
+    def set_property(self, key, value, metadata=None):
+        return self.send_data_command('set_property', key, value, metadata)
 
     def extend(self, iterable):
         for x in iterable:
