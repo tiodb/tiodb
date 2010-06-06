@@ -62,7 +62,7 @@ namespace tio
 
 		unsigned int Elapsed()
 		{
-			return (clock() - start) / (CLOCKS_PER_SEC / 1000);
+			return ((clock() - start) * 1000) / CLOCKS_PER_SEC;
 		}
 	};
 

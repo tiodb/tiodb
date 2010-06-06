@@ -94,6 +94,9 @@ void RunServer(const string& dataPath, unsigned short port,
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
+	Timer t;
+	t.Start();
+
 #ifndef _WIN32
 	//ProfilerStart("/tmp/tio.prof");
 #endif
@@ -104,7 +107,6 @@ void RunServer(const string& dataPath, unsigned short port,
 
 	LoadStorageTypes(&containerManager, dataPath);
 
-	
 	pair<string, string> p;
 	BOOST_FOREACH(p, aliases)
 	{
@@ -127,10 +129,12 @@ void RunServer(const string& dataPath, unsigned short port,
 	}
 
 	tio::TioTcpServer tioServer(containerManager, io_service, e);
-	
-	tioServer.Start();
 
-	cout << "running!" << endl;
+	unsigned int elapsed = t.Elapsed();
+
+	cout << "now running (" << elapsed << "ms to start)" << endl;
+
+	tioServer.Start();
 
 	io_service.run();
 

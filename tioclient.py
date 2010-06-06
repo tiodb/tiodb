@@ -3,15 +3,54 @@ import socket
 import functools
 from cStringIO import StringIO
 from datetime import datetime
+import weakref
 
 separator = '^'
 
-class TestSink:
-    def __getattr__(self, name):
-        return functools.partial(self.EventHandler, name)
+__connections = {}
+
+def decode(value):
+    '''
+        transforms 'X10003C0002I000aS0000X 12 abcdefghij' into [12, 'abcde']
+
+        X1 = protocol version
+        0003C = field count
+        0002I = first is an integer, codified into 2 bytes
+        000aS = second field is an string with 0xA bytes
+        0000X = NULL field
+
+        there's always an space between the values, and IT'S NOT taken into account
+        when calculating the field size
+        
+    '''
+    if value[:2] != 'X1':
+        raise Exception('not a valid message')
     
-    def EventHandler(self, eventName, key, value, metadata):
-        print ('%s - %s, %s, %s' % (eventName, key, value, metadata))
+    header_size = 2
+    field_count = int(value[header_size:header_size+4], 16) # expect hex
+    current_data_offset = header_size + (field_count + 1) * 5
+    ret = []
+
+    for x in range(field_count):
+        size_start = header_size + 5 * (x + 1)
+        field_size = int(value[size_start:size_start+4], 16)
+        data_type = value[size_start + 4: size_start + 5]
+
+        field_value = value[current_data_offset:current_data_offset+field_size]
+
+        if data_type == 'D':
+            field_value = float(field_value)
+        elif data_type == 'I':
+            field_value = int(field_value)
+        elif data_type == 'X':
+            field_value = None
+
+        current_data_offset += field_size + 1
+
+        ret.append(field_value)
+
+    return ret        
+
 
 class RemoteContainer(object):
     def __init__(self, manager, handle, type, name):
@@ -20,9 +59,6 @@ class RemoteContainer(object):
         self.type = type
         self.name = name
         
-        self.__dict__['insert'] = functools.partial(self.send_data_command, 'insert')
-        self.__dict__['set'] = functools.partial(self.send_data_command, 'set')
-
     def __repr__(self):
         return '<tioclient.RemoteContainer name="%s", type="%s">' % (self.name, self.type)
 
@@ -73,9 +109,8 @@ class RemoteContainer(object):
         key, value, metadata = self.send_data_command('get', key, None, None)
         return value if not withKeyAndMetadata else (key, value, metadata)
 
-    def delete(self, key, withKeyAndMetadata=False):
-        key, value, metadata = self.send_data_command('delete', key, None, None)
-        return value if not withKeyAndMetadata else (key, value, metadata)    
+    def delete(self, key):
+        self.send_data_command('delete', key, None, None)
 
     def pop_back(self, withKeyAndMetadata=False):
         key, value, metadata = self.send_data_command('pop_back', None, None, None)
@@ -87,12 +122,18 @@ class RemoteContainer(object):
 
     def append(self, value, metadata=None):
         return self.push_back(value, metadata)
+
+    def insert(self, value, metadata=None):
+        return self.send_data_command('insert', None, value, metadata)
+
+    def set(self, value, metadata=None):
+        return self.send_data_command('set', None, value, metadata)    
     
     def push_back(self, value, metadata=None):
         return self.send_data_command('push_back', None, value, metadata)
 
     def push_front(self, value, metadata=None):
-        return functools.partial(self.send_data_command, 'push_front', None, value, metadata)    
+        return functools.partial(self.send_data_command, 'push_front', None, value, metadata)
         
     def get_count(self):
         return int(self.manager.SendCommand('get_count', self.handle)['count'])
@@ -120,7 +161,9 @@ class RemoteContainer(object):
 
     def wait_and_pop_next(self, sink):
         return self.manager.WaitAndPop(self.handle, 'wnp_next', sink)
-  
+
+    def start_recording(self, destination_container):
+        return self.manager.SendCommand('start_recording', self.handle, destination_container.handle)
 
 class TioServerConnection(object):
     def __init__(self, host = None, port = None):
@@ -132,6 +175,7 @@ class TioServerConnection(object):
         self.dontWaitForAnswers = False
         self.pendingAnswerCount = 0
         self.containers = {}
+        self.stop = False
 
         self.log_sends = False        
 
@@ -142,6 +186,9 @@ class TioServerConnection(object):
         i = self.receiveBuffer.find('\r\n')
         while i == -1:
             self.receiveBuffer += self.s.recv(4096)
+            if not self.receiveBuffer:
+                raise Exception('error reading from connection socket')
+            
             i = self.receiveBuffer.find('\r\n')
 
         ret = self.receiveBuffer[:i]
@@ -246,6 +293,12 @@ class TioServerConnection(object):
     def RunLoop(self):
         while 1:
             self.Dispatch()
+            if self.stop:
+                self.DispatchAllEvents()
+                return
+
+    def Stop(self):
+        self.stop = True
 
     def Dispatch(self):
         self.DispatchAllEvents()
@@ -339,11 +392,12 @@ class TioServerConnection(object):
             self.pendingAnswerCount -= 1
             self.ReceiveAnswer()
 
-    def SendCommand(self, command, parameter=None):
+    def SendCommand(self, command, *args):
         buffer = command
-        if not parameter is None and len(parameter) > 0:
-            buffer += ' ' + parameter
-
+        if len(args):
+            buffer += ' '
+            buffer += ' '.join([str(x) for x in args])
+        
         if buffer[-2:] != '\r\n':
             buffer += '\r\n'            
 
@@ -396,7 +450,7 @@ class TioServerConnection(object):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
     def __CreateOrOpenContainer(self, command, name, type):
-        handle = self.SendCommand(command, name if type == '' else name + ' ' + type)['handle']
+        handle = self.SendCommand(command, name if not type else name + ' ' + type)['handle']
         container = RemoteContainer(self, handle, type, name)
         self.containers[int(handle)] = container
         return container

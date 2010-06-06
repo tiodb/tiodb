@@ -15,6 +15,10 @@ namespace tio
 
 	using boost::tuple;
 
+	using std::setfill;
+	using std::setw;
+	using std::hex;
+
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
@@ -218,6 +222,8 @@ namespace tio
 
 		dispatchMap_["modify"] = boost::bind(&TioTcpServer::OnModify, this, _1, _2, _3, _4);
 
+		dispatchMap_["start_recording"] = boost::bind(&TioTcpServer::OnCommand_Start_Recording, this, _1, _2, _3, _4);
+
 		dispatchMap_["wnp_next"] = boost::bind(&TioTcpServer::OnCommand_WnpNext, this, _1, _2, _3, _4);
 		dispatchMap_["wnp_key"] = boost::bind(&TioTcpServer::OnCommand_WnpKey, this, _1, _2, _3, _4);
 		
@@ -241,6 +247,146 @@ namespace tio
 		dispatchMap_["auth"] = boost::bind(&TioTcpServer::OnCommand_Auth, this, _1, _2, _3, _4);
 
 		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
+	}
+
+	std::string Serialize(const std::list<const TioData*>& fields)
+	{
+		stringstream header, values;
+
+		// message identification
+		header << "X1";
+		
+		// field count
+		header << setfill('0') << setw(4) << hex << fields.size() << "C";
+
+		BOOST_FOREACH(const TioData* field, fields)
+		{
+			unsigned int currentStreamSize = values.str().size();
+			unsigned int size = 0;
+			char dataTypeCode = 'X';
+
+			if(field && field->GetDataType() != TioData::None)
+			{	
+				switch(field->GetDataType())
+				{
+				case TioData::Sz:
+					values << field->AsSz();
+					dataTypeCode = 'S';
+					break;
+				case TioData::Int:
+					values << field->AsInt();
+					dataTypeCode = 'I';
+					break;
+				case TioData::Double:
+					values << field->AsDouble();
+					dataTypeCode = 'D';
+					break;
+				}
+
+				size = values.str().size() - currentStreamSize;
+
+				values << " ";
+			}
+			else
+			{
+				size = 0;
+			}
+
+			header << setfill('0') << setw(4) << hex << size << dataTypeCode;
+		}
+
+		header << values.str();
+
+		return header.str();
+	}
+
+	void RecordChange(shared_ptr<ITioContainer> source,
+		shared_ptr<ITioContainer> destination,
+		const string& evt, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		std::list<const TioData*> fields;
+		TioData eventString(evt);
+
+		fields.push_back(&eventString);
+		fields.push_back(key.GetDataType() != TioData::None ? &key : NULL);
+		fields.push_back(value.GetDataType() != TioData::None ? &value : NULL);
+		fields.push_back(metadata.GetDataType() != TioData::None ?& metadata : NULL);
+
+		string serialized = Serialize(fields);
+
+		destination->PushBack(TIONULL, serialized, source->GetName());
+	}
+
+	//
+	// The record command asks the server to record all events from a container is another container
+	// It will create a kind of transaction log. Even if the client disconnects, the events will continue to
+	// be recorded. It's for clients that can't loose events even in case of disconnection and
+	// clients that want to receive events but can stay connected (subscription by polling)
+	//
+	void TioTcpServer::OnCommand_Start_Recording(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		shared_ptr<ITioContainer> source, destination;
+		unsigned int sourceHandle, destinationHandle;
+
+		try
+		{
+			sourceHandle = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+			destinationHandle = lexical_cast<unsigned int>(cmd.GetParameters()[1]);
+
+			source = session->GetRegisteredContainer(sourceHandle);
+			destination = session->GetRegisteredContainer(destinationHandle);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid handle");
+			return;
+		}
+
+		RecordingSessions::const_iterator i;
+		
+		//
+		// check if it's already being recorded
+		//
+		i = recordingSessions_.find(source->GetName());
+
+		if(i != recordingSessions_.end() &&
+		   i->second.find(destination->GetName()) != i->second.end())
+		{
+			MakeAnswer(error, answer, "already recording to this container");
+			return;
+		}
+		
+		//
+		// check if it will not create a loop
+		//
+		i = recordingSessions_.find(destination->GetName());
+
+		if(i != recordingSessions_.end() &&
+			i->second.find(source->GetName()) != i->second.end())
+		{
+			MakeAnswer(error, answer, 
+				"container informed as destination is being recorded to the source container, it will create a loop");
+			return;
+		}
+
+		//
+		// TODO: write recordings to a metacontainer too
+		//
+
+		recordingSessions_[source->GetName()].insert(destination->GetName());
+
+		//
+		// TODO: should check other ways to create loops
+		//
+		source->Subscribe(boost::bind(&RecordChange, source, destination, _1, _2, _3, _4), string());
+
+		MakeAnswer(success, answer);
 	}
 
 	void TioTcpServer::OnCommand_WnpNext(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
@@ -724,6 +870,12 @@ namespace tio
 
 			if(cmd.GetCommand() == "create")
 			{
+				if(containerName.size() > 1 && containerName[0] == '_' && containerName[1] == '_')
+				{
+					MakeAnswer(error, answer, "invalid name, names starting with __ are reserved for internal use");
+					return;
+				}
+
 				if(!CheckCommandAccess(cmd.GetCommand(), answer, session))
 					return;
 
@@ -738,8 +890,6 @@ namespace tio
 			}
 
 			unsigned int handle = session->RegisterContainer(containerName, container);
-
-
 
 			MakeAnswer(success, answer, "handle", lexical_cast<string>(handle));
 		}
@@ -1225,9 +1375,10 @@ namespace tio
 
 			else if(cmd.GetCommand() == "get")
 			{
-				container->GetRecord(key, NULL, &value, &metadata);
+				TioData realKey;
+				container->GetRecord(key, &realKey, &value, &metadata);
 				
-				MakeDataAnswer(key, value, metadata, answer);
+				MakeDataAnswer(realKey.GetDataType() == TioData::None ? key : realKey, value, metadata, answer);
 
 				return;
 			}

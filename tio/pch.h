@@ -14,11 +14,13 @@
 #pragma warning(disable : 4127) // conditional expression is constant
 #pragma warning(disable : 4512) // assignment operator could not be generated
 #pragma warning(disable : 4100) // unreferenced local parameter
+#pragma warning(disable : 4018) // signaled/unsigned mismatch
 
 //
 // lexical_cast is triggering this warning every time, it's pissing me off
 //
 #pragma warning(disable: 4267)
+
 //
 // "non standard extension" every time, but GCC is happy as well, so fuck off
 //
@@ -58,6 +60,7 @@
 #include <boost/typeof/std/vector.hpp>
 
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <numeric>
 #include <queue>

@@ -85,9 +85,10 @@ namespace MemoryStorage
 		  virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		  {
 			  CheckValue(value);
+
 			  data_.push_back(ValueAndMetadata(value, metadata));
 
-			  dispatcher_.RaiseEvent("push_back", key, value, metadata);
+			  dispatcher_.RaiseEvent("push_back", static_cast<int>(data_.size() - 1), value, metadata);
 		  }
 
 		  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)

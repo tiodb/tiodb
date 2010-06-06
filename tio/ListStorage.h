@@ -202,7 +202,7 @@ public:
 		if(index < data_.size() / 2)
 		{
 			i = data_.begin();
-			for(int x = 0  ; x < index ; ++x, ++i) 
+			for(int x = 0  ; x < index ; ++x, ++i)
 				;
 		}
 		else
@@ -211,7 +211,7 @@ public:
 
 			int walk = data_.size() - index;
 
-			for(int x = 0  ; x < walk ; ++x, --i) 
+			for(int x = 0  ; x < walk ; ++x, --i)
 				;
 		}
 

@@ -15,6 +15,8 @@ namespace tio
 	using boost::system::error_code;
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
+
+	std::string Serialize(const std::list<const TioData*>& fields);
 	
 	class TioTcpServer
 	{
@@ -72,6 +74,9 @@ namespace tio
 			}
 		};
 
+		typedef map< string, set<string> > RecordingSessions;
+		RecordingSessions recordingSessions_;
+
 		unsigned int lastID_;
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
@@ -102,6 +107,7 @@ namespace tio
 
 		void LoadDispatchMap();
 
+		void OnCommand_Start_Recording(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Version(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		

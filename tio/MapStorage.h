@@ -4,6 +4,8 @@
 namespace tio {
 namespace MemoryStorage
 {
+using boost::bad_lexical_cast;
+
 class MapStorage : 
 	boost::noncopyable,
 	public ITioStorage,
@@ -22,9 +24,6 @@ private:
 		if(key.GetDataType() == TioData::Int)
 		{
 			int offset = NormalizeIndex(key.AsInt(), data_.size());
-
-			if(static_cast<size_t>(offset) > data_.size() - 1)
-				throw std::invalid_argument("invalid offset");
 
 			DataMap::iterator i = data_.begin();
 			std::advance(i, offset);
@@ -187,12 +186,43 @@ public:
 		  // we will accept 0 as start index to stay compatible
 		  // with vector
 		  //
-		  if(!start.empty() && start != "0")
+		  DataMap::const_iterator startIterator;
+
+		  if(!start.empty())
 		  {
+			  int index = 0;
+			  bool isNumeric = false;
+			  
+			  try
+			  {
+				  index = lexical_cast<int>(start);
+				  index = NormalizeIndex(index, data_.size());
+				  isNumeric = true;
+			  }
+			  catch(std::exception&)
+			  {
+			  }
+
+			  if(isNumeric)
+			  {
+				  if(index + 1 > data_.size())
+					  throw std::invalid_argument("out of bounds");
+
+				  startIterator = data_.begin();
+				  std::advance(startIterator, index);
+			  }
+			  else
+			  {
+				  startIterator = data_.find(start);
+				  
+				  if(startIterator == data_.end())
+					  throw std::invalid_argument("key not found");
+			  }
+
 			  throw std::invalid_argument("invalid start");
 		  }
 
-		  for(DataMap::const_iterator i = data_.begin() ; i != data_.end() ; ++i)
+		  for(DataMap::const_iterator i = startIterator ; i != data_.end() ; ++i)
 		  {
 			  sink("set", i->first.c_str(), i->second.value, i->second.metadata);
 		  }
