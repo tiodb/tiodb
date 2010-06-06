@@ -258,6 +258,7 @@ namespace logdb
 
 		void SetPageSize(DWORD pageSize)
 		{
+			FreeCache();
 			_pageSize = pageSize;
 		}
 
@@ -886,7 +887,16 @@ namespace logdb
 
 			_metatable.lastBlockHeaderInfo.offset = _header.tableBlockOffset;
 
+			DWORD currentPageSize = _file.GetPageSize();
+
+			//
+			// using 4MB page size for load will make it *much* faster
+			//
+			_file.SetPageSize(1024 * 1024 * 4);
+
 			LoadTables();
+
+			_file.SetPageSize(currentPageSize);
 
 			return true;
 		}
@@ -1141,7 +1151,7 @@ namespace logdb
 		{
 			_totalRecordCount = 0;
 			_defaultBlockSize = 4096;
-			_growPagesStep = (5 * 1024 * 1024) / _file.GetPageSize();
+			_growPagesStep = (4 * 1024 * 1024) / _file.GetPageSize();
 			_lastRecordID = 0;
 		}
 
