@@ -125,14 +125,14 @@ namespace tio {
 
 				CheckValue(value);
 
-				ConverterHelper converter(key, value, metadata);
+				ConverterHelper converter(TIONULL, value, metadata);
 
 				DWORD index = ldb_.Append(tableInfo_, NULL, converter.GetLdbValue(), converter.GetLdbMetadata());
 
 				if(index == logdb::LDB_INVALID_RECNO)
 					throw std::runtime_error("error appending record");
 
-				dispatcher_.RaiseEvent("push_back", key, value, metadata);
+				dispatcher_.RaiseEvent("push_back", (int)ldb_.GetRecordCount(tableInfo_), value, metadata);
 			}
 
 			virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -148,7 +148,7 @@ namespace tio {
 			}
 
 		private:
-			void _Pop(size_t recordIndex, TioData* value, TioData* metadata)
+			void _Pop(size_t recordIndex, TioData* key, TioData* value, TioData* metadata)
 			{
 				ConverterHelper helper;
 
@@ -156,7 +156,7 @@ namespace tio {
 
 				ldb_.DeleteByIndex(tableInfo_, recordIndex);
 
-				helper.ToTioData(NULL, value, metadata);
+				helper.ToTioData(key, value, metadata);
 			}
 		public:
 			virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
@@ -171,12 +171,23 @@ namespace tio {
 
 				size_t recordIndex = recordCount - 1;
 
-				_Pop(recordIndex, value, metadata);
+				TioData itemValue, itemMetadata;
+
+				_Pop(recordIndex, NULL, &itemValue, &itemMetadata);
+
+				if(key)
+					*key = (int)recordIndex;
+
+				if(value)
+					*value = itemValue;
+				
+				if(metadata)
+					*metadata = itemMetadata;
 
 				dispatcher_.RaiseEvent("pop_back", 
-					key ? *key : TIONULL, 
-					value ? *value : TIONULL,
-					metadata ? *metadata : TIONULL);
+					(int)recordIndex, // returned key is the item index
+					itemValue,
+					itemMetadata);
 			}
 
 			virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
@@ -187,7 +198,7 @@ namespace tio {
 				if(ldb_.GetRecordCount(tableInfo_) == 0)
 					throw std::invalid_argument("empty");
 
-				_Pop(0, value, metadata);
+				_Pop(0, key, value, metadata);
 
 				dispatcher_.RaiseEvent("pop_front", 
 					key ? *key : TIONULL, 
@@ -319,9 +330,11 @@ namespace tio {
 
 				if(accessType_ == RecordNumber)
 				{
+					int index = NormalizeIndex(searchKey.AsInt(), ldb_.GetRecordCount(tableInfo_));
+
 					DWORD dw = ldb_.GetByIndex(tableInfo_, 
-						searchKey.AsInt(), 
-						helper.GetLdbKey(), 
+						index, 
+						helper.GetLdbKey(),
 						helper.GetLdbValue(),
 						helper.GetLdbMetadata());
 
@@ -331,7 +344,7 @@ namespace tio {
 					helper.ToTioData(NULL, value, metadata);
 
 					if(key)
-						*key = searchKey;
+						*key = index;
 				}
 				else
 				{
@@ -339,8 +352,18 @@ namespace tio {
 
 					helper.FromTioData(searchKey, NULL, NULL);
 
-					DWORD recordIndex = ldb_.Get(tableInfo_, 0, *helper.GetLdbKey(), 
-						helper.GetLdbValue(), helper.GetLdbMetadata());
+					DWORD recordIndex = logdb::LDB_INVALID_RECNO;
+
+					if(searchKey.GetDataType() == TioData::Int)
+					{
+						recordIndex = ldb_.GetByIndex(tableInfo_, searchKey.AsInt(), 
+							helper.GetLdbKey(), helper.GetLdbValue(), helper.GetLdbMetadata());
+					}
+					else if(searchKey.GetDataType() == TioData::Sz)
+					{
+						recordIndex = ldb_.Get(tableInfo_, 0, *helper.GetLdbKey(), 
+							helper.GetLdbValue(), helper.GetLdbMetadata());
+					}
 
 					if(recordIndex == logdb::LDB_INVALID_RECNO)
 						throw std::invalid_argument("key not found");
