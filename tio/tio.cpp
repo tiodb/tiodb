@@ -23,8 +23,8 @@ void LoadStorageTypes(ContainerManager* containerManager, const string& dataPath
 //	containerManager->RegisterStorageManager("bdb_map", bdb);
 //	containerManager->RegisterStorageManager("bdb_vector", bdb);
 
-	containerManager->RegisterStorageManager("persistent/list", ldb);
-	containerManager->RegisterStorageManager("persistent/map", ldb);
+	containerManager->RegisterStorageManager("persistent_list", ldb);
+	containerManager->RegisterStorageManager("persistent_map", ldb);
 }
 
 void TestEventSink(const string& eventName, const TioData* key, const TioData* value, const TioData* metadata)
@@ -119,7 +119,7 @@ void RunServer(const string& dataPath, unsigned short port,
 	
 	if(users.size())
 	{
-		shared_ptr<ITioContainer> usersContainer = containerManager.CreateContainer("volatile/map", "__users__");
+		shared_ptr<ITioContainer> usersContainer = containerManager.CreateContainer("volatile_map", "__users__");
 
 		pair<string, string> p;
 		BOOST_FOREACH(p, users)

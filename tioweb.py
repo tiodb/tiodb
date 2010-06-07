@@ -96,6 +96,7 @@ class TioWeb(object):
         self.dispatch_map['create'] = self.create
         self.dispatch_map['get_count'] = self.get_count
         self.dispatch_map['publications'] = self.publications
+        self.dispatch_map['query'] = self.query
 
         def add_data_command(name):
             self.dispatch_map[name] = functools.partial(self.__send_data_command, name)
@@ -108,7 +109,13 @@ class TioWeb(object):
         add_data_command('pop_front')
         add_data_command('pop_back')
         add_data_command('delete')
+
+    def query(self):
+        container = self.open_container(self.form['container'].value)
+        ret = container.query_with_key_and_metadata()
+        ret = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
         
+        return {'result': 'ok', 'result_set': ret}        
     
     def subscribe(self):
         container = self.open_container(self.form['container'].value)
@@ -218,11 +225,10 @@ def main():
         ret = tioweb.dispatch(form, response)
 
         if not tioweb.debug:
-            encoded = json.dumps(ret, separators=(',',':'))
+            ret = json.dumps(ret, separators=(',',':'))
         else:
             encoded = json.dumps(ret, indent=2)
-
-        ret = '<script language="javascript">var ret = %s;</script>' % encoded
+            ret = '<script language="javascript">var ret = %s;</script>' % encoded
 
         response.write(ret)
 
@@ -243,7 +249,7 @@ def main():
             response.write('</pre>')
 
         ret = {'result': 'error', 'description': str(ex)}        
-        ret = '<script language="javascript">var ret = %s;</script>' % json.dumps(ret)
+        ret = json.dumps(ret)
         response.write(ret)
 
         if debug:

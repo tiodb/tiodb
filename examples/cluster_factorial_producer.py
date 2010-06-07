@@ -1,8 +1,8 @@
 import random
 import tioclient
 tio = tioclient.Connect('tio://127.0.0.1:12345')
-source = tio.CreateContainer('factorial_cluster/source', 'volatile/list')
-destination = tio.CreateContainer('factorial_cluster/destination', 'volatile/list')
+source = tio.CreateContainer('factorial_cluster/source', 'volatile_list')
+destination = tio.CreateContainer('factorial_cluster/destination', 'volatile_list')
 
 source.set_property('destination', 'factorial_cluster/destination')
 

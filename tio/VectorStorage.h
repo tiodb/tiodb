@@ -6,6 +6,7 @@ namespace MemoryStorage
 {
 	class VectorStorage : 
 		boost::noncopyable,
+		public boost::enable_shared_from_this<VectorStorage>,
 		public ITioStorage
 	{
 	private:
@@ -191,9 +192,15 @@ namespace MemoryStorage
 			dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL);
 		}
 
-		virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
-			throw std::runtime_error("not implemented");
+			if(!query.IsNull())
+				throw std::runtime_error("not supported");
+
+			NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
+
+			return shared_ptr<ITioResultSet>(
+				new GenericResultSet<ITioStorage>(query, shared_from_this(), startOffset, endOffset)); 
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)

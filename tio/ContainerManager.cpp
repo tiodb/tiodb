@@ -7,20 +7,20 @@ namespace tio
 		shared_ptr<ITioStorageManager> volatileList,
 		shared_ptr<ITioStorageManager> volatileMap)
 	{
-		managerByType_["volatile/list"] = volatileList;
-		managerByType_["volatile/map"] = volatileMap;
+		managerByType_["volatile_list"] = volatileList;
+		managerByType_["volatile_map"] = volatileMap;
 
-		meta_containers_ = CreateContainer("volatile/map", "meta/containers");
-		meta_availableTypes_ = CreateContainer("volatile/list", "meta/available_types");
+		meta_containers_ = CreateContainer("volatile_map", "meta/containers");
+		meta_availableTypes_ = CreateContainer("volatile_list", "meta/available_types");
 
 		//
 		// it'll make it available on the meta/containers list itself...
 		//
-		meta_containers_ = CreateContainer("volatile/map", "meta/containers");
+		meta_containers_ = CreateContainer("volatile_map", "meta/containers");
 		
 
-		meta_availableTypes_->PushBack(TIONULL, "volatile/list");
-		meta_availableTypes_->PushBack(TIONULL, "volatile/map");
+		meta_availableTypes_->PushBack(TIONULL, "volatile_list");
+		meta_availableTypes_->PushBack(TIONULL, "volatile_map");
 	}
 
 	void ContainerManager::RegisterStorageManager(const string& type, shared_ptr<ITioStorageManager> manager)

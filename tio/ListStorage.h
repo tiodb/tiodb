@@ -5,86 +5,8 @@ namespace tio {
 namespace MemoryStorage
 {
 
+
 typedef list<ValueAndMetadata> ListType;
-
-class ListResultSet : public ITioResultSet
-{
-	TioData source_;
-	ListType::const_iterator begin_, current_, end_;
-	
-	size_t currentIndex_;
-public:
-
-	ListResultSet(const TioData& source, 
-		ListType::const_iterator begin, 
-		ListType::const_iterator end,
-		unsigned int beginIndex)
-		: source_(source), current_(begin), begin_(begin), end_(end), currentIndex_(beginIndex)
-	{
-	}
-
-	virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata)
-	{
-		if(current_ == end_)
-			return false;
-
-		if(key)
-			key->Set((int)currentIndex_);
-
-		if(value)
-			*value = current_->value;
-
-		if(metadata)
-			*metadata = current_->metadata;
-
-		return true;
-	}
-
-	virtual bool MoveNext()
-	{
-		if(current_ == end_)
-			return false;
-
-		++current_;
-		++currentIndex_;
-
-		if(current_ == end_)
-			return false;
-
-		return true;
-	}
-
-	virtual bool MovePrevious()
-	{
-		if(current_ == begin_)
-			return false;
-
-		--current_;
-		--currentIndex_;
-
-		return true;
-	}
-
-	virtual bool AtBegin()
-	{
-		return current_ == begin_;
-	}
-
-	virtual bool AtEnd()
-	{
-		return current_ == end_;
-	}
-
-	virtual TioData Source()
-	{
-		return source_;
-	}
-
-	virtual unsigned int RecordCount()
-	{
-		return 0xFFFFFFFF;
-	}
-};
 
 class ListStorage : 
 	boost::noncopyable,
@@ -95,8 +17,6 @@ private:
 	ListType data_;
 	string name_, type_;
 	EventDispatcher dispatcher_;
-
-	
 
 public:
 
@@ -199,7 +119,7 @@ public:
 		// advance a list iterator is expensive. If it's near the end, will
 		// walk backwards
 		//
-		if(index < data_.size() / 2)
+		if(index < static_cast<int>(data_.size() / 2))
 		{
 			i = data_.begin();
 			for(int x = 0  ; x < index ; ++x, ++i)
@@ -258,19 +178,45 @@ public:
 		dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL); 
 	}
 
-	virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+	virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 	{
-		if(query.IsNull() || (query.GetDataType() == TioData::Sz && *query.AsSz() == '\0'))
-			return shared_ptr<ITioResultSet>(new ListResultSet(TIONULL, data_.begin(), data_.end(), 0));
+		if(!query.IsNull())
+			throw std::runtime_error("not supported");
+
+		ListType::const_iterator begin, end;
 
 		//
-		// int = start index
+		// if client is asking for a negative index that's bigger than the container,
+		// will start from beginning. Ex: if container size is 3 and start = -5, will start from 0
 		//
-		if(query.GetDataType() == TioData::Int)
-			return shared_ptr<ITioResultSet>(
-				new ListResultSet(TIONULL, GetOffset(query.AsInt()), data_.end(), query.AsInt()));
-		
-		throw std::runtime_error("not supported");		
+		if(GetRecordCount() == 0)
+		{
+			begin = end = data_.end();
+			startOffset = 0;
+		}
+		else
+		{
+			int recordCount = GetRecordCount();
+
+			NormalizeQueryLimits(&startOffset, &endOffset, recordCount);
+			
+			if(startOffset == 0)
+				begin = data_.begin();
+			else if(startOffset == recordCount)
+				begin = data_.end();
+			else
+				begin = GetOffset(startOffset);
+
+			if(endOffset == 0)
+				end = data_.begin();
+			else if(endOffset == recordCount)
+				end = data_.end();
+			else
+				end = GetOffset(endOffset);	
+		}
+
+		return shared_ptr<ITioResultSet>(
+			new StlContainerResultSet<ListType>(TIONULL, startOffset, begin, end));
 	}
 
 	virtual unsigned int Subscribe(EventSink sink, const string& start)

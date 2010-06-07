@@ -182,6 +182,11 @@ namespace tio
 		SendString(answer.str());
 	}
 
+	void TioTcpSession::SendAnswer(const string& answer)
+	{
+		SendString(answer);
+	}
+
 
 	string TioDataToString(const TioData& data)
 	{
@@ -213,6 +218,83 @@ namespace tio
 		
 		answer << "event " << handle << " " << eventName;
 		
+		if(!keyString.empty())
+			answer << " key " << GetDataTypeAsString(key) << " " << keyString.length();
+
+		if(!valueString.empty())
+			answer << " value " << GetDataTypeAsString(value) << " " << valueString.length();
+
+		if(!metadataString.empty())
+			answer << " metadata " << GetDataTypeAsString(metadata) << " " << metadataString.length();
+
+		answer << "\r\n";
+
+		if(!keyString.empty())
+			answer << keyString << "\r\n";
+
+		if(!valueString.empty())
+			answer << valueString << "\r\n";
+
+		if(!metadataString.empty())
+			answer << metadataString << "\r\n";
+
+		SendString(answer.str());
+	}
+
+	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	{
+		stringstream answer;
+		answer << "answer ok query " << queryID << "\r\n";
+
+		SendAnswer(answer);
+
+		for(;;)
+		{
+			TioData key, value, metadata;
+			
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+
+			if(!b)
+			{
+				stringstream answer;
+				answer << "query " << queryID << " end\r\n";
+				SendAnswer(answer);
+				break;
+			}
+
+			SendResultSetItem(queryID, key, value, metadata);
+
+			resultSet->MoveNext();
+		}
+	}
+
+	void TioTcpSession::SendResultSetItem(unsigned int queryID, 
+		const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		stringstream answer;
+
+		/*
+		if(itemType == "last");
+		{
+			answer << "query " << queryID << " end";
+			SendString(answer.str());
+			return;
+		}
+		*/
+
+		string keyString, valueString, metadataString;
+
+		if(key)
+			keyString = TioDataToString(key);
+
+		if(value)
+			valueString = TioDataToString(value);
+
+		if(metadata)
+			metadataString = TioDataToString(metadata);
+
+		answer << "query " << queryID << " item";
+
 		if(!keyString.empty())
 			answer << " key " << GetDataTypeAsString(key) << " " << keyString.length();
 
@@ -377,7 +459,7 @@ namespace tio
 			//
 			try
 			{
-				subscriptionInfo->resultSet = container->Query(numericStart);
+				subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
 			}
 			catch(std::exception&)
 			{

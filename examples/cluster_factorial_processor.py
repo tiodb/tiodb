@@ -1,6 +1,6 @@
 import tioclient
 tio = tioclient.Connect('tio://127.0.0.1:12345')
-source = tio.CreateContainer('factorial_cluster/source', 'volatile/list')
+source = tio.CreateContainer('factorial_cluster/source', 'volatile_list')
 
 destination_name = source.get_property('destination')
 destination = tio.OpenContainer(destination_name)

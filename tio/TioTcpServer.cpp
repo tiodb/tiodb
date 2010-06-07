@@ -91,7 +91,8 @@ namespace tio
 		containerManager_(containerManager),
 		acceptor_(io_service, endpoint),
 		io_service_(io_service),
-		lastID_(0)
+		lastSessionID_(0),
+		lastQueryID_(0)
 	{
 		LoadDispatchMap();
 		InitializeMetaContainers();
@@ -102,7 +103,7 @@ namespace tio
 		//
 		// users
 		//
-		metaContainers_.users = containerManager_.CreateContainer("volatile/map", "meta/users");
+		metaContainers_.users = containerManager_.CreateContainer("volatile_map", "meta/users");
 
 		try
 		{
@@ -121,9 +122,9 @@ namespace tio
 		//
 		// sessions
 		//
-		metaContainers_.sessions = containerManager_.CreateContainer("volatile/map", "meta/sessions");
+		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "meta/sessions");
 
-		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile/map", "meta/session_last_command");
+		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "meta/session_last_command");
 
 
 	}
@@ -135,7 +136,7 @@ namespace tio
 	
 	void TioTcpServer::DoAccept()
 	{
-		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, ++lastID_));
+		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, ++lastSessionID_));
 
 		acceptor_.async_accept(session->GetSocket(),
 			boost::bind(&TioTcpServer::OnAccept, this, session, asio::placeholders::error));
@@ -247,6 +248,8 @@ namespace tio
 		dispatchMap_["auth"] = boost::bind(&TioTcpServer::OnCommand_Auth, this, _1, _2, _3, _4);
 
 		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
+
+		dispatchMap_["query"] = boost::bind(&TioTcpServer::OnCommand_Query, this, _1, _2, _3, _4);
 	}
 
 	std::string Serialize(const std::list<const TioData*>& fields)
@@ -300,7 +303,7 @@ namespace tio
 		return header.str();
 	}
 
-	void RecordChange(shared_ptr<ITioContainer> source,
+	void RecordChangeRecorder(shared_ptr<ITioContainer> source,
 		shared_ptr<ITioContainer> destination,
 		const string& evt, const TioData& key, const TioData& value, const TioData& metadata)
 	{
@@ -315,6 +318,59 @@ namespace tio
 		string serialized = Serialize(fields);
 
 		destination->PushBack(TIONULL, serialized, source->GetName());
+	}
+
+	void TioTcpServer::OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 1, at_least))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		shared_ptr<ITioContainer> container;
+		unsigned int handle;
+
+		try
+		{
+			handle = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+			container = session->GetRegisteredContainer(handle);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid handle");
+			return;
+		}
+
+		int start = 0, end = 0;
+		TioData query;
+
+		try
+		{
+			if(cmd.GetParameters().size() > 1)
+				start = lexical_cast<int>(cmd.GetParameters()[1]);
+			
+			if(cmd.GetParameters().size() > 2)
+				end = lexical_cast<int>(cmd.GetParameters()[2]);
+		}
+		catch(bad_lexical_cast&)
+		{
+			MakeAnswer(error, answer, "invalid parameter");
+			return;
+		}
+
+		try
+		{
+			shared_ptr<ITioResultSet> queryResult = container->Query(start, end, query);
+			unsigned int queryID = ++lastQueryID_;
+
+			session->SendResultSet(queryResult, queryID);
+		}
+		catch(std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+			return;
+		}
 	}
 
 	//
@@ -384,7 +440,7 @@ namespace tio
 		//
 		// TODO: should check other ways to create loops
 		//
-		source->Subscribe(boost::bind(&RecordChange, source, destination, _1, _2, _3, _4), string());
+		source->Subscribe(boost::bind(&RecordChangeRecorder, source, destination, _1, _2, _3, _4), string());
 
 		MakeAnswer(success, answer);
 	}
@@ -720,8 +776,8 @@ namespace tio
 	{
 		//
 		// examples:
-		// set_permission persistent/map my_map push_back allow user_name
-		// set_permission volatile/vector object_name * allow user_name
+		// set_permission persistent_map my_map push_back allow user_name
+		// set_permission volatile_vector object_name * allow user_name
 		//
 		if(!CheckParameterCount(cmd, 4, exact) && !CheckParameterCount(cmd, 5, exact))
 		{

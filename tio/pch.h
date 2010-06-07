@@ -14,7 +14,6 @@
 #pragma warning(disable : 4127) // conditional expression is constant
 #pragma warning(disable : 4512) // assignment operator could not be generated
 #pragma warning(disable : 4100) // unreferenced local parameter
-#pragma warning(disable : 4018) // signaled/unsigned mismatch
 
 //
 // lexical_cast is triggering this warning every time, it's pissing me off
@@ -65,7 +64,14 @@
 #include <numeric>
 #include <queue>
 #include <deque>
+#include <limits>
 
+//
+// macros are evil, you know?
+//
+#if defined(max) 
+#undef max
+#endif
 //
 // berkeley db
 //

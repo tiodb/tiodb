@@ -105,9 +105,9 @@ namespace MemoryStorage
 
 		MemoryStorageManager()
 		{
-			supportedTypes_["volatile/vector"] = &CreateVectorStorage;
-			supportedTypes_["volatile/map"] = &CreateMapStorage;
-			supportedTypes_["volatile/list"] = &CreateListStorage;
+			supportedTypes_["volatile_vector"] = &CreateVectorStorage;
+			supportedTypes_["volatile_map"] = &CreateMapStorage;
+			supportedTypes_["volatile_list"] = &CreateListStorage;
 		}
 
 		virtual std::vector<string> GetSupportedTypes()

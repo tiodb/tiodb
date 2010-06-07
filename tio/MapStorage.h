@@ -168,9 +168,20 @@ public:
 		  dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL);
 	  }
 
-	  virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+	  virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 	  {
-		  throw std::runtime_error("not implemented");
+		  if(!query.IsNull() || startOffset != 0 || endOffset != 0)
+			  throw std::runtime_error("not supported");
+			 
+		  return shared_ptr<ITioResultSet>(
+			new StlContainerResultSet<DataMap>(
+				TIONULL,
+				0,
+				data_.begin(), 
+				data_.end(), 
+				data_.size(),
+				&MapContainerGetter<DataMap>
+				));
 	  }
 
 	  virtual unsigned int Subscribe(EventSink sink, const string& start)
@@ -205,7 +216,7 @@ public:
 
 			  if(isNumeric)
 			  {
-				  if(index + 1 > data_.size())
+				  if(index + 1 > static_cast<int>(data_.size()))
 					  throw std::invalid_argument("out of bounds");
 
 				  startIterator = data_.begin();

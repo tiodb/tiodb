@@ -116,7 +116,7 @@ namespace tio
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata);
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata);
 		virtual void Clear();
-		virtual shared_ptr<ITioResultSet> Query(const TioData& query);
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query);
 		
 
 		virtual string GetType();

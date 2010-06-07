@@ -5,6 +5,11 @@
 //
 namespace tio
 {
+	using std::numeric_limits;
+	using std::runtime_error;
+	using boost::function;
+
+
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
 	{
@@ -364,6 +369,11 @@ namespace tio
 			type_ = None;
 		}
 
+		void Set(const TioData& v)
+		{
+			CopyFrom(v);
+		}
+
 		void Set(int v)
 		{
 			Free();
@@ -543,7 +553,7 @@ namespace tio
 	// support for negative indexes, just like python. -1 is the last,
 	// -2 is the one before the last, and so on...
 	//
-	inline int NormalizeIndex(int index, unsigned int size)
+	inline unsigned int NormalizeIndex(int index, int size)
 	{	
 		if(index < 0)
 		{
@@ -560,7 +570,35 @@ namespace tio
 				throw std::invalid_argument("out of bounds");
 		}
 
-		return index;
+		ASSERT(index >=0);
+
+		return static_cast<unsigned int>(index);
+	}
+
+	//
+	// if the index is outside bound, will bring it to the nearest bound
+	//
+	inline int NormalizeForQueries(int index, int size)
+	{
+		if(size == 0 || (index < 0 && abs(index) > size))
+			return 0;
+		else if(index > size)
+			return size;
+		else
+			return NormalizeIndex(index, size);
+	}
+
+	inline void NormalizeQueryLimits(int* start, int* end, int containerSize)
+	{
+		*start = NormalizeForQueries(*start, containerSize);
+
+		if(*end == 0)
+			*end = containerSize;
+		else
+			*end = NormalizeForQueries(*end, containerSize);
+
+		if(*start > *end)
+			*start = *end;
 	}
 
 	typedef boost::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
@@ -599,7 +637,7 @@ namespace tio
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata) = 0;
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata) = 0;
 
-		virtual shared_ptr<ITioResultSet> Query(const TioData& query) = 0;
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
 
 		virtual void Clear() = 0;
 
@@ -660,7 +698,7 @@ namespace tio
 		virtual void Set(const TioData& key, const TioData& value, const TioData& metadata = TIONULL) = 0;
 		virtual void Delete(const TioData& key, const TioData& value = TIONULL, const TioData& metadata = TIONULL) = 0;
 
-		virtual shared_ptr<ITioResultSet> Query(const TioData& query) = 0;
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
 
 		virtual void Clear() = 0;
 
@@ -803,9 +841,9 @@ namespace tio
 			storage_->Delete(key, value, metadata);
 		}
 
-		virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
-			return storage_->Query(query);
+			return storage_->Query(startOffset, endOffset, query);
 		}
 
 		virtual void Clear()
@@ -926,6 +964,277 @@ namespace tio
 			size_t index = i->second;
 
 			return GetField(index);
+		}
+	};
+
+
+
+	template<class ContainerT>
+	bool NumericIndexBasedContainerGetter(
+		size_t currentQueryIndex, typename ContainerT::const_iterator current, TioData* key, TioData* value, TioData* metadata)
+	{
+		//
+		// TODO: 64bits problem here, size_t is bigger than int
+		//
+		if(key)
+			key->Set((int)currentQueryIndex);
+
+		if(value)
+			*value = current->value;
+
+		if(metadata)
+			*metadata = current->metadata;
+
+		return true;
+	}
+
+	template<class ContainerT>
+	bool MapContainerGetter(
+		size_t currentQueryIndex, typename ContainerT::const_iterator current, TioData* key, TioData* value, TioData* metadata)
+	{
+		if(key)
+			key->Set(current->first);
+
+		if(value)
+			value->Set(current->second.value);
+
+		if(metadata)
+			metadata->Set(current->second.metadata);
+
+		return true;
+	}
+
+	template<class ContainerT>
+	class StlContainerResultSet : public ITioResultSet
+	{
+		typedef function<bool (size_t, typename ContainerT::const_iterator, TioData*, TioData*, TioData*)> ItemGetFunction;
+
+		ItemGetFunction itemGetFunction_;
+		TioData source_;
+
+		typename ContainerT::const_iterator begin_, current_, end_;
+
+		size_t currentIndex_;
+		size_t recordCount_;
+		bool invalidated_;
+
+	public:
+
+		StlContainerResultSet(
+			const TioData& source,
+			unsigned int beginIndex, 
+			typename ContainerT::const_iterator begin, 
+			typename ContainerT::const_iterator end,
+			typename ContainerT::size_type recordCount = numeric_limits<typename ContainerT::size_type>::max(),
+			ItemGetFunction itemGetFunction = &NumericIndexBasedContainerGetter<ContainerT>
+			)
+
+			: source_(source), current_(begin), begin_(begin), end_(end), 
+			currentIndex_(beginIndex), itemGetFunction_(itemGetFunction), recordCount_(recordCount)
+		{
+			invalidated_ = false;
+		}
+
+		void Invalidate()
+		{
+			invalidated_ = true;
+		}
+
+		void CheckInvalidated()
+		{
+			if(invalidated_)
+				throw runtime_error("invalidated query");
+		}
+
+		virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata)
+		{
+			CheckInvalidated();
+
+			if(current_ == end_)
+				return false;
+
+			return itemGetFunction_(currentIndex_, current_, key, value, metadata);
+		}
+
+		virtual bool MoveNext()
+		{
+			CheckInvalidated();
+
+			if(current_ == end_)
+				return false;
+
+			++current_;
+			++currentIndex_;
+
+			if(current_ == end_)
+				return false;
+
+			return true;
+		}
+
+		virtual bool MovePrevious()
+		{
+			CheckInvalidated();
+
+			if(current_ == begin_)
+				return false;
+
+			--current_;
+			--currentIndex_;
+
+			return true;
+		}
+
+		virtual bool AtBegin()
+		{
+			CheckInvalidated();
+
+			return current_ == begin_;
+		}
+
+		virtual bool AtEnd()
+		{
+			CheckInvalidated();
+
+			return current_ == end_;
+		}
+
+		virtual TioData Source()
+		{
+			CheckInvalidated();
+
+			return source_;
+		}
+
+		virtual typename ContainerT::size_type RecordCount()
+		{
+			CheckInvalidated();
+
+			return recordCount_;
+		}
+	};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	template<class ContainerT>
+	class GenericResultSet : public ITioResultSet
+	{
+		TioData source_;
+		shared_ptr<ContainerT> container_;
+
+		unsigned int currentIndex_, beginIndex_, endIndex_;
+		unsigned int recordCount_;
+		bool invalidated_;
+
+	public:
+		GenericResultSet(
+			const TioData& source, 
+			shared_ptr<ContainerT> container,
+			unsigned int beginIndex,
+			unsigned int endIndex
+			)
+			: source_(source), currentIndex_(beginIndex), beginIndex_(beginIndex), endIndex_(endIndex), 
+			  recordCount_(endIndex - beginIndex),
+			  container_(container)
+		{
+			invalidated_ = false;
+		}
+
+		void Invalidate()
+		{
+			invalidated_ = true;
+		}
+
+		void CheckInvalidated()
+		{
+			if(invalidated_)
+				throw runtime_error("invalidated query");
+		}
+
+		virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata)
+		{
+			CheckInvalidated();
+
+			if(currentIndex_ == endIndex_)
+				return false;
+
+			container_->GetRecord((int)currentIndex_, key, value, metadata);
+
+			return true;
+		}
+
+		virtual bool MoveNext()
+		{
+			CheckInvalidated();
+
+			if(currentIndex_ == endIndex_)
+				return false;
+
+			++currentIndex_;
+
+			if(currentIndex_ == endIndex_)
+				return false;
+
+			return true;
+		}
+
+		virtual bool MovePrevious()
+		{
+			CheckInvalidated();
+
+			if(currentIndex_ == beginIndex_)
+				return false;
+
+			--currentIndex_;
+
+			return true;
+		}
+
+		virtual bool AtBegin()
+		{
+			CheckInvalidated();
+
+			return currentIndex_ == beginIndex_;
+		}
+
+		virtual bool AtEnd()
+		{
+			CheckInvalidated();
+
+			return currentIndex_ == endIndex_;
+		}
+
+		virtual TioData Source()
+		{
+			CheckInvalidated();
+
+			return source_;
+		}
+
+		virtual unsigned int RecordCount()
+		{
+			CheckInvalidated();
+
+			return recordCount_;
 		}
 	};
 }

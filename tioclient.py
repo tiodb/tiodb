@@ -1,4 +1,5 @@
-from __future__ import print_function
+# we'll not use this because it works only on 2.6+
+#from __future__ import print_function
 import socket
 import functools
 from cStringIO import StringIO
@@ -67,16 +68,7 @@ class RemoteContainer(object):
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            l = []
-            start = key.start
-            stop = key.stop
-            if start is None:
-                start = 0
-            if stop is None:
-                stop = len(self)
-            for x in range(start, stop):
-                l.append(self.get(x))
-            return l                         
+            return self.query(key.start, key.stop)
         else:
             return self.get(key)
 
@@ -123,17 +115,17 @@ class RemoteContainer(object):
     def append(self, value, metadata=None):
         return self.push_back(value, metadata)
 
-    def insert(self, value, metadata=None):
-        return self.send_data_command('insert', None, value, metadata)
+    def insert(self, key, value, metadata=None):
+        return self.send_data_command('insert', key, value, metadata)
 
-    def set(self, value, metadata=None):
-        return self.send_data_command('set', None, value, metadata)    
+    def set(self, key, value, metadata=None):
+        return self.send_data_command('set', key, value, metadata)    
     
     def push_back(self, value, metadata=None):
         return self.send_data_command('push_back', None, value, metadata)
 
     def push_front(self, value, metadata=None):
-        return functools.partial(self.send_data_command, 'push_front', None, value, metadata)
+        return self.send_data_command('push_front', None, value, metadata)
         
     def get_count(self):
         return int(self.manager.SendCommand('get_count', self.handle)['count'])
@@ -165,6 +157,19 @@ class RemoteContainer(object):
     def start_recording(self, destination_container):
         return self.manager.SendCommand('start_recording', self.handle, destination_container.handle)
 
+    def values(self):
+        return self.query()
+
+    def keys(self):
+        return [x[0] for x in self.query_with_key_and_metadata()]
+
+    def query(self, startOffset=None, endOffset=None):
+        # will return only the values
+        return [x[1] for x in self.query_with_key_and_metadata(startOffset, endOffset)]
+
+    def query_with_key_and_metadata(self, startOffset=None, endOffset=None):
+        return self.manager.Query(self.handle, startOffset, endOffset)
+
 class TioServerConnection(object):
     def __init__(self, host = None, port = None):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -177,7 +182,9 @@ class TioServerConnection(object):
         self.containers = {}
         self.stop = False
 
-        self.log_sends = False        
+        self.log_sends = False
+
+        self.running_queries = {}
 
         if host:
             self.Connect(host, port)
@@ -235,6 +242,17 @@ class TioServerConnection(object):
         self.receiveBuffer = self.receiveBuffer[size:]
 
         return ret
+
+    def RegisterQuery(self, query_id):
+        self.running_queries[query_id] = []
+
+    def AddToQuery(self, query_id, data):
+        self.running_queries[query_id].append(data)
+
+    def FinishQuery(self, query_id):
+        query = self.running_queries[query_id]
+        del self.running_queries[query_id]
+        return query
                 
     def ReceiveAnswer(self, wait_until_answer = True):
         while 1:        
@@ -271,6 +289,23 @@ class TioServerConnection(object):
                 if parameterType == 'data':
                     return self.ReceiveDataAnswer(params, currentParam)
 
+                if parameterType == 'query':
+                    query_id = params[currentParam+1]
+                    self.RegisterQuery(query_id)
+                    continue
+
+                raise Exception('invalid parameter type: ' + parameterType) 
+
+            elif answerType == 'query':
+                query_id = params[1]
+                what = params[2]
+
+                # query [id] (item|end) [data]
+                if what == 'item':
+                    self.AddToQuery(query_id, self.ReceiveDataAnswer(params, 2))
+                elif what == 'end':
+                    return self.FinishQuery(query_id)
+                
             elif answerType == 'event':
                 class Event: pass
                 
@@ -404,7 +439,7 @@ class TioServerConnection(object):
         self.s.sendall(buffer)
 
         if self.log_sends:
-            print(buffer)
+            print buffer
 
         if self.dontWaitForAnswers:
             self.pendingAnswerCount += 1
@@ -438,7 +473,7 @@ class TioServerConnection(object):
             buffer += metadata[0] + '\r\n'
 
         if self.log_sends:
-            print(buffer)
+            print buffer
 
         return self.SendCommand(buffer)
 
@@ -464,6 +499,15 @@ class TioServerConnection(object):
     def OpenContainer(self, name, type = ''):
         return self.__CreateOrOpenContainer('open', name, type)
 
+    def Query(self, handle, startOffset=None, endOffset=None):
+        l = []
+        l.append('query')
+        l.append(handle)
+        if not startOffset is None: l.append(str(startOffset))
+        if not endOffset is None: l.append(str(endOffset))
+
+        return self.SendCommand(' '.join(l))
+        
 class FieldParser:
     def __init__(self):
         pass
@@ -509,7 +553,7 @@ def SpeedTest(func, count, bytes, useKey = False):
         func(key=str(x) if useKey else None, value=v)
         if x % log_step == 0:
             d = datetime.now() - mark
-            print("%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)))
+            print "%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0))
             mark = datetime.now()
 
        
@@ -521,11 +565,11 @@ def MasterSpeedTest():
     man.Connect('localhost', 6666)
 
     tests = (
-              {'type': 'volatile/map',      'hasKey': True},
-              {'type': 'persistent/map',    'hasKey': True},
+              {'type': 'volatile_map',      'hasKey': True},
+              {'type': 'persistent_map',    'hasKey': True},
 
-              {'type': 'volatile/list',      'hasKey': False},
-              {'type': 'persistent/list',    'hasKey': False},
+              {'type': 'volatile_list',      'hasKey': False},
+              {'type': 'persistent_list',    'hasKey': False},
             )
 
     count = 50 * 1000
@@ -536,24 +580,24 @@ def MasterSpeedTest():
         type = test['type']
         hasKey = test['hasKey']
         ds = man.CreateContainer(namePerfix + type, type)
-        print(type)
+        print type
         result = SpeedTest(ds.Set if hasKey else ds.PushBack, count, bytes, hasKey)
 
-        print('%s: %f msg/s' % (type, result))
+        print '%s: %f msg/s' % (type, result)
 
 def TestWaitAndPop():
     def f(key, value, metadata):
-        print ((key, value, metadata))
+        print (key, value, metadata)
         
     man = TioServerConnection('localhost', 6666)
-    container = man.CreateContainer('abc', 'volatile/vector')
+    container = man.CreateContainer('abc', 'volatile_vector')
     container.WaitAndPopNext(f)
     container.PushBack(key=None, value='abababu')
     container.WaitAndPopNext(f)
     container.WaitAndPopNext(f)
     container.PushBack(key=None, value='xpto')
 
-    container = man.CreateContainer('xpto', 'volatile/vector')
+    container = man.CreateContainer('xpto', 'volatile_vector')
     container.Set('key1', 'value1')
     container.Set('key2', 'value2')
     container.WaitAndPopKey('key1', f)
@@ -583,7 +627,7 @@ def ParseUrl(url):
         # data container name is optional
         return (host, port, parts[1]) if len(parts) == 2 else (host, port, None)
     except Exception, ex:
-        print(ex)
+        print ex
         raise Exception ('Not supported. Format must be "tio://host:port/[container_name]"')
 
 def OpenByUrl(url, create_container_type=None):
@@ -600,28 +644,70 @@ def Connect(url):
         raise Exception('container specified, you must inform a url with just the server/port')
     
     return TioServerConnection(address, port)
-    
+
+def TestQuery():
+    tio = Connect('tio://127.0.0.1:6666')
+
+    def do_all_queries(container):
+        print container
+        try:
+            for x in container.query((len(container)/2)):
+                print x
+            for x in container.query(-(len(container)/2)):
+                print x
+        except:
+            pass
+            
+        for x in container.keys():
+            print x
+        for x in container.values():
+            print x
+        for x in container.query():
+            print x
+        for x in container.query_with_key_and_metadata():
+            print x
+        
+
+    do_all_queries(tio.CreateContainer('pl', 'persistent_list'))
+    do_all_queries(tio.CreateContainer('pm', 'persistent_map'))
+
+    container = tio.CreateContainer('vl', 'volatile_list')
+    container.extend([x for x in xrange(10)])
+    do_all_queries(container)
+
+    container = tio.CreateContainer('vm', 'volatile_map')
+    for x in range(10): container[str(x)] = x
+    do_all_queries(container)    
+
+
 def DoTest():
     man = Connect('tio://127.0.0.1:6666')
-    container = man.CreateContainer('name', 'volatile/list')
+    container = man.CreateContainer('test123', 'volatile_list')
+
+    container.clear()    
+
+    def show(*args):
+        print args
     
-    container.subscribe(print)
+    container.subscribe(show)
 
     for x in range(1):
-        print(x)
+        print x
         container.push_back(10, 'metadata')
         container[0] = 'Rodrigo Strauss'
         container.insert(0, 'test')
         container.push_front(value=12334567)
+        assert len(container) == 3
 
         key, value, metadata = container.get(0, withKeyAndMetadata=True)        
 
-        man.DispatchAllEvents();
+    man.DispatchAllEvents();
 
     return
 
        
 if __name__ == '__main__':
+    TestQuery()
     DoTest()
     #BdbTest()
     #ParseUrl('tio://127.0.0.1:6666/xpto/asas')

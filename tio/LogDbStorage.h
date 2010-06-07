@@ -67,6 +67,7 @@ namespace tio {
 
 		class LogDbVectorStorage : 
 			boost::noncopyable,
+			public boost::enable_shared_from_this<LogDbVectorStorage>,
 			public ITioStorage,
 			public ITioPropertyMap
 		{
@@ -316,9 +317,15 @@ namespace tio {
 				ldb_.ClearAllRecords(tableInfo_);
 			}
 
-			virtual shared_ptr<ITioResultSet> Query(const TioData& query)
+			virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 			{
-				throw std::runtime_error("not implemented");
+				if(!query.IsNull())
+					throw std::runtime_error("not supported");
+
+				NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
+
+				return shared_ptr<ITioResultSet>(
+					new GenericResultSet<ITioStorage>(query, shared_from_this(), startOffset, endOffset)); 
 			}
 
 			virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
@@ -522,8 +529,8 @@ namespace tio {
 			{
 				std::vector<string> ret;
 
-				ret.push_back("persistent/list");
-				ret.push_back("persistent/map");
+				ret.push_back("persistent_list");
+				ret.push_back("persistent_map");
 
 				return ret;
 			}
@@ -542,7 +549,7 @@ namespace tio {
 
 			void CheckType(const string& type)
 			{
-				if(type != "persistent/list" && type != "persistent/map")
+				if(type != "persistent_list" && type != "persistent_map")
 					throw std::invalid_argument("storage type not supported");
 			}
 
@@ -603,11 +610,11 @@ namespace tio {
 
 				LogDbVectorStorage::AccessType accessType;
 
-				if(type == "persistent/list")
+				if(type == "persistent_list")
 					accessType = LogDbVectorStorage::RecordNumber;
 				else 
 				{	
-					BOOST_ASSERT(type == "persistent/map");
+					BOOST_ASSERT(type == "persistent_map");
 					accessType = LogDbVectorStorage::Map;
 				}
 

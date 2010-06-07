@@ -77,7 +77,8 @@ namespace tio
 		typedef map< string, set<string> > RecordingSessions;
 		RecordingSessions recordingSessions_;
 
-		unsigned int lastID_;
+		unsigned int lastSessionID_;
+		unsigned int lastQueryID_;
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;
@@ -107,6 +108,7 @@ namespace tio
 
 		void LoadDispatchMap();
 
+		void OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Start_Recording(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Version(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);

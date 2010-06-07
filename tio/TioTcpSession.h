@@ -65,6 +65,9 @@ namespace tio
 
 		void SendPendingSnapshots();
 
+		void SendResultSetItem(unsigned int queryID, 
+			const TioData& key, const TioData& value, const TioData& metadata);
+
 	public:
 
 		TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id);
@@ -77,12 +80,15 @@ namespace tio
 
 		unsigned int GetID();
 
+		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
+
 		void OnReadCommand(const error_code& err, size_t read);
 		void OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read);
 		void OnReadMessage(const error_code& err);
 		bool CheckError(const error_code& err);
 		void OnCommandData(size_t dataSize, const error_code& err, size_t read);
 		void SendAnswer(stringstream& answer);
+		void SendAnswer(const string& answer);
 
 		unsigned int RegisterContainer(const string& containerName, shared_ptr<ITioContainer> container);
 		shared_ptr<ITioContainer> GetRegisteredContainer(unsigned int handle, string* containerName = NULL, string* containerType = NULL);
