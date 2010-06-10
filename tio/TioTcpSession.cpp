@@ -35,7 +35,73 @@ namespace tio
 	TioTcpSession::~TioTcpSession()
 	{
 		BOOST_ASSERT(subscriptions_.empty());
+		BOOST_ASSERT(diffs_.empty());
+
 		return;
+	}
+
+
+	void TioTcpSession::StopDiffs()
+	{
+		for(DiffMap::iterator i = diffs_.begin() ; i != diffs_.end() ; ++i)
+		{
+			i->second.first->Unsubscribe(i->second.second);
+
+			//
+			// TODO: clear diff contents
+			//
+		}
+
+		diffs_.clear();
+	}
+
+	shared_ptr<ITioContainer> TioTcpSession::GetDiffDestinationContainer(unsigned int handle)
+	{
+		DiffMap::const_iterator i = diffs_.find(handle);
+
+		if(i != diffs_.end())
+			return i->second.first;
+		else
+			return shared_ptr<ITioContainer>();
+	}
+
+	void MapContainerMirror(shared_ptr<ITioContainer> source, shared_ptr<ITioContainer> destination,
+		const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		if(event_name == "set" || event_name == "insert")
+			destination->Set(key, value, event_name);
+		if(event_name == "delete")
+			destination->Delete(key, TIONULL, event_name);
+		else if(event_name == "clear")
+		{
+			//
+			// on a clear, we'll set an delete event for every source record
+			//
+			shared_ptr<ITioResultSet> query = source->Query(0,0, TIONULL);
+
+			TioData key;
+
+			while(query->GetRecord(&key, NULL, NULL))
+			{
+				destination->Set(key, TIONULL, "delete");
+				query->MoveNext();
+			}
+		}
+
+		//
+		// TODO: support other events
+		//
+	}
+
+	void TioTcpSession::SetupDiffContainer(unsigned int handle, 
+		shared_ptr<ITioContainer> destinationContainer)
+	{
+		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
+
+		unsigned int cookie = container->Subscribe(boost::bind(&MapContainerMirror, container, destinationContainer, _1, _2, _3, _4), 
+			"__none__"); // "__none__" will make us receive only the updates (not the snapshot)
+
+		diffs_[handle] = make_pair(destinationContainer, cookie); 
 	}
 
 	unsigned int TioTcpSession::GetID()
@@ -395,6 +461,8 @@ namespace tio
 		}
 
 		subscriptions_.clear();
+
+		StopDiffs();
 	}
 
 

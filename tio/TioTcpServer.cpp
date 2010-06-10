@@ -223,8 +223,6 @@ namespace tio
 
 		dispatchMap_["modify"] = boost::bind(&TioTcpServer::OnModify, this, _1, _2, _3, _4);
 
-		dispatchMap_["start_recording"] = boost::bind(&TioTcpServer::OnCommand_Start_Recording, this, _1, _2, _3, _4);
-
 		dispatchMap_["wnp_next"] = boost::bind(&TioTcpServer::OnCommand_WnpNext, this, _1, _2, _3, _4);
 		dispatchMap_["wnp_key"] = boost::bind(&TioTcpServer::OnCommand_WnpKey, this, _1, _2, _3, _4);
 		
@@ -250,6 +248,9 @@ namespace tio
 		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
 
 		dispatchMap_["query"] = boost::bind(&TioTcpServer::OnCommand_Query, this, _1, _2, _3, _4);
+		dispatchMap_["start_recording"] = boost::bind(&TioTcpServer::OnCommand_Start_Recording, this, _1, _2, _3, _4);
+		dispatchMap_["diff"] = boost::bind(&TioTcpServer::OnCommand_Diff, this, _1, _2, _3, _4);
+
 	}
 
 	std::string Serialize(const std::list<const TioData*>& fields)
@@ -365,6 +366,74 @@ namespace tio
 			unsigned int queryID = ++lastQueryID_;
 
 			session->SendResultSet(queryResult, queryID);
+		}
+		catch(std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+			return;
+		}
+	}
+
+
+	void TioTcpServer::OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 1, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		shared_ptr<ITioContainer> container;
+		unsigned int handle;
+
+		try
+		{
+			handle = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+			container = session->GetRegisteredContainer(handle);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid handle");
+			return;
+		}
+
+		try
+		{
+			shared_ptr<ITioContainer> diffContainer = session->GetDiffDestinationContainer(handle);
+
+			//
+			// if there's already a container with a diff, we will send its contents
+			// and clear it, so the new diff will be relative to the current one
+			//
+			if(diffContainer)
+			{
+				shared_ptr<ITioResultSet> queryResult = diffContainer->Query(0, 0, TIONULL);
+				unsigned int queryID = ++lastQueryID_;
+				
+				session->SendResultSet(queryResult, queryID);
+
+				queryResult.reset();
+
+				diffContainer->Clear();
+			}
+			else
+			{
+				//
+				// No diff. We'll start a new one by sending the current contents
+				//
+				shared_ptr<ITioResultSet> queryResult = container->Query(0, 0, TIONULL);
+				unsigned int queryID = ++lastQueryID_;
+				session->SendResultSet(queryResult, queryID);
+				queryResult.reset();
+
+				stringstream destinationName;
+				destinationName << "__/diff/" << session->GetID() << "/" << container->GetName() << "/" << handle;
+
+				diffContainer = containerManager_.CreateContainer("volatile_map", destinationName.str());
+
+				session->SetupDiffContainer(handle, diffContainer);
+			}
+			
 		}
 		catch(std::exception& ex)
 		{

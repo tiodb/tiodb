@@ -197,7 +197,7 @@ public:
 		  // we will accept 0 as start index to stay compatible
 		  // with vector
 		  //
-		  DataMap::const_iterator startIterator;
+		  DataMap::const_iterator startIterator = data_.begin();
 
 		  if(!start.empty())
 		  {
