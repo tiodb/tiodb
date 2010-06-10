@@ -31,7 +31,13 @@ namespace tio
 
 		typedef std::map<unsigned int, pair<shared_ptr<ITioContainer>, string> > HandleMap;
 
+		//               handle             container                  subscription cookie
+		typedef std::map<unsigned int, pair<shared_ptr<ITioContainer>, unsigned int> > DiffMap;
+
 		HandleMap handles_;
+		
+		DiffMap diffs_;
+
 		unsigned int lastHandle_;
         unsigned int pendingSendSize_;
 
@@ -100,6 +106,10 @@ namespace tio
 
 		const vector<string>& GetTokens();
 		void AddToken(const string& token);
+
+		shared_ptr<ITioContainer> GetDiffDestinationContainer(unsigned int handle);
+		void SetupDiffContainer(unsigned int handle, shared_ptr<ITioContainer> destinationContainer);
+		void StopDiffs();
 
 		void SetCommandRunning()
 		{
