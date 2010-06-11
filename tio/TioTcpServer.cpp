@@ -1,3 +1,19 @@
+/*
+Tio: The Information Overlord
+Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 #include "pch.h"
 #include "TioTcpServer.h"
 
@@ -248,7 +264,8 @@ namespace tio
 		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
 
 		dispatchMap_["query"] = boost::bind(&TioTcpServer::OnCommand_Query, this, _1, _2, _3, _4);
-		dispatchMap_["start_recording"] = boost::bind(&TioTcpServer::OnCommand_Start_Recording, this, _1, _2, _3, _4);
+		
+		dispatchMap_["diff_start"] = boost::bind(&TioTcpServer::OnCommand_Diff_Start, this, _1, _2, _3, _4);
 		dispatchMap_["diff"] = boost::bind(&TioTcpServer::OnCommand_Diff, this, _1, _2, _3, _4);
 
 	}
@@ -304,22 +321,6 @@ namespace tio
 		return header.str();
 	}
 
-	void RecordChangeRecorder(shared_ptr<ITioContainer> source,
-		shared_ptr<ITioContainer> destination,
-		const string& evt, const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		std::list<const TioData*> fields;
-		TioData eventString(evt);
-
-		fields.push_back(&eventString);
-		fields.push_back(key.GetDataType() != TioData::None ? &key : NULL);
-		fields.push_back(value.GetDataType() != TioData::None ? &value : NULL);
-		fields.push_back(metadata.GetDataType() != TioData::None ?& metadata : NULL);
-
-		string serialized = Serialize(fields);
-
-		destination->PushBack(TIONULL, serialized, source->GetName());
-	}
 
 	void TioTcpServer::OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
@@ -362,10 +363,7 @@ namespace tio
 
 		try
 		{
-			shared_ptr<ITioResultSet> queryResult = container->Query(start, end, query);
-			unsigned int queryID = ++lastQueryID_;
-
-			session->SendResultSet(queryResult, queryID);
+			SendResultSet(session, container->Query(start, end, query));
 		}
 		catch(std::exception& ex)
 		{
@@ -374,8 +372,47 @@ namespace tio
 		}
 	}
 
+	void MapChangeRecorder(const TioTcpServer::DiffSessionInfo& info,
+		const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		if(event_name == "set" || event_name == "insert")
+			info.destination->Set(key, value, event_name);
+		if(event_name == "delete")
+			info.destination->Delete(key, TIONULL, event_name);
+		else if(event_name == "clear")
+		{
+			//
+			// Looks ugly, but there's no other (easy) way to do this. On clear
+			// event, there's already no record on the source container, so we
+			// can't just enumerate the record and generate a delete event for all 
+			// of them. Since clients can't create key starting with "__", no
+			// conflict will happen
+			//
+			info.destination->Set("__special__", "clear", TIONULL);
+		}
 
-	void TioTcpServer::OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+		//
+		// TODO: support other events
+		//
+	}
+
+	void ListChangeRecorder(const TioTcpServer::DiffSessionInfo& info,
+		const string& evt, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		std::list<const TioData*> fields;
+		TioData eventString(evt);
+
+		fields.push_back(&eventString);
+		fields.push_back(key.GetDataType() != TioData::None ? &key : NULL);
+		fields.push_back(value.GetDataType() != TioData::None ? &value : NULL);
+		fields.push_back(metadata.GetDataType() != TioData::None ?& metadata : NULL);
+
+		string serialized = Serialize(fields);
+
+		info.destination->PushBack(TIONULL, serialized, info.source->GetName());
+	}
+
+	void TioTcpServer::OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
 		if(!CheckParameterCount(cmd, 1, exact))
 		{
@@ -399,41 +436,51 @@ namespace tio
 
 		try
 		{
-			shared_ptr<ITioContainer> diffContainer = session->GetDiffDestinationContainer(handle);
+			stringstream destinationName;
+			shared_ptr<ITioContainer> diffContainer;
+			DiffSessionType diffType = DiffSessionType_Map;
+			string diffHandleType;
 
-			//
-			// if there's already a container with a diff, we will send its contents
-			// and clear it, so the new diff will be relative to the current one
-			//
-			if(diffContainer)
+			string containerType = container->GetType();
+			string destinationContainerType;
+
+			if(containerType == "volatile_map" || containerType == "persistent_map")
 			{
-				shared_ptr<ITioResultSet> queryResult = diffContainer->Query(0, 0, TIONULL);
-				unsigned int queryID = ++lastQueryID_;
+				diffType = DiffSessionType_Map;
+				diffHandleType = "diff_map";
+				destinationContainerType = "volatile_map";
+			}
 				
-				session->SendResultSet(queryResult, queryID);
-
-				queryResult.reset();
-
-				diffContainer->Clear();
+			else if(containerType == "volatile_list" || containerType == "persistent_list" ||
+					containerType == "volatile_vector" || containerType == "persistent_vector")
+			{
+				diffType = DiffSessionType_List;
+				diffHandleType = "diff_list";
+				destinationContainerType = "volatile_list";
 			}
 			else
 			{
-				//
-				// No diff. We'll start a new one by sending the current contents
-				//
-				shared_ptr<ITioResultSet> queryResult = container->Query(0, 0, TIONULL);
-				unsigned int queryID = ++lastQueryID_;
-				session->SendResultSet(queryResult, queryID);
-				queryResult.reset();
-
-				stringstream destinationName;
-				destinationName << "__/diff/" << session->GetID() << "/" << container->GetName() << "/" << handle;
-
-				diffContainer = containerManager_.CreateContainer("volatile_map", destinationName.str());
-
-				session->SetupDiffContainer(handle, diffContainer);
+				MakeAnswer(error, answer, "cannot create diff for this container type");
 			}
+
+			//
+			// generating a unique name for destination container
+			//
+			unsigned int diffID = ++lastDiffID_;
+			destinationName << "__/diff/" << container->GetName() << "/" << diffID;
 			
+			diffContainer = containerManager_.CreateContainer(destinationContainerType, destinationName.str());
+
+			DiffSessionInfo info;
+			info.firstQuerySent = false;
+			info.diffID = diffID;
+			info.source = container;
+			info.destination = diffContainer;
+			info.diffType = diffType;
+
+			diffSessions_[info.diffID] = info;
+
+			MakeAnswer(success, answer, diffHandleType, lexical_cast<string>(info.diffID));
 		}
 		catch(std::exception& ex)
 		{
@@ -442,20 +489,76 @@ namespace tio
 		}
 	}
 
+	void TioTcpServer::SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet)
+	{
+		session->SendResultSet(resultSet, ++lastQueryID_);
+	}
+
 	//
 	// The record command asks the server to record all events from a container is another container
 	// It will create a kind of transaction log. Even if the client disconnects, the events will continue to
 	// be recorded. It's for clients that can't loose events even in case of disconnection and
 	// clients that want to receive events but can stay connected (subscription by polling)
 	//
-	void TioTcpServer::OnCommand_Start_Recording(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	void TioTcpServer::OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		if(!CheckParameterCount(cmd, 2, exact))
+		if(!CheckParameterCount(cmd, 1, exact))
 		{
 			MakeAnswer(error, answer, "invalid parameter count");
 			return;
 		}
 
+		unsigned int diffID = 0;
+
+		try
+		{
+			diffID = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid diff handle");
+			return;
+		}
+
+		DiffSessions::iterator i = diffSessions_.find(diffID);
+
+		if(i == diffSessions_.end())
+		{
+			MakeAnswer(error, answer, "invalid diff handle");
+			return;
+		}
+
+		DiffSessionInfo& info = i->second;
+
+		//
+		// if it's the first query, will send the entire content of container
+		// and setup the incremental recording
+		//
+
+		if(!info.firstQuerySent)
+		{
+			if(info.diffType == DiffSessionType_List)
+			{
+				info.subscriptionCookie = 
+					info.source->Subscribe(boost::bind(&ListChangeRecorder, info, _1, _2, _3, _4), "");
+			}
+			else if(info.diffType == DiffSessionType_Map)
+			{
+				info.subscriptionCookie = 
+					info.source->Subscribe(boost::bind(&MapChangeRecorder, info, _1, _2, _3, _4), "__none__");
+			}
+
+			SendResultSet(session, info.source->Query(0, 0, TIONULL));
+
+			info.firstQuerySent = true;
+		}
+		else
+		{
+			SendResultSet(session, info.destination->Query(0, 0, TIONULL));
+			info.destination->Clear();
+		}
+
+		/*
 		shared_ptr<ITioContainer> source, destination;
 		unsigned int sourceHandle, destinationHandle;
 
@@ -512,6 +615,8 @@ namespace tio
 		source->Subscribe(boost::bind(&RecordChangeRecorder, source, destination, _1, _2, _3, _4), string());
 
 		MakeAnswer(success, answer);
+
+		*/
 	}
 
 	void TioTcpServer::OnCommand_WnpNext(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
@@ -807,7 +912,7 @@ namespace tio
 
 	void TioTcpServer::OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		MakeAnswer(success, answer, "PONG", cmd.GetParameters().begin(), cmd.GetParameters().end());
+		MakeAnswer(cmd.GetParameters().begin(), cmd.GetParameters().end(), success, answer, "PONG");
 	}
 
 	void TioTcpServer::OnCommand_Version(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
@@ -1016,7 +1121,7 @@ namespace tio
 
 			unsigned int handle = session->RegisterContainer(containerName, container);
 
-			MakeAnswer(success, answer, "handle", lexical_cast<string>(handle));
+			MakeAnswer(success, answer, "handle", lexical_cast<string>(handle), container->GetType());
 		}
 		catch (std::exception& ex)
 		{

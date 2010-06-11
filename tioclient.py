@@ -170,6 +170,13 @@ class RemoteContainer(object):
     def query_with_key_and_metadata(self, startOffset=None, endOffset=None):
         return self.manager.Query(self.handle, startOffset, endOffset)
 
+    def diff_start(self):
+        result = self.manager.DiffStart(self.handle)
+        return result['diff_handle']
+
+    def diff_query(self, diff_handle):
+        return self.manager.Diff(diff_handle)
+
 class TioServerConnection(object):
     def __init__(self, host = None, port = None):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -283,7 +290,13 @@ class TioServerConnection(object):
                 if parameterType == '':
                     return
 
-                if parameterType == 'handle' or parameterType == 'count' or parameterType == 'name':
+                if parameterType == 'handle':
+                    return { 'handle' : params[currentParam+1], 'type':  params[currentParam+2]}
+
+                if parameterType == 'diff_map' or parameterType == 'diff_list':
+                    return { 'diff_type' : parameterType, 'diff_handle':  params[currentParam+1] }
+                
+                if parameterType == 'count' or parameterType == 'name':
                     return { parameterType : params[currentParam+1] }
 
                 if parameterType == 'data':
@@ -296,6 +309,10 @@ class TioServerConnection(object):
 
                 raise Exception('invalid parameter type: ' + parameterType) 
 
+            elif answerType == 'diff_list' or answerType == 'diff_map':
+                diff_handle = params[1]
+                return (answerType, diff_handle)
+            
             elif answerType == 'query':
                 query_id = params[1]
                 what = params[2]
@@ -384,6 +401,13 @@ class TioServerConnection(object):
 
     def Auth(self, token, password):
         self.SendCommand(' '.join( ('auth', token, 'clean', password) ))
+
+    def DiffStart(self, handle):
+        diff_result = self.SendCommand('diff_start ' + str(handle))
+        return diff_result
+
+    def Diff(self, diff_handle):
+        return self.SendCommand('diff ' + str(diff_handle))
 
     def SetPermission(self, objectType, objectName, command, allowOrDeny, user = ''):
         halfCommand = ' '.join( ('set_permission', objectType, objectName, command, allowOrDeny) )
@@ -485,7 +509,9 @@ class TioServerConnection(object):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
     def __CreateOrOpenContainer(self, command, name, type):
-        handle = self.SendCommand(command, name if not type else name + ' ' + type)['handle']
+        info = self.SendCommand(command, name if not type else name + ' ' + type)
+        handle = info['handle']
+        type = info['type']
         container = RemoteContainer(self, handle, type, name)
         self.containers[int(handle)] = container
         return container
@@ -677,7 +703,12 @@ def TestQuery():
 
     container = tio.CreateContainer('vm', 'volatile_map')
     for x in range(10): container[str(x)] = x
-    do_all_queries(container)    
+    do_all_queries(container)
+
+def DiffTest():
+    tio = tioclient.Connect('tio://127.0.0.1:6666')
+    vm = tio.OpenContainer('vm')
+    vm.diff_start()
 
 
 def DoTest():
@@ -707,8 +738,9 @@ def DoTest():
 
        
 if __name__ == '__main__':
-    TestQuery()
-    DoTest()
+    DiffTest()
+    #TestQuery()
+    #DoTest()
     #BdbTest()
     #ParseUrl('tio://127.0.0.1:6666/xpto/asas')
     #MasterSpeedTest()

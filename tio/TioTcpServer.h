@@ -1,3 +1,19 @@
+/*
+Tio: The Information Overlord
+Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 #pragma once
 
 #include "pch.h"
@@ -22,6 +38,23 @@ namespace tio
 	{
 	public:
 		typedef boost::function<void (Command&, ostream&, size_t*, shared_ptr<TioTcpSession>)> CommandFunction;
+
+		enum DiffSessionType
+		{
+			DiffSessionType_Map,
+			DiffSessionType_List
+		};
+
+		struct DiffSessionInfo
+		{
+			unsigned int diffID;
+			bool firstQuerySent;
+			DiffSessionType diffType;
+			shared_ptr<ITioContainer> source;
+			shared_ptr<ITioContainer> destination;
+			unsigned int subscriptionCookie;
+		};
+
 
 	private:
 
@@ -73,12 +106,14 @@ namespace tio
 				this->handle = handle;
 			}
 		};
-
-		typedef map< string, set<string> > RecordingSessions;
-		RecordingSessions recordingSessions_;
+		
+		// map<diff handle, DiffSessionInfo >
+		typedef map< unsigned int, DiffSessionInfo > DiffSessions;
+		DiffSessions diffSessions_;
 
 		unsigned int lastSessionID_;
 		unsigned int lastQueryID_;
+		unsigned int lastDiffID_;
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;
@@ -108,8 +143,10 @@ namespace tio
 
 		void LoadDispatchMap();
 
+		void SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet);
+
 		void OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
-		void OnCommand_Start_Recording(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
+		void OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);

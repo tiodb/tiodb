@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="9.00"
+	Version="9,00"
 	Name="tio"
 	ProjectGUID="{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}"
 	RootNamespace="tio"
@@ -286,10 +286,6 @@
 			</File>
 			<File
 				RelativePath=".\pch.h"
-				>
-			</File>
-			<File
-				RelativePath=".\Storage.h"
 				>
 			</File>
 			<File

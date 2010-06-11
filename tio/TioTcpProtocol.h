@@ -1,3 +1,19 @@
+/*
+Tio: The Information Overlord
+Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
 #pragma once
 
 
@@ -40,8 +56,15 @@ namespace tio
 		MakeAnswer(type, stream, answer1 + " " + answer2);
 	}
 
+	inline void MakeAnswer(AnswerType type, ostream& stream, const string& answer1, const string& answer2, const string& answer3)
+	{
+		MakeAnswerStart(type, stream);
+		stream << answer1 << " " << answer2 << " " << answer3;
+		MakeAnswerEnd(stream);
+	}
+
 	template<typename T>
-	inline void MakeAnswer(AnswerType type, ostream& stream, const char* answer, T begin, T end)
+	inline void MakeAnswer(T begin, T end, AnswerType type, ostream& stream, const char* answer)
 	{
 		MakeAnswerStart(type, stream, answer);
 
@@ -50,7 +73,6 @@ namespace tio
 
 		MakeAnswerEnd(stream);
 	}
-
 
 	inline void SerializeData(const TioData& key, const TioData& value, const TioData& metadata, ostream& stream)
 	{
