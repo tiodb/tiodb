@@ -29,7 +29,7 @@ def decode(value):
     
     header_size = 2
     field_count = int(value[header_size:header_size+4], 16) # expect hex
-    current_data_offset = header_size + (field_count + 1) * 5
+    current_data_offset = header_size + 1 + (field_count + 1) * 5
     ret = []
 
     for x in range(field_count):
@@ -658,6 +658,10 @@ def ParseUrl(url):
 
 def OpenByUrl(url, create_container_type=None):
     address, port, container = ParseUrl(url)
+
+    if not container:
+        raise Exception('url "%s" doesn\'t have a container specification' % url)
+    
     server = TioServerConnection(address, port)
     if create_container_type:
         return server.CreateContainer(container, create_container_type)
@@ -706,10 +710,38 @@ def TestQuery():
     do_all_queries(container)
 
 def DiffTest():
-    tio = tioclient.Connect('tio://127.0.0.1:6666')
-    vm = tio.OpenContainer('vm')
-    vm.diff_start()
+    def DiffTest_Map():
+        tio = Connect('tio://127.0.0.1:6666')
+        vm = tio.CreateContainer('vm', 'volatile_map')
+        diff = vm.diff_start()
 
+        for x in range(20) : vm[str(x)] = x*x
+
+        print vm.diff_query(diff)
+
+        for x in range(10) : vm[str(x)] = x*x
+
+        vm.clear()
+
+        print vm.diff_query(diff)
+
+    def DiffTest_List():
+        tio = Connect('tio://127.0.0.1:6666')
+        vl = tio.CreateContainer('vl', 'volatile_list')
+        diff = vl.diff_start()
+
+        vl.extend(range(100))
+
+        print vl.diff_query(diff)
+
+        vl.extend(range(10))
+
+        vl.clear()
+
+        print vl.diff_query(diff)
+
+    DiffTest_List()
+    DiffTest_Map()
 
 def DoTest():
     man = Connect('tio://127.0.0.1:6666')

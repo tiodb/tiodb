@@ -211,7 +211,7 @@ namespace MemoryStorage
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
 			if(!query.IsNull())
-				throw std::runtime_error("not supported");
+				throw std::runtime_error("this container doesn't support query strings");
 
 			NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
 

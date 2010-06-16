@@ -68,23 +68,23 @@ class TioWeb(object):
         if form.has_key('debug') and form['debug'].value.lower() in ('y', 'yes', '1', 'on', 'true'):
             self.debug = True        
 
-        if not form.has_key('action'):
-            raise Exception('action?')
+        if not form.has_key('command'):
+            raise Exception('command?')
             return
 
         if form.has_key('session_id'):
             self.__set_session_id(form['session_id'].value)
 
-        action = form['action'].value
+        command = form['command'].value
 
-        if not action in self.dispatch_map:
-            raise Exception('invalid action: %s' % action)
+        if not command in self.dispatch_map:
+            raise Exception('invalid command: %s' % command)
             
-        return self.dispatch_map[action]()
+        return self.dispatch_map[command]()
 
     #
     #
-    # actions
+    # commands
     #
     #
     def __load_dispatch_map(self):
@@ -112,10 +112,25 @@ class TioWeb(object):
 
     def query(self):
         container = self.open_container(self.form['container'].value)
-        ret = container.query_with_key_and_metadata()
-        ret = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
+
+        start = int(self.form['start'].value) if 'start' in self.form else 0        
+        end = int(self.form['end'].value) if 'end' in self.form else 0
+
+        query_limit = 10 * 1000
         
-        return {'result': 'ok', 'result_set': ret}        
+        if end == 0 or end - start > query_limit:
+            end = start + query_limit
+            query_type = 'maybe_truncated'
+        else:
+            query_type = 'full'
+            
+            
+        
+        ret = container.query_with_key_and_metadata(start, end)
+
+        result_set = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
+        
+        return {'result': 'ok', 'query_type': query_type, 'result_set': result_set}        
     
     def subscribe(self):
         container = self.open_container(self.form['container'].value)

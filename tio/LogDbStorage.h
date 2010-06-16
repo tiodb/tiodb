@@ -127,7 +127,7 @@ namespace tio {
 
 			virtual string Command(const string& command)
 			{
-				throw std::invalid_argument("command not supported");
+				throw std::invalid_argument("\"command\" not supported");
 			}
 
 			virtual size_t GetRecordCount()
@@ -138,7 +138,7 @@ namespace tio {
 			virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 			{
 				if(accessType_ != RecordNumber)
-					throw std::runtime_error("not supported");
+					throw std::runtime_error("\"push_back\" not supported by this container");
 
 				CheckValue(value);
 
@@ -179,7 +179,7 @@ namespace tio {
 			virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 			{
 				if(accessType_ != RecordNumber)
-					throw std::runtime_error("not supported");
+					throw std::runtime_error("\"pop_back\" not supported by this container");
 
 				size_t recordCount = ldb_.GetRecordCount(tableInfo_);
 
@@ -210,7 +210,7 @@ namespace tio {
 			virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 			{
 				if(accessType_ != RecordNumber)
-					throw std::runtime_error("not supported");
+					throw std::runtime_error("\"pop_front\" not supported by this container");
 
 				if(ldb_.GetRecordCount(tableInfo_) == 0)
 					throw std::invalid_argument("empty");
@@ -336,7 +336,7 @@ namespace tio {
 			virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 			{
 				if(!query.IsNull())
-					throw std::runtime_error("not supported");
+					throw std::runtime_error("query string not supported by this container");
 
 				NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
 

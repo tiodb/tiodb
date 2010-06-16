@@ -69,6 +69,7 @@ namespace tio
 
 			unsigned int cookie;
 			unsigned int nextRecord;
+			string event_name;
 			shared_ptr<ITioContainer> container;
 			shared_ptr<ITioResultSet> resultSet;
 		};

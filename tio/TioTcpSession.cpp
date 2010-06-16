@@ -554,6 +554,13 @@ namespace tio
 
 			subscriptionInfo->nextRecord = numericStart;
 
+			if(IsListContainer(container))
+				subscriptionInfo->event_name = "push_back";
+			else if(IsMapContainer(container))
+				subscriptionInfo->event_name = "set";
+			else
+				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
+
 			pendingSnapshots_[handle] = subscriptionInfo;
 			
 			subscriptions_[handle] = subscriptionInfo;
@@ -607,6 +614,7 @@ namespace tio
 			BOOST_FOREACH(SubscriptionMap::value_type& p, pendingSnapshots_)
 			{
 				unsigned int handle;
+				string event_name;
 				shared_ptr<SUBSCRIPTION_INFO> info;
 				TioData searchKey, key, value, metadata;
 
@@ -658,8 +666,7 @@ namespace tio
 				// numeric key and it will return the real string key
 				//
 				//
-				OnEvent(handle, searchKey == key ? "push_back" : "insert",
-					key, value, metadata);
+				OnEvent(handle, info->event_name, key, value, metadata);
 
 				info->nextRecord++;
 			}

@@ -53,7 +53,7 @@ public:
 
 	  virtual string Command(const string& command)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"command\" not supported by the container");
 	  }
 
 	  virtual size_t GetRecordCount()
@@ -197,7 +197,7 @@ public:
 	virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 	{
 		if(!query.IsNull())
-			throw std::runtime_error("not supported");
+			throw std::runtime_error("query type not supported by this container");
 
 		ListType::const_iterator begin, end;
 

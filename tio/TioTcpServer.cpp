@@ -316,7 +316,7 @@ namespace tio
 			header << setfill('0') << setw(4) << hex << size << dataTypeCode;
 		}
 
-		header << values.str();
+		header << " " << values.str();
 
 		return header.str();
 	}
@@ -374,9 +374,19 @@ namespace tio
 
 	void MapChangeRecorder(const TioTcpServer::DiffSessionInfo& info,
 		const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
-	{
+	{		
 		if(event_name == "set" || event_name == "insert")
-			info.destination->Set(key, value, event_name);
+		{
+			std::list<const TioData*> fields;
+			TioData eventString(event_name);
+
+			fields.push_back(value.GetDataType() != TioData::None ? &value : NULL);
+			fields.push_back(metadata.GetDataType() != TioData::None ?& metadata : NULL);
+
+			string serialized = Serialize(fields);
+
+			info.destination->Set(key, serialized, event_name);
+		}
 		if(event_name == "delete")
 			info.destination->Delete(key, TIONULL, event_name);
 		else if(event_name == "clear")
@@ -388,6 +398,7 @@ namespace tio
 			// of them. Since clients can't create key starting with "__", no
 			// conflict will happen
 			//
+			info.destination->Clear();
 			info.destination->Set("__special__", "clear", TIONULL);
 		}
 
@@ -397,10 +408,10 @@ namespace tio
 	}
 
 	void ListChangeRecorder(const TioTcpServer::DiffSessionInfo& info,
-		const string& evt, const TioData& key, const TioData& value, const TioData& metadata)
+		const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		std::list<const TioData*> fields;
-		TioData eventString(evt);
+		TioData eventString(event_name);
 
 		fields.push_back(&eventString);
 		fields.push_back(key.GetDataType() != TioData::None ? &key : NULL);
@@ -444,15 +455,14 @@ namespace tio
 			string containerType = container->GetType();
 			string destinationContainerType;
 
-			if(containerType == "volatile_map" || containerType == "persistent_map")
+			if(IsMapContainer(container))
 			{
 				diffType = DiffSessionType_Map;
 				diffHandleType = "diff_map";
 				destinationContainerType = "volatile_map";
 			}
 				
-			else if(containerType == "volatile_list" || containerType == "persistent_list" ||
-					containerType == "volatile_vector" || containerType == "persistent_vector")
+			else if(IsListContainer(container))
 			{
 				diffType = DiffSessionType_List;
 				diffHandleType = "diff_list";
@@ -540,15 +550,15 @@ namespace tio
 			if(info.diffType == DiffSessionType_List)
 			{
 				info.subscriptionCookie = 
-					info.source->Subscribe(boost::bind(&ListChangeRecorder, info, _1, _2, _3, _4), "");
+					info.source->Subscribe(boost::bind(&ListChangeRecorder, info, _1, _2, _3, _4), "0");
 			}
 			else if(info.diffType == DiffSessionType_Map)
 			{
 				info.subscriptionCookie = 
-					info.source->Subscribe(boost::bind(&MapChangeRecorder, info, _1, _2, _3, _4), "__none__");
+					info.source->Subscribe(boost::bind(&MapChangeRecorder, info, _1, _2, _3, _4), "");
 			}
 
-			SendResultSet(session, info.source->Query(0, 0, TIONULL));
+			SendResultSet(session, info.destination->Query(0, 0, TIONULL));
 
 			info.firstQuerySent = true;
 		}

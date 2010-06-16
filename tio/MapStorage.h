@@ -107,7 +107,7 @@ public:
 
 	  virtual string Command(const string& command)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"command\" not supported");
 	  }
 
 	  virtual size_t GetRecordCount()
@@ -117,22 +117,22 @@ public:
 
 	  virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"push_back\" not supported by this container");
 	  }
 
 	  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"push_front\" not supported by this container");
 	  }
 
 	  virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"pop_back\" not supported by this container");
 	  }
 
 	  virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 	  {
-		  throw std::invalid_argument("not supported");
+		  throw std::invalid_argument("\"pop_front\" not supported by this container");
 	  }
 
 	  virtual void Set(const TioData& key, const TioData& value, const TioData& metadata)
@@ -186,15 +186,41 @@ public:
 
 	  virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 	  {
-		  if(!query.IsNull() || startOffset != 0 || endOffset != 0)
-			  throw std::runtime_error("not supported");
-			 
+		  if(!query.IsNull())
+			  throw std::runtime_error("this container supports only querystr=null");
+
+		  DataMap::const_iterator start, end;
+
+		  if(startOffset == 0 && endOffset == 0)
+		  {
+			  start = data_.begin();
+			  end = data_.end();
+		  }
+		  else
+		  {
+			  if(endOffset == 0)
+			  {
+				  startOffset = NormalizeForQueries(startOffset, data_.size());
+				  end = data_.end();
+				  start = data_.begin();
+				  std::advance(start, startOffset);
+			  }
+			  else
+			  {
+				  NormalizeQueryLimits(&startOffset, &endOffset, data_.size());
+				  start = end = data_.begin();
+				  
+				  std::advance(start, startOffset);
+				  std::advance(end, endOffset);
+			  }
+		  }
+
 		  return shared_ptr<ITioResultSet>(
 			new StlContainerResultSet<DataMap>(
 				TIONULL,
-				0,
-				data_.begin(), 
-				data_.end(), 
+				startOffset,
+				start, 
+				end, 
 				data_.size(),
 				&MapContainerGetter<DataMap>
 				));

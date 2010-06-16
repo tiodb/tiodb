@@ -1253,4 +1253,18 @@ namespace tio
 			return recordCount_;
 		}
 	};
+
+	inline bool IsListContainer(shared_ptr<ITioContainer> container)
+	{
+		string type = container->GetType();
+		return type == "volatile_list" || type == "persistent_list" ||
+			   type == "volatile_vector" || type == "persistent_vector";
+	}
+
+	inline bool IsMapContainer(shared_ptr<ITioContainer> container)
+	{
+		string type = container->GetType();
+		return type == "volatile_map" || type == "persistent_map";
+	}
+
 }
