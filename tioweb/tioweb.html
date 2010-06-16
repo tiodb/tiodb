@@ -1,0 +1,99 @@
+<html>
+ <head>
+  <title>TioWebTest</title>
+  <script language="javascript" src="tioweb.js"/>
+
+<script language="javascript">
+
+    var address = "http://127.0.0.1/tio/tioweb.py";
+            
+    function on_load() {
+        log_element = info;
+        
+        log("on_load", "debug");
+
+        tio_full_query(
+            address,
+            "meta/containers",
+
+            function(ret) {
+                for (var x in ret.result_set) {
+                    opt = document.createElement("OPTION");
+                    opt.innerText = ret.result_set[x].key;
+                    container_list.options.add(opt);
+                }
+            },
+           dump_result
+        );
+    }
+
+    function selected_container() {
+        return container_name_textbox.value;
+    }
+
+    function get_count() {
+        container_name = selected_container();
+        
+        tio_get_count(
+            address,
+            container_name,
+            function(result) { log_info(container_name + ".get_count() = " + result.count); },
+            dump_result);
+    }
+
+    function dump_query(result) {
+        dump_str = "<table border=\"1\" style=\"font-family: Lucida Console; font-size: 9pt\">" + 
+                   "<tr><td><b>key</b></td><td><b>value</b></td><td><b>metadata</b></td></tr>";
+        for (x in result.result_set) {
+            item = result.result_set[x];
+            item_str = "<tr><td>" + item.key + "</td><td>" + item.value + "</td><td>" + item.metadata + "</td></tr>";
+            dump_str += item_str;
+        }
+        dump_str += "</table>";
+        return dump_str;
+    }
+
+    function query() {
+        container_name = selected_container();
+        
+        tio_full_query(
+            address,
+            container_name,
+            function(result) {
+                log_info(container_name + ".query, type=" + result.query_type + 
+                    ", size=" + result.result_set.length + "<br/>" + dump_query(result)); },
+            dump_result);
+    }
+    
+  </script>
+ </head>
+<body onload="on_load();">
+    <form method="post" action="tioweb.py">
+    
+    <table>
+    <tr>
+     <td>
+      <select id="container_list" name="container_list" size="10" 
+        onchange="container_name_textbox.value = this.options[this.selectedIndex].value;">
+      </select><br />
+      <input id="container_name_textbox" name="container_name" type="text" size="40"/>
+     </td>
+     
+     <td>
+    
+      <input id="get_count_button" type="button" value="count" onclick="get_count();"/><br />
+        
+      <input id="query_button" type="button" value="query" onclick="query();"/><br />
+        
+      <input id="clear_log_button" type="button" value="clear log" onclick="info.innerHTML='';"/><br />
+     </td>
+    </tr>
+   </table>
+
+
+    </form>
+    
+    <div id="info" style="background-color: #EEEEEE; -webkit-border-radius: 5px; padding: 10px 10px 10px 10px; font-family: Lucida Console; font-size: 9pt">
+    </div>
+</body>
+</html>
