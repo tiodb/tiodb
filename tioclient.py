@@ -50,8 +50,30 @@ def decode(value):
 
         ret.append(field_value)
 
-    return ret        
+    return ret
 
+type_map = {}
+type_map[int] = 'I'
+type_map[float] = 'D'
+type_map[str] = 'S'
+type_map[unicode] = 'S'
+
+def encode(values):
+    header_io = StringIO()
+    values_io = StringIO()
+
+    header_io.write('X1')
+    header_io.write('%04XC' % len(values))
+
+    for v in values:
+        strv = str(v)
+        header_io.write('%04X%s' % (len(strv), type_map[type(v)]))
+        values_io.write(strv) ; values_io.write(' ')
+
+    header_io.write(' ')
+    header_io.write(values_io.getvalue())
+
+    return header_io.getvalue()    
 
 class RemoteContainer(object):
     def __init__(self, manager, handle, type, name):
