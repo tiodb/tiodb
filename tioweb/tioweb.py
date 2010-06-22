@@ -6,6 +6,7 @@ import time
 import traceback
 import json
 import functools
+from cStringIO import StringIO
         
 class CgiResponse(object):
     def __init__(self):
@@ -54,16 +55,13 @@ class TioWeb(object):
         return self.containers_by_handle[self.containers_by_name[name_or_handle]]
 
     def create_container(self, name, type):
-        #self.response.write('creating container "%s"' % name)
         return self.__add_container(self.tio.CreateContainer(name, type))
 
     def open_container(self, name, type=None):
-        #self.response.write('opening container "%s"' % name)
         return self.__add_container(self.tio.OpenContainer(name, type))
     
-    def dispatch(self, form, response):
+    def dispatch(self, form):
         self.form = form
-        self.response = response
 
         if form.has_key('debug') and form['debug'].value.lower() in ('y', 'yes', '1', 'on', 'true'):
             self.debug = True        
@@ -226,29 +224,23 @@ class TioWeb(object):
         return {'result': 'ok', 'session_id': self.session_id}
 
          
-def main():
-    response = CgiResponse()
-    form = cgi.FieldStorage()
-
-    response.send_http_headers()    
-
+def doit(tio, form):
+    
     try:        
-        tio = tioclient.Connect('tio://127.0.0.1:6666')    
-
         tioweb = TioWeb(tio)
 
-        ret = tioweb.dispatch(form, response)
+        ret = []
+
+        result = tioweb.dispatch(form)
 
         if not tioweb.debug:
-            ret = json.dumps(ret, separators=(',',':'))
+            ret.append(json.dumps(result, separators=(',',':')))
         else:
-            encoded = json.dumps(ret, indent=2)
-            ret = '<script language="javascript">var ret = %s;</script>' % encoded
-
-        response.write(ret)
+            encoded = json.dumps(result, indent=2)
+            ret.append('<script language="javascript">var ret = %s;</script>' % encoded)
 
         if tioweb.debug:
-            response.write('<pre>%s</pre>' % cgi.escape(ret))
+            ret.append('<pre>%s</pre>' % cgi.escape(result))
                     
     except Exception, ex:
         debug = False
@@ -258,31 +250,55 @@ def main():
             pass
         
         if debug:
-            response.write('<pre>')
-            response.write('Exception: %s\r\n' % ex)
-            traceback.print_tb(sys.exc_info()[2], limit=None, file=response.stream)
-            response.write('</pre>')
+            ret.append('<pre>')
+            ret.append('Exception: %s\r\n' % ex)
+            #traceback.print_tb(sys.exc_info()[2], limit=None, file=response.stream)
+            ret.append('</pre>')
 
-        ret = {'result': 'error', 'description': str(ex)}        
-        ret = json.dumps(ret)
-        response.write(ret)
+        ret.append(json.dumps({'result': 'error', 'description': str(ex)}))
 
         if debug:
-            response.write('<pre>%s</pre>' % cgi.escape(ret))        
+            ret.append('<pre>%s</pre>' % cgi.escape(ret))        
 
-        
-def test():
-    from BaseHTTPServer import HTTPServer
-    from CGIHTTPServer import CGIHTTPRequestHandler
+    return ret
 
-    class Handler(CGIHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            self.cgi_directories = ['/']
-            CGIHTTPRequestHandler.__init__(self, *args, **kwargs)
-            
-    serveradresse = ("",8080)
-    server = HTTPServer(serveradresse, Handler)
-    server.serve_forever()
+tio_connection = None
+
+def application(environ, start_response):
+    headers = []
+    headers.append(('Content-Type', 'text/html'))
+    write = start_response('200 OK', headers)
+
+    global tio_connection
+
+    if not tio_connection:
+        tio_connection = tioclient.Connect(environ['tio.server']) 
+
+    form = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ, keep_blank_values=True)
+
+    ret = doit(tio_connection, form)
+    #ret.extend(dump_environ(environ))
+
+    return ret
+
+def dump_environ(environ):
+    input = environ['wsgi.input']
+    output = StringIO()
+
+    print >> output, "PID: %s" % os.getpid()
+    print >> output, "UID: %s" % os.getuid()
+    print >> output, "GID: %s" % os.getgid()
+    print >> output
+
+    keys = environ.keys()
+    keys.sort()
+    for key in keys:
+        print >> output, '%s: %s' % (key, repr(environ[key]))
+        print >> output
+
+        output.write(input.read(int(environ.get('CONTENT_LENGTH', '0'))))
+
+    return ['<pre>', output.getvalue(), '</pre>']
     
 
 if __name__ == '__main__':
