@@ -126,7 +126,12 @@ class TioWeb(object):
         
         ret = container.query_with_key_and_metadata(start, end)
 
-        result_set = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
+        if container.type in ('volatile_map', 'persistent_map'):
+            result_set = {}
+            for key, value, metadata in ret:
+                result_set[key] = {'value': value, 'metadata': metadata }
+        else:
+            result_set = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
         
         return {'result': 'ok', 'query_type': query_type, 'result_set': result_set}        
     
@@ -299,7 +304,14 @@ def dump_environ(environ):
         output.write(input.read(int(environ.get('CONTENT_LENGTH', '0'))))
 
     return ['<pre>', output.getvalue(), '</pre>']
-    
+
+
+def main():
+    from wsgiref.simple_server import make_server
+    print 'running server on localhost:8080'
+    srv = make_server('localhost', 8080, application)
+    srv.base_environ['tio.server'] = 'tio://127.0.0.1:6666'
+    srv.serve_forever()
 
 if __name__ == '__main__':
     main()
