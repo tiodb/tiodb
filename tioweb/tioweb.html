@@ -1,11 +1,11 @@
 <html>
  <head>
   <title>TioWebTest</title>
-  <script language="javascript" src="tioweb.js"/>
+  <script language="javascript" src="tioweb.js"></script>
 
 <script language="javascript">
 
-    var address = "http://127.0.0.1/tio/tioweb.py";
+    var address = "tioweb.py";
             
     function on_load() {
         log_element = info;
@@ -68,8 +68,6 @@
   </script>
  </head>
 <body onload="on_load();">
-    <form method="post" action="tioweb.py">
-    
     <table>
     <tr>
      <td>
@@ -89,10 +87,7 @@
      </td>
     </tr>
    </table>
-
-
-    </form>
-    
+       
     <div id="info" style="background-color: #EEEEEE; -webkit-border-radius: 5px; padding: 10px 10px 10px 10px; font-family: Lucida Console; font-size: 9pt">
     </div>
 </body>

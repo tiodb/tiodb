@@ -111,7 +111,7 @@ class TioWeb(object):
     def query(self):
         container = self.open_container(self.form['container'].value)
 
-        start = int(self.form['start'].value) if 'start' in self.form else 0        
+        start = int(self.form['start'].value) if 'start' in self.form else 0
         end = int(self.form['end'].value) if 'end' in self.form else 0
 
         query_limit = 10 * 1000
@@ -121,15 +121,13 @@ class TioWeb(object):
             query_type = 'maybe_truncated'
         else:
             query_type = 'full'
-            
-            
-        
+                    
         ret = container.query_with_key_and_metadata(start, end)
 
         if container.type in ('volatile_map', 'persistent_map'):
             result_set = {}
             for key, value, metadata in ret:
-                result_set[key] = {'value': value, 'metadata': metadata }
+                result_set[key] = {'key': key, 'value': value, 'metadata': metadata }
         else:
             result_set = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
         
@@ -229,8 +227,7 @@ class TioWeb(object):
         return {'result': 'ok', 'session_id': self.session_id}
 
          
-def doit(tio, form):
-    
+def doit(tio, form):    
     try:        
         tioweb = TioWeb(tio)
 
@@ -248,7 +245,7 @@ def doit(tio, form):
             ret.append('<pre>%s</pre>' % cgi.escape(result))
                     
     except Exception, ex:
-        debug = False
+        debug = True
         try:
             debug = tioweb.debug
         except:

@@ -1,5 +1,7 @@
 ﻿
   var log_element;
+  var last_ret;
+
 
   function log(what, level) {
       str = level + ": " + what + "<br/>";
@@ -34,6 +36,7 @@
               if (xmlhttp.status == 200) {
                   var ret = eval('(' + xmlhttp.responseText + ')');
                   ret.json = xmlhttp.responseText;
+                  last_ret = ret.json;
               }
               else {
                   var ret = new Object();
