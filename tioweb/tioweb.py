@@ -271,10 +271,10 @@ def application(environ, start_response):
     headers.append(('Content-Type', 'text/html'))
     write = start_response('200 OK', headers)
 
-    global tio_connection
+    #global tio_connection
 
-    if not tio_connection:
-        tio_connection = tioclient.Connect(environ['tio.server']) 
+    #if not tio_connection:
+    tio_connection = tioclient.Connect(environ['tio.server']) 
 
     form = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ, keep_blank_values=True)
 
