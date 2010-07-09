@@ -265,26 +265,33 @@ def doit(tio, form):
 
     return ret
 
-tls_data = threading.local()
+
+#
+# thread.local doesn't work because WSGI server can create
+# a new python subinterpreter on each request
+#
+tls_data = {}
+tls_lock = threading.Lock()
 
 # connection pool, one per server per thread
 def get_tio(server):
-    try:
-        tio = tls_data.tio_pool[server]
+    thread_id = threading.current_thread().ident
+
+    with tls_lock:
+        thread_data = tls_data.get(thread_id, {})    
         try:
-            tio.ping()
-            return tio
-        except:
-            pass # will recreate the connection below
-    except AttributeError:
-        tls_data.tio_pool = {}
-    except KeyError:
-        pass
+            tio = thread_data[server]
+            try:
+                tio.ping()
+                return tio
+            except:
+                pass # will recreate the connection below
+        except KeyError:
+            pass
 
-    tio = tioclient.Connect(server)
-    tls_data.tio_pool[server] = tio
-
-    return tio    
+        tio = tioclient.Connect(server)
+        thread_data[server] = tio
+        return tio
 
 def application(environ, start_response):
     headers = []
