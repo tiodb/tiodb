@@ -6,6 +6,7 @@ import time
 import traceback
 import json
 import functools
+import threading
 from cStringIO import StringIO
         
 class CgiResponse(object):
@@ -264,17 +265,34 @@ def doit(tio, form):
 
     return ret
 
-tio_connection = None
+tls_data = threading.local()
+
+# connection pool, one per server per thread
+def get_tio(server):
+    try:
+        tio = tls_data.tio_pool[server]
+        try:
+            tio.ping()
+            return tio
+        except:
+            pass # will recreate the connection below
+    except AttributeError:
+        tls_data.tio_pool = {}
+    except KeyError:
+        pass
+
+    tio = tioclient.Connect(server)
+    tls_data.tio_pool[server] = tio
+
+    return tio    
 
 def application(environ, start_response):
     headers = []
     headers.append(('Content-Type', 'text/html'))
     write = start_response('200 OK', headers)
 
-    #global tio_connection
-
     #if not tio_connection:
-    tio_connection = tioclient.Connect(environ['tio.server']) 
+    tio_connection = get_tio(environ['tio.server']) 
 
     form = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ, keep_blank_values=True)
 

@@ -922,7 +922,7 @@ namespace tio
 
 	void TioTcpServer::OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		MakeAnswer(cmd.GetParameters().begin(), cmd.GetParameters().end(), success, answer, "PONG");
+		MakeAnswer(cmd.GetParameters().begin(), cmd.GetParameters().end(), success, answer, "pong");
 	}
 
 	void TioTcpServer::OnCommand_Version(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)

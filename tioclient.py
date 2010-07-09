@@ -282,6 +282,9 @@ class TioServerConnection(object):
         query = self.running_queries[query_id]
         del self.running_queries[query_id]
         return query
+
+    def ping(self):
+        return self.SendCommand('ping')
                 
     def ReceiveAnswer(self, wait_until_answer = True):
         while 1:        
@@ -311,6 +314,9 @@ class TioServerConnection(object):
                 #
                 if parameterType == '':
                     return
+
+                if parameterType == 'pong':
+                    return ' '.join(params[currentParam:])
 
                 if parameterType == 'handle':
                     return { 'handle' : params[currentParam+1], 'type':  params[currentParam+2]}
@@ -792,6 +798,7 @@ def DoTest():
 
        
 if __name__ == '__main__':
+    Connect('tio://127.0.0.1:6666').ping()
     DiffTest()
     #TestQuery()
     #DoTest()
