@@ -255,7 +255,7 @@ namespace logdb
 			//
 			// TODO: hardcoded cache size
 			//
-			_cacheMaxPages = (128 * 1042 * 1024) / _pageSize;
+			_cacheMaxPages = (4 * 1042 * 1024) / _pageSize;
 		}
 
 		~PagedFile()

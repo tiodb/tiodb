@@ -255,7 +255,11 @@ def doit(tio, form):
         if debug:
             ret.append('<pre>')
             ret.append('Exception: %s\r\n' % ex)
-            #traceback.print_tb(sys.exc_info()[2], limit=None, file=response.stream)
+            x = StringIO()
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            traceback.print_exception(exc_type, exc_value, exc_traceback,
+                                                  limit=None, file=x)
+            ret.append(x.getvalue())
             ret.append('</pre>')
 
         ret.append(json.dumps({'result': 'error', 'description': str(ex)}))
@@ -293,14 +297,18 @@ def get_tio(server):
         thread_data[server] = tio
         return tio
 
+tio_connection = None
+
 def application(environ, start_response):
     headers = []
     headers.append(('Content-Type', 'text/html'))
     write = start_response('200 OK', headers)
 
-    #if not tio_connection:
-    tio_connection = get_tio(environ['tio.server']) 
+    global tio_connection
 
+    if not tio_connection:
+        tio_connection = tioclient.Connect(environ['tio.server'])
+    
     form = cgi.FieldStorage(fp=environ['wsgi.input'], environ=environ, keep_blank_values=True)
 
     ret = doit(tio_connection, form)
