@@ -192,7 +192,7 @@ namespace logdb
 		typedef std::list<DWORD> CurrentCachePagesList;
 		CurrentCachePagesList _currentCachePagesList;
 
-		DWORD _cacheMaxPages;
+		DWORD _cacheMaxPages, _cacheInMegabytes;
 
 		void* GetPage(DWORD page)
 		{
@@ -250,12 +250,8 @@ namespace logdb
 	public:
 		PagedFile()
 		{
-			_pageSize = 4096;
-			
-			//
-			// TODO: hardcoded cache size
-			//
-			_cacheMaxPages = (4 * 1042 * 1024) / _pageSize;
+			_cacheInMegabytes = 4;
+			SetPageSize(4096);
 		}
 
 		~PagedFile()
@@ -281,6 +277,7 @@ namespace logdb
 		{
 			FreeCache();
 			_pageSize = pageSize;
+			_cacheMaxPages = (_cacheInMegabytes * 1024 * 1024) / _pageSize;
 		}
 
 		DWORD GetPageSize()
