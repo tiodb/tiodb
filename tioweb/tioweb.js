@@ -85,6 +85,11 @@
       return container_command(address, "query", container, parameters, okCallback, errorCallback);
   }
 
+  function tio_query_with_schema(address, container, start, end, okCallback, errorCallback) {
+      parameters = "start=" + start + "&end=" + end;
+      return container_command(address, "query_with_schema", container, parameters, okCallback, errorCallback);
+  }
+
   function tio_get(address, container, key, okCallback, errorCallback, cookie) {
       parameters = "key=" + key
       

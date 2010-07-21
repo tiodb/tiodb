@@ -96,6 +96,7 @@ class TioWeb(object):
         self.dispatch_map['get_count'] = self.get_count
         self.dispatch_map['publications'] = self.publications
         self.dispatch_map['query'] = self.query
+        self.dispatch_map['query_with_schema'] = self.query_with_schema
 
         def add_data_command(name):
             self.dispatch_map[name] = functools.partial(self.__send_data_command, name)
@@ -132,7 +133,22 @@ class TioWeb(object):
         else:
             result_set = [dict(zip(('key', 'value', 'metadata'), x)) for x in ret]
         
-        return {'result': 'ok', 'query_type': query_type, 'result_set': result_set}        
+        return {'result': 'ok', 'query_type': query_type, 'result_set': result_set}
+
+    def query_with_schema(self):
+        ret = self.query()
+        container = self.open_container(self.form['container'].value)
+        schema = tioclient.decode(container.get_property('schema'))
+
+        result_set = ret['result_set']
+
+        for x in xrange(len(result_set)):
+            item_dict = result_set[x]
+            raw_value = item_dict['value']
+            values = tioclient.decode(raw_value)
+            item_dict.update(dict(zip(schema, values)))
+
+        return ret        
     
     def subscribe(self):
         container = self.open_container(self.form['container'].value)
