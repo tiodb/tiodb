@@ -1127,7 +1127,7 @@ namespace tio
 			return source_;
 		}
 
-		virtual typename ContainerT::size_type RecordCount()
+		virtual unsigned RecordCount()
 		{
 			CheckInvalidated();
 

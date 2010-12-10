@@ -52,7 +52,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
   #include <sys/types.h>
   #include <sys/stat.h>
   #include <unistd.h>
-  #include <google/profiler.h>
+//  #include <google/profiler.h>
 #endif
 
 #include <boost/bind.hpp>

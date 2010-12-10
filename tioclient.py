@@ -218,6 +218,12 @@ class TioServerConnection(object):
         if host:
             self.Connect(host, port)
 
+    def __del__(self):
+       self.close() 
+
+    def close(self):
+        self.s.close()
+
     def __ReceiveLine(self):
         i = self.receiveBuffer.find('\r\n')
         while i == -1:

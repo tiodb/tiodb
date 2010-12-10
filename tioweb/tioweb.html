@@ -6,13 +6,14 @@
 <script language="javascript">
 
     var address = "tioweb.py";
+    var last_request = null;
             
     function on_load() {
         log_element = info;
         
         log("on_load", "debug");
 
-        tio_full_query(
+        last_request = tio_full_query (
             address,
             "meta/containers",
 
@@ -33,8 +34,8 @@
 
     function get_count() {
         container_name = selected_container();
-        
-        tio_get_count(
+
+        last_request = tio_get_count(
             address,
             container_name,
             function(result) { log_info(container_name + ".get_count() = " + result.count); },
@@ -51,6 +52,11 @@
         }
         dump_str += "</table>";
         return dump_str;
+    }
+
+    function cancel_last_request() {
+        cancel_request(last_request);
+        log_info('last request cancelled');
     }
 
     function query() {
@@ -84,6 +90,8 @@
       <input id="query_button" type="button" value="query" onclick="query();"/><br />
         
       <input id="clear_log_button" type="button" value="clear log" onclick="info.innerHTML='';"/><br />
+      
+      <input id="cancel_request_button" type="button" value="cancel request" onclick="cancel_last_request();"/><br />
      </td>
     </tr>
    </table>
