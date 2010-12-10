@@ -73,6 +73,21 @@ namespace tio
 		throw std::runtime_error("invalid python type");
 	}
 
+	python::object TioDataToPythonObject(const TioData v)
+	{
+		switch(v.GetDataType())
+		{
+		case TioData::Sz:
+			return python::object(v.AsSz());
+		case TioData::Int:
+			return python::object(v.AsInt());
+		case TioData::Double:
+			return python::object(v.AsDouble());
+		}
+
+		return python::object();
+	}
+
 	class TioContainerWrapper : public PythonWrapperImpl< shared_ptr<ITioContainer>, TioContainerWrapper>
 	{
 	public:
@@ -91,6 +106,8 @@ namespace tio
 		{
 			return wrapped_->GetRecordCount();
 		}
+
+
 		
 		void push_back(python::object key, python::object value, python::object metadata)
 		{
