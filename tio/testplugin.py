@@ -1,3 +1,7 @@
+import pdb
 
 def TioPluginMain(container_manager):
-	print 'Containers count = %d' % len(container_manager.OpenContainer('meta/containers'))
+    def Log(event_name, key, value, metadata):
+        print event_name, key, value, metadata
+    
+    container_manager.open('meta/containers').subscribe(Log)

@@ -61,7 +61,7 @@ namespace tio
 
 #define INITIALIZE_PYTHON_WRAPPER(T) python::object T::pythonWrapperT;
 
-	TioData PythonObjectToTioData(const python::object obj)
+	TioData PythonObjectToTioData(const python::object& obj)
 	{
 		if(PyString_Check(obj.ptr()))
 			return TioData(python::extract<string>(obj));
@@ -73,7 +73,7 @@ namespace tio
 		throw std::runtime_error("invalid python type");
 	}
 
-	python::object TioDataToPythonObject(const TioData v)
+	python::object TioDataToPythonObject(const TioData& v)
 	{
 		switch(v.GetDataType())
 		{
@@ -88,6 +88,45 @@ namespace tio
 		return python::object();
 	}
 
+	class TioResultSetWrapper : public PythonWrapperImpl<shared_ptr<ITioResultSet> , TioResultSetWrapper>
+	{
+	public:
+		static python::object InitPythonType()
+		{
+				return 
+					python::class_<TioResultSetWrapper>("ResultSet")
+						.def("get", &TioResultSetWrapper::GetRecord)
+						.def("next", &TioResultSetWrapper::MoveNext)
+						.def("previous", &TioResultSetWrapper::MovePrevious)
+						.def("at_begin", &TioResultSetWrapper::AtBegin)
+						.def("at_end", &TioResultSetWrapper::AtEnd)
+						.def("count", &TioResultSetWrapper::RecordCount);
+		}
+
+		void MoveNext() { wrapped_->MoveNext(); }
+		void MovePrevious() { wrapped_->MovePrevious(); }
+		bool AtBegin() { return wrapped_->AtBegin(); }
+		bool AtEnd() { return wrapped_->AtEnd(); }
+		unsigned int RecordCount() { return wrapped_->RecordCount();}
+
+		python::object Source() 
+		{ 
+			return TioDataToPythonObject(wrapped_->Source());
+		}
+
+		python::object GetRecord()
+		{
+			TioData key, value, metadata;
+			
+			wrapped_->GetRecord(&key, &value, &metadata);
+
+			return python::make_tuple(
+				TioDataToPythonObject(key),
+				TioDataToPythonObject(value),
+				TioDataToPythonObject(metadata));
+		}
+	};
+
 	class TioContainerWrapper : public PythonWrapperImpl< shared_ptr<ITioContainer>, TioContainerWrapper>
 	{
 	public:
@@ -96,20 +135,116 @@ namespace tio
 		{
 			return
 				python::class_<TioContainerWrapper>("Container")
-					.def("push_back", &TioContainerWrapper::push_back)
-					.def("get_count", &TioContainerWrapper::get_count)
-					.def("__len__", &TioContainerWrapper::get_count)
-					.add_property("name", &TioContainerWrapper::name);
+					.def("push_back", &TioContainerWrapper::PushBack)
+					.def("pop_back", &TioContainerWrapper::PopBack)
+					.def("push_front", &TioContainerWrapper::PushFront)
+					.def("pop_front", &TioContainerWrapper::PopFront)
+					.def("insert", &TioContainerWrapper::Insert)
+					.def("set", &TioContainerWrapper::Set)
+					.def("get", &TioContainerWrapper::GetRecord)
+					.def("delete", &TioContainerWrapper::Delete)
+					.def("clear", &TioContainerWrapper::Clear)
+					.def("set_property", &TioContainerWrapper::SetProperty)
+					.def("get_property", &TioContainerWrapper::GetProperty)
+					.def("subscribe", &TioContainerWrapper::Subscribe)
+					.def("subscribe", &TioContainerWrapper::Subscribe1)
+					.def("unsubscribe", &TioContainerWrapper::Unsubscribe)
+					.def("__len__", &TioContainerWrapper::GetRecordCount)
+					.add_property("name", &TioContainerWrapper::GetName);
 		}
 
-		int get_count()
+		static void PythonCallbackBridge(python::object callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+		{
+			callback(
+				eventName,
+				TioDataToPythonObject(key),
+				TioDataToPythonObject(value),
+				TioDataToPythonObject(metadata));
+		}
+
+		int Subscribe(python::object callback, const string& start)
+		{
+			return wrapped_->Subscribe(
+				boost::bind(&TioContainerWrapper::PythonCallbackBridge, callback, _1, _2, _3, _4),
+				start);
+		}
+
+		int Subscribe1(python::object callback)
+		{
+			return Subscribe(callback, string());
+		}
+
+		void Unsubscribe(unsigned int cookie)
+		{
+			wrapped_->Unsubscribe(cookie);
+		}
+
+		void Clear()
+		{
+			wrapped_->Clear();
+		}
+
+		string GetProperty(const string& key)
+		{
+			return wrapped_->GetProperty(key);
+		}
+
+		void SetProperty(const string& key, const string& value)
+		{
+			return wrapped_->SetProperty(key, value);
+		}
+
+		int GetRecordCount()
 		{
 			return wrapped_->GetRecordCount();
 		}
 
+		python::object GetRecord(python::object searchKey)
+		{
+			TioData key, value, metadata;
+			
+			wrapped_->GetRecord(PythonObjectToTioData(searchKey), &key, &value, &metadata);
 
-		
-		void push_back(python::object key, python::object value, python::object metadata)
+			return python::make_tuple(
+				TioDataToPythonObject(key),
+				TioDataToPythonObject(value),
+				TioDataToPythonObject(metadata));
+		}
+
+		python::object PopBack(python::object searchKey)
+		{
+			TioData key, value, metadata;
+			
+			wrapped_->PopBack(&key, &value, &metadata);
+
+			return python::make_tuple(
+				TioDataToPythonObject(key),
+				TioDataToPythonObject(value),
+				TioDataToPythonObject(metadata));
+		}
+
+		python::object PopFront(python::object searchKey)
+		{
+			TioData key, value, metadata;
+			
+			wrapped_->PopFront(&key, &value, &metadata);
+
+			return python::make_tuple(
+				TioDataToPythonObject(key),
+				TioDataToPythonObject(value),
+				TioDataToPythonObject(metadata));
+		}
+
+		void PushFront(python::object key, python::object value, python::object metadata)
+		{
+			wrapped_->PushFront(
+				PythonObjectToTioData(key),
+				PythonObjectToTioData(value),
+				PythonObjectToTioData(metadata));
+		}
+
+
+		void PushBack(python::object key, python::object value, python::object metadata)
 		{
 			wrapped_->PushBack(
 				PythonObjectToTioData(key),
@@ -117,7 +252,31 @@ namespace tio
 				PythonObjectToTioData(metadata));
 		}
 
-		string name()
+		void Insert(python::object key, python::object value, python::object metadata)
+		{
+			wrapped_->Insert(
+				PythonObjectToTioData(key),
+				PythonObjectToTioData(value),
+				PythonObjectToTioData(metadata));
+		}
+
+		void Set(python::object key, python::object value, python::object metadata)
+		{
+			wrapped_->Set(
+				PythonObjectToTioData(key),
+				PythonObjectToTioData(value),
+				PythonObjectToTioData(metadata));
+		}
+
+		void Delete(python::object key, python::object value, python::object metadata)
+		{
+			wrapped_->Delete(
+				PythonObjectToTioData(key),
+				PythonObjectToTioData(value),
+				PythonObjectToTioData(metadata));
+		}
+
+		string GetName()
 		{
 			return wrapped_->GetName();
 		}
@@ -130,11 +289,11 @@ namespace tio
 		{
 				return 
 					python::class_<TioContainerManagerWrapper>("ContainerManager")
-						.def("CreateContainer", &TioContainerManagerWrapper::CreateContainer)
-						.def("OpenContainer", &TioContainerManagerWrapper::OpenContainer1)
-						.def("OpenContainer", &TioContainerManagerWrapper::OpenContainer2)
-						.def("DeleteContainer", &TioContainerManagerWrapper::DeleteContainer)
-						.def("Exists", &TioContainerManagerWrapper::Exists);
+						.def("create", &TioContainerManagerWrapper::CreateContainer)
+						.def("open", &TioContainerManagerWrapper::OpenContainer1)
+						.def("open", &TioContainerManagerWrapper::OpenContainer2)
+						.def("delete", &TioContainerManagerWrapper::DeleteContainer)
+						.def("exists", &TioContainerManagerWrapper::Exists);
 
 		}
 
