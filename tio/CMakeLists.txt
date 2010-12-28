@@ -6,6 +6,8 @@ PROJECT(tio)
 #LINK_DIRECTORIES(/usr/local/lib)
 #LINK_DIRECTORIES(/usr/include/boost_1_34_1/stage/lib)
 
+INCLUDE_DIRECTORIES(/usr/include/python2.6)
+
 LINK_LIBRARIES (tio debug boost_system optimized boost_system)
 LINK_LIBRARIES (tio debug boost_program_options optimized boost_program_options)
 LINK_LIBRARIES (tio pthread)
@@ -14,5 +16,5 @@ LINK_LIBRARIES (tio pthread)
 #LINK_LIBRARIES (tio tcmalloc) # google's tcmalloc
 #LINK_LIBRARIES (tio profiler) # google's cpu profiler
 
-ADD_EXECUTABLE(tio Command.cpp ContainerManager.cpp TioTcpServer.cpp TioTcpSession.cpp pch.cpp tio.cpp)
+ADD_EXECUTABLE(tio Command.cpp ContainerManager.cpp TioTcpServer.cpp TioTcpSession.cpp TioPython.cpp pch.cpp tio.cpp)
 
