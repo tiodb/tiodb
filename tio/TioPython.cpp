@@ -106,7 +106,10 @@ namespace tio
 						.def("count", &TioResultSetWrapper::RecordCount);
 		}
 
-		void MoveNext() { wrapped_->MoveNext(); }
+		void MoveNext()
+		{ 
+			wrapped_->MoveNext(); 
+		}
 		void MovePrevious() { wrapped_->MovePrevious(); }
 		bool AtBegin() { return wrapped_->AtBegin(); }
 		bool AtEnd() { return wrapped_->AtEnd(); }
@@ -121,7 +124,10 @@ namespace tio
 		{
 			TioData key, value, metadata;
 			
-			wrapped_->GetRecord(&key, &value, &metadata);
+			bool exists = wrapped_->GetRecord(&key, &value, &metadata);
+
+			if(!exists)
+
 
 			return python::make_tuple(
 				TioDataToPythonObject(key),
@@ -138,37 +144,8 @@ namespace tio
 		{
 			using python::arg;
 
-			string containerPythonizer =  
-				"class ContainerPythonizer(object):\r\n"
-				"    def __del__(self):\r\n"
-				"        self.Close()\r\n"
-				"    def __getitem__(self, key):\r\n"
-				"        if isinstance(key, slice):\r\n"
-				"            return self.query(key.start, key.stop)\r\n"
-				"        else:\r\n"
-				"            return self.get(key)\r\n"
-				"    def __delitem__(self, key):\r\n"
-				"        return self.delete(key)    \r\n"
-				"    def __len__(self):\r\n"
-				"        return self.get_count()    \r\n"
-				"    def __setitem__(self, key, valueOrValueAndMetadata):\r\n"
-				"        if isinstance(valueOrValueAndMetadata, tuple):\r\n"
-				"            value, metadata = valueOrValueAndMetadata\r\n"
-				"        else:\r\n"
-				"            value, metadata = valueOrValueAndMetadata, None\r\n"
-				"        return self.set(key, value, metadata)\r\n"
-				"    def append(self, value, metadata=None):\r\n"
-				"        return self.push_back(value, metadata)\r\n"
-				"    def e\r\ntend(self, iterable):\r\n"
-				"        for \r\n in iterable:\r\n"
-				"            self.push_back(\r\n)\r\n"
-				"    def values(self):\r\n"
-				"        return self.query()    \r\n"
-				"    def keys(self):\r\n"
-				"        return [\r\n[0] for \r\n in self.query_with_key_and_metadata()]\r\n";
-
-			python::object containerBase = 
-				python::class_<TioContainerWrapper>("ContainerBase")
+			python::object containerType = 
+				python::class_<TioContainerWrapper>("Container")
 					.def("push_back", &TioContainerWrapper::PushBack)
 					.def("append", &TioContainerWrapper::PushBackValue)
 					.def("pop_back", &TioContainerWrapper::PopBack)
@@ -176,7 +153,7 @@ namespace tio
 					.def("pop_front", &TioContainerWrapper::PopFront)
 					.def("insert", &TioContainerWrapper::Insert)
 					.def("set", &TioContainerWrapper::Set, (arg("key"), arg("value"), arg("metadata")))
-					.def("get", &TioContainerWrapper::GetRecord)
+					.def("get", &TioContainerWrapper::GetRecord, (arg("key")))
 					.def("delete", &TioContainerWrapper::Delete)
 					.def("clear", &TioContainerWrapper::Clear)
 					.def("set_property", &TioContainerWrapper::SetProperty)
@@ -184,20 +161,20 @@ namespace tio
 					.def("subscribe", &TioContainerWrapper::Subscribe)
 					.def("subscribe", &TioContainerWrapper::Subscribe1)
 					.def("unsubscribe", &TioContainerWrapper::Unsubscribe)
+
+					.def("values", &TioContainerWrapper::Values)
+					.def("keys", &TioContainerWrapper::Keys)
+					.def("query", &TioContainerWrapper::Values)
+					.def("query_with_key_and_metadata", &TioContainerWrapper::Query)
+					.def("query_with_key_and_metadata", &TioContainerWrapper::Query0)
+
 					.def("__len__", &TioContainerWrapper::GetRecordCount)
 					.def("__getitem__", &TioContainerWrapper::GetRecordValue)
 					.def("__setitem__", &TioContainerWrapper::Set1)
-					//.def("__delitem__", &map_item<Key,Val>().del)
+					.def("__delitem__",  &TioContainerWrapper::Delete1)
 					.add_property("name", &TioContainerWrapper::GetName);
 
-			python::object main_module((python::handle<>(python::borrowed(PyImport_AddModule("__main__")))));
-			python::object main_namespace = main_module.attr("__dict__");
-
-			main_namespace["ContainerBase"] = containerBase;
-			PyRun_String(containerPythonizer.c_str(), 0, main_namespace.ptr(), main_namespace.ptr());
-
-			return main_namespace["Container"];
-
+			return containerType;
 		}
 
 		static void PythonCallbackBridge(python::object container, python::object callback, const string& eventFilter, const string& eventName, 
@@ -249,6 +226,58 @@ namespace tio
 		int GetRecordCount()
 		{
 			return wrapped_->GetRecordCount();
+		}
+		/*
+		def query(self, startOffset=None, endOffset=None):
+        # will return only the values
+        return [x[1] for x in self.query_with_key_and_metadata(startOffset, endOffset)]
+
+		def query_with_key_and_metadata(self, startOffset=None, endOffset=None):
+        return self.manager.Query(self.handle, startOffset, endOffset)
+		*/
+
+		python::object Values()
+		{
+			shared_ptr<ITioResultSet> resultSet = wrapped_->Query(0, 0, TIONULL);
+
+			TioData value;
+			python::list ret;
+
+			while(resultSet->GetRecord(NULL, &value, NULL))
+			{
+				ret.append(TioDataToPythonObject(value));
+				resultSet->MoveNext();
+			}
+
+			return ret;
+		}
+
+		python::object Keys()
+		{
+			shared_ptr<ITioResultSet> resultSet = wrapped_->Query(0, 0, TIONULL);
+
+			TioData key;
+			python::list ret;
+
+			while(resultSet->GetRecord(&key, NULL, NULL))
+			{
+				ret.append(TioDataToPythonObject(key));
+				resultSet->MoveNext();
+			}
+
+			return ret;
+		}
+
+		python::object Query0()
+		{
+			return Query(0, 0);
+		}
+
+		python::object Query(unsigned start, unsigned end)
+		{
+			shared_ptr<ITioResultSet> resultSet = wrapped_->Query(start, end, TIONULL);
+
+			return TioResultSetWrapper::CreateWrapper(resultSet);
 		}
 
 		python::object GetRecord(python::object searchKey)
@@ -339,6 +368,11 @@ namespace tio
 				PythonObjectToTioData(key),
 				PythonObjectToTioData(value),
 				TIONULL);
+		}
+
+		void Delete1(python::object key)
+		{
+			wrapped_->Delete(PythonObjectToTioData(key));
 		}
 
 		void Delete(python::object key, python::object value, python::object metadata)
