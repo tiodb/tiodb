@@ -15,6 +15,38 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
    limitations under the License.
 */
 #pragma once
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <numeric>
+#include <queue>
+#include <assert.h>
+#include <deque>
+#include <limits>
+#include <map>
+#include <vector>
+#include <boost/function.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/noncopyable.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/bind.hpp>
+#include <boost/asio.hpp>
+#include <boost/foreach.hpp>
+
+ #define min(x,y) (x<y?x:y)
+
+
+
+
+#ifndef INTERFACE
+#define INTERFACE struct
+#endif
+
+#ifndef ASSERT
+#define ASSERT assert
+#endif
 
 #include "Container.h"
 #include "buffer.h"
@@ -31,6 +63,9 @@ namespace tio
 	using boost::asio::ip::tcp;
 	namespace ip = boost::asio::ip;
 
+	using std::queue;
+	using std::string;
+
 	struct Event
 	{
 		unsigned int handle;
@@ -41,6 +76,7 @@ namespace tio
 	class RemoteContainerManager
 	{
 	private:
+		asio::io_service& io_service_;
 		tcp::socket socket_;
 		
 		asio::streambuf response_;
@@ -133,7 +169,6 @@ namespace tio
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata);
 		virtual void Clear();
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query);
-		
 
 		virtual string GetType();
 		virtual string GetName();

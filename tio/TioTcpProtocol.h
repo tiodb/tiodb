@@ -21,6 +21,7 @@ namespace tio
 {
 	using std::string;
 	using std::stringstream;
+	using std::ostream;
 	using boost::lexical_cast;
 	using boost::bad_lexical_cast;
 	

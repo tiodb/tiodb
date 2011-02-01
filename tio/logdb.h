@@ -848,7 +848,8 @@ namespace logdb
 					}
 					break;
 				default:
-					ASSERT(false);
+					;
+					//ASSERT(false);
 				}
 
 				//

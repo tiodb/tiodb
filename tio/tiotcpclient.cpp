@@ -4,6 +4,7 @@
 namespace tio
 {
 	RemoteContainerManager::RemoteContainerManager(asio::io_service& io_service):
+		io_service_(io_service),
 		socket_(io_service),
 		response_stream_(&response_)
 	{
@@ -11,7 +12,14 @@ namespace tio
 
 	void RemoteContainerManager::Connect(const char* host, unsigned short port)
 	{
-		socket_.connect(ip::tcp::endpoint(ip::address_v4::from_string(host), port));
+		tcp::resolver resolver(io_service_);
+		tcp::resolver::query query(host, lexical_cast<string>(port));
+		tcp::resolver::iterator i = resolver.resolve(query);
+		
+		if(i == tcp::resolver::iterator())
+			throw std::runtime_error("couldn't resolve server name");
+
+		socket_.connect(*i);
 	}
 
 	string RemoteContainerManager::ReceiveLine()
@@ -310,12 +318,12 @@ namespace tio
 
 	shared_ptr<ITioContainer> RemoteContainerManager::CreateContainer(const string& type, const string& name)
 	{
-		return CreateOrOpenContainer("create_container", type, name);
+		return CreateOrOpenContainer("create", type, name);
 	}
 
 	shared_ptr<ITioContainer> RemoteContainerManager::OpenContainer(const string& type, const string& name)
 	{
-		return CreateOrOpenContainer("open_container", type, name);
+		return CreateOrOpenContainer("open", type, name);
 	}
 
 
@@ -507,7 +515,7 @@ namespace tio
 			throw std::runtime_error(answer.parameter);
 	}
 
-	shared_ptr<ITioResultSet> RemoteContainer::Query(const TioData& query)
+	shared_ptr<ITioResultSet> RemoteContainer::Query(int startOffset, int endOffset, const TioData& query)
 	{
 		throw std::runtime_error("not implemented");
 	}

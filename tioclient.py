@@ -568,7 +568,7 @@ class TioServerConnection(object):
         self.s.close()
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
-    def __CreateOrOpenContainer(self, command, name, type):
+    def __CreateOropen(self, command, name, type):
         info = self.SendCommand(command, name if not type else name + ' ' + type)
         handle = info['handle']
         type = info['type']
@@ -579,11 +579,11 @@ class TioServerConnection(object):
     def CloseContainer(self, handle):
         self.SendCommand('close', handle)
 
-    def CreateContainer(self, name, type):
-        return self.__CreateOrOpenContainer('create', name, type)
+    def create(self, name, type):
+        return self.__CreateOropen('create', name, type)
 
-    def OpenContainer(self, name, type = ''):
-        return self.__CreateOrOpenContainer('open', name, type)
+    def open(self, name, type = ''):
+        return self.__CreateOropen('open', name, type)
 
     def Query(self, handle, startOffset=None, endOffset=None):
         l = []
@@ -665,7 +665,7 @@ def MasterSpeedTest():
     for test in tests:
         type = test['type']
         hasKey = test['hasKey']
-        ds = man.CreateContainer(namePerfix + type, type)
+        ds = man.create(namePerfix + type, type)
         print type
         result = SpeedTest(ds.set if hasKey else ds.push_back, count, bytes, hasKey)
 
@@ -676,14 +676,14 @@ def TestWaitAndPop():
         print (key, value, metadata)
         
     man = TioServerConnection('localhost', 6666)
-    container = man.CreateContainer('abc', 'volatile_vector')
+    container = man.create('abc', 'volatile_vector')
     container.WaitAndPopNext(f)
     container.PushBack(key=None, value='abababu')
     container.WaitAndPopNext(f)
     container.WaitAndPopNext(f)
     container.PushBack(key=None, value='xpto')
 
-    container = man.CreateContainer('xpto', 'volatile_vector')
+    container = man.create('xpto', 'volatile_vector')
     container.Set('key1', 'value1')
     container.Set('key2', 'value2')
     container.WaitAndPopKey('key1', f)
@@ -724,9 +724,9 @@ def OpenByUrl(url, create_container_type=None):
     
     server = TioServerConnection(address, port)
     if create_container_type:
-        return server.CreateContainer(container, create_container_type)
+        return server.create(container, create_container_type)
     else:
-        return server.OpenContainer(container)
+        return server.open(container)
 
 def Connect(url):
     address, port, container = ParseUrl(url)
@@ -758,21 +758,21 @@ def TestQuery():
             print x
         
 
-    do_all_queries(tio.CreateContainer('pl', 'persistent_list'))
-    do_all_queries(tio.CreateContainer('pm', 'persistent_map'))
+    do_all_queries(tio.create('pl', 'persistent_list'))
+    do_all_queries(tio.create('pm', 'persistent_map'))
 
-    container = tio.CreateContainer('vl', 'volatile_list')
+    container = tio.create('vl', 'volatile_list')
     container.extend([x for x in xrange(10)])
     do_all_queries(container)
 
-    container = tio.CreateContainer('vm', 'volatile_map')
+    container = tio.create('vm', 'volatile_map')
     for x in range(10): container[str(x)] = x
     do_all_queries(container)
 
 def DiffTest():
     def DiffTest_Map():
         tio = Connect('tio://127.0.0.1:6666')
-        vm = tio.CreateContainer('vm', 'volatile_map')
+        vm = tio.create('vm', 'volatile_map')
         diff = vm.diff_start()
 
         for x in range(20) : vm[str(x)] = x*x
@@ -787,7 +787,7 @@ def DiffTest():
 
     def DiffTest_List():
         tio = Connect('tio://127.0.0.1:6666')
-        vl = tio.CreateContainer('vl', 'volatile_list')
+        vl = tio.create('vl', 'volatile_list')
         diff = vl.diff_start()
 
         vl.extend(range(100))
@@ -805,7 +805,7 @@ def DiffTest():
 
 def DoTest():
     man = Connect('tio://127.0.0.1:6666')
-    container = man.CreateContainer('test123', 'volatile_list')
+    container = man.create('test123', 'volatile_list')
 
     container.clear()    
 
