@@ -127,7 +127,7 @@ namespace tio
 			bool exists = wrapped_->GetRecord(&key, &value, &metadata);
 
 			if(!exists)
-
+				throw std::runtime_error("no more records");
 
 			return python::make_tuple(
 				TioDataToPythonObject(key),
@@ -146,13 +146,17 @@ namespace tio
 
 			python::object containerType = 
 				python::class_<TioContainerWrapper>("Container")
-					.def("push_back", &TioContainerWrapper::PushBack)
-					.def("append", &TioContainerWrapper::PushBackValue)
+					.def("push_back", &TioContainerWrapper::PushBack1, (arg("value")))
+					.def("push_back", &TioContainerWrapper::PushBack2, (arg("value"), arg("metadata")))
+					.def("append", &TioContainerWrapper::PushBack1, (arg("value")))
+					.def("append", &TioContainerWrapper::PushBack2, (arg("value"), arg("metadata")))
 					.def("pop_back", &TioContainerWrapper::PopBack)
 					.def("push_front", &TioContainerWrapper::PushFront)
 					.def("pop_front", &TioContainerWrapper::PopFront)
 					.def("insert", &TioContainerWrapper::Insert)
-					.def("set", &TioContainerWrapper::Set, (arg("key"), arg("value"), arg("metadata")))
+					.def("insert", &TioContainerWrapper::Insert1)
+					.def("set", &TioContainerWrapper::Set3, (arg("key"), arg("value"), arg("metadata")))
+					.def("set", &TioContainerWrapper::Set2, (arg("key"), arg("value")))
 					.def("get", &TioContainerWrapper::GetRecord, (arg("key")))
 					.def("delete", &TioContainerWrapper::Delete)
 					.def("clear", &TioContainerWrapper::Clear)
@@ -170,7 +174,7 @@ namespace tio
 
 					.def("__len__", &TioContainerWrapper::GetRecordCount)
 					.def("__getitem__", &TioContainerWrapper::GetRecordValue)
-					.def("__setitem__", &TioContainerWrapper::Set1)
+					.def("__setitem__", &TioContainerWrapper::Set2)
 					.def("__delitem__",  &TioContainerWrapper::Delete1)
 					.add_property("name", &TioContainerWrapper::GetName);
 
@@ -333,15 +337,15 @@ namespace tio
 				PythonObjectToTioData(metadata));
 		}
 
-		void PushBack(python::object key, python::object value, python::object metadata)
+		void PushBack2(python::object value, python::object metadata)
 		{
 			wrapped_->PushBack(
-				PythonObjectToTioData(key),
+				TIONULL,
 				PythonObjectToTioData(value),
 				PythonObjectToTioData(metadata));
 		}
 
-		void PushBackValue(python::object value)
+		void PushBack1(python::object value)
 		{
 			wrapped_->PushBack(TIONULL, PythonObjectToTioData(value));
 		}
@@ -354,7 +358,14 @@ namespace tio
 				PythonObjectToTioData(metadata));
 		}
 
-		void Set(python::object key, python::object value, python::object metadata)
+		void Insert1(python::object key, python::object value)
+		{
+			wrapped_->Insert(
+				PythonObjectToTioData(key),
+				PythonObjectToTioData(value));
+		}
+
+		void Set3(python::object key, python::object value, python::object metadata)
 		{
 			wrapped_->Set(
 				PythonObjectToTioData(key),
@@ -362,7 +373,7 @@ namespace tio
 				PythonObjectToTioData(metadata));
 		}
 
-		void Set1(python::object key, python::object value)
+		void Set2(python::object key, python::object value)
 		{
 			wrapped_->Set(
 				PythonObjectToTioData(key),
