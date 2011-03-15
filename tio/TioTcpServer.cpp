@@ -271,6 +271,7 @@ namespace tio
 				break;
 
 				case TIO_COMMAND_GET:
+				case TIO_COMMAND_PROPGET:
 				{
 					TioData searchKey;
 
@@ -278,7 +279,15 @@ namespace tio
 
 					TioData key, value, metadata;
 
-					container->GetRecord(searchKey, &key, &value, &metadata);
+					if(command == TIO_COMMAND_GET)
+						container->GetRecord(searchKey, &key, &value, &metadata);
+					else if(command == TIO_COMMAND_PROPGET)
+					{
+						value = container->GetProperty(searchKey.AsSz());
+					}
+					else
+						throw std::runtime_error("INTERNAL ERROR");
+
 
 					session->SendBinaryAnswer(&key, &value, &metadata);
 				}
@@ -308,6 +317,7 @@ namespace tio
 				case TIO_COMMAND_INSERT:
 				case TIO_COMMAND_DELETE:
 				case TIO_COMMAND_CLEAR:
+				case TIO_COMMAND_PROPSET:
 				{
 					TioData key, value, metadata;
 
@@ -325,6 +335,13 @@ namespace tio
 						container->Delete(key, value, metadata);
 					else if(command == TIO_COMMAND_CLEAR)
 						container->Clear();
+					else if(command == TIO_COMMAND_PROPSET)
+					{
+						if(key.GetDataType() != TioData::Sz	|| value.GetDataType() != TioData::Sz)
+							throw std::runtime_error("properties key and value should be strings");
+
+						container->SetProperty(key.AsSz(), value.AsSz());
+					}
 					else
 						throw std::runtime_error("INTERNAL ERROR");
 

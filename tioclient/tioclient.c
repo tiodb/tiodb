@@ -957,7 +957,7 @@ int tio_container_send_command_and_get_data_response(
 
 
 
-int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, char* type, struct TIO_CONTAINER** container)
+int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, const char* type, struct TIO_CONTAINER** container)
 {
 	struct PR1_MESSAGE* pr1_message = NULL;
 	struct PR1_MESSAGE* response = NULL;
@@ -1170,6 +1170,11 @@ clean_up_and_return:
 	return result;
 }
 
+int tio_container_propset(struct TIO_CONTAINER* container, const struct TIO_DATA* key, const struct TIO_DATA* value)
+{
+	return tio_container_input_command(container, TIO_COMMAND_PROPSET, key, value, NULL);
+}
+
 int tio_container_push_back(struct TIO_CONTAINER* container, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
 	return tio_container_input_command(container, TIO_COMMAND_PUSH_BACK, key, value, metadata);
@@ -1231,6 +1236,17 @@ int tio_container_get(struct TIO_CONTAINER* container, const struct TIO_DATA* se
 		key,
 		value,
 		metadata);
+}
+
+int tio_container_propget(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* value)
+{
+	return tio_container_send_command_and_get_data_response(
+		container,
+		TIO_COMMAND_PROPGET,
+		search_key,
+		NULL,
+		value,
+		NULL);
 }
 
 int tio_container_get_count(struct TIO_CONTAINER* container, int* count)
