@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.6)
 
 PROJECT(tio)
+SET(CMAKE_BUILD_TYPE Debug)
 
 #INCLUDE_DIRECTORIES(/usr/include/boost_1_34_1/)
 #LINK_DIRECTORIES(/usr/local/lib)
@@ -19,5 +20,5 @@ LINK_LIBRARIES (tio python2.6)
 #LINK_LIBRARIES (tio tcmalloc) # google's tcmalloc
 #LINK_LIBRARIES (tio profiler) # google's cpu profiler
 
-ADD_EXECUTABLE(tio Command.cpp ContainerManager.cpp TioTcpServer.cpp TioTcpSession.cpp TioPython.cpp pch.cpp tio.cpp)
+ADD_EXECUTABLE(tio Command.cpp ContainerManager.cpp TioTcpServer.cpp TioTcpSession.cpp TioPython.cpp pch.cpp tio.cpp ../tioclient/tioclient.c)
 

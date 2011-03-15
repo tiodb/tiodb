@@ -302,6 +302,7 @@ namespace tio
 				case TioData::Sz:
 					this->type_ = TioData::Sz;
 					this->sz_ = new char[size + 1];
+					this->bufferOwnership_ = true;
 					
 					memcpy((void*)this->sz_, &data[2], size);
 					((char*)this->sz_)[size] = '\0';
@@ -329,6 +330,7 @@ namespace tio
 				case TioData::Raw:
 					this->type_ = TioData::Raw;
 					this->raw_ = new unsigned char[size];
+					this->bufferOwnership_ = true;
 
 					memcpy((void*)this->raw_, &data[2], size);
 

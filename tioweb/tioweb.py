@@ -1,3 +1,6 @@
+#!/usr/bin/python
+
+import decimal
 import sys
 import tioclient
 import cgi
@@ -8,7 +11,13 @@ import json
 import functools
 import threading
 from cStringIO import StringIO
-        
+class DecimalJsonEncodder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            return str(o)
+        return super(DecimalJsonEncodder, self).default(o)
+
+
 class CgiResponse(object):
     def __init__(self):
         self.stream = sys.stdout
@@ -56,10 +65,10 @@ class TioWeb(object):
         return self.containers_by_handle[self.containers_by_name[name_or_handle]]
 
     def create_container(self, name, type):
-        return self.__add_container(self.tio.CreateContainer(name, type))
+        return self.__add_container(self.tio.create(name, type))
 
     def open_container(self, name, type=None):
-        return self.__add_container(self.tio.OpenContainer(name, type))
+        return self.__add_container(self.tio.open(name, type))
     
     def dispatch(self, form):
         self.form = form
@@ -245,7 +254,7 @@ class TioWeb(object):
 
          
 def doit(tio, form):    
-    try:        
+    try:
         tioweb = TioWeb(tio)
 
         ret = []
@@ -256,15 +265,16 @@ def doit(tio, form):
             result['cookie'] = form['cookie'].value
 
         if not tioweb.debug:
-            ret.append(json.dumps(result, separators=(',',':')))
+            ret.append(json.dumps(result, separators=(',',':'),cls=DecimalJsonEncodder))
         else:
-            encoded = json.dumps(result, indent=2)
+            encoded = json.dumps(result, indent=2,cls=DecimalJsonEncodder)
             ret.append('<script language="javascript">var ret = %s;</script>' % encoded)
 
         if tioweb.debug:
             ret.append('<pre>%s</pre>' % cgi.escape(result))
                     
     except Exception, ex:
+        print ex
         debug = True
         try:
             debug = tioweb.debug
@@ -277,10 +287,10 @@ def doit(tio, form):
             #traceback.print_tb(sys.exc_info()[2], limit=None, file=response.stream)
             ret.append('</pre>')
 
-        ret.append(json.dumps({'result': 'error', 'description': str(ex)}))
+        ret.append(json.dumps({'result': 'error', 'description': str(ex)}),cls=DecimalJsonEncodder)
 
         if debug:
-            ret.append('<pre>%s</pre>' % cgi.escape(ret))        
+            ret.append('<pre>%s</pre>' % cgi.escape(ret))
 
     return ret
 

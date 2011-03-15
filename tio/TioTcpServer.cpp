@@ -15,6 +15,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
    limitations under the License.
 */
 #include "pch.h"
+#include "TioTcpSession.h"
 #include "TioTcpServer.h"
 
 namespace tio
@@ -172,6 +173,206 @@ namespace tio
 		session->OnAccept();
 
 		DoAccept();
+	}
+
+	shared_ptr<ITioContainer> TioTcpServer::GetContainerAndParametersFromRequest(const PR1_MESSAGE* message, shared_ptr<TioTcpSession> session, TioData* key, TioData* value, TioData* metadata)
+	{
+		int handle;
+
+		Pr1MessageGetHandleKeyValueAndMetadata(message, &handle, key, value, metadata);
+
+		if(!handle)
+			throw std::runtime_error("");
+
+		return session->GetRegisteredContainer(handle);
+	}
+
+	
+
+	void TioTcpServer::OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message)
+	{
+		bool b;
+		int command;
+
+		pr1_message_parse(message);
+
+		b = Pr1MessageGetFieldAsInt(message, MESSAGE_FIELD_ID_COMMAND, &command);
+
+		if(!b)
+		{
+			session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+			return;
+		}
+
+		try
+		{
+			switch(command)
+			{
+			case TIO_COMMAND_PING:
+				{
+					string payload;
+					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_VALUE, &payload);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+
+					shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
+
+					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
+					pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_VALUE, payload.c_str());
+
+
+					session->SendBinaryMessage(answer);
+				}
+				break;
+			case TIO_COMMAND_OPEN:
+			case TIO_COMMAND_CREATE:
+				{
+					string name, type;
+					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_NAME, &name);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+
+					Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_TYPE, &type);
+
+					shared_ptr<ITioContainer> container;
+
+					if(command == TIO_COMMAND_CREATE)
+					{
+						if(type.empty())
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+							break;
+						}
+
+						container = containerManager_.CreateContainer(type, name);
+					}
+					else if(command == TIO_COMMAND_OPEN)
+					{
+						container = containerManager_.OpenContainer(type, name);
+					}
+
+					unsigned int handle = session->RegisterContainer(name, container);
+
+					shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
+
+					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
+					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+				
+					session->SendBinaryMessage(answer);
+				}
+				break;
+
+				case TIO_COMMAND_GET:
+				{
+					TioData searchKey;
+
+					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, &searchKey, NULL, NULL);
+
+					TioData key, value, metadata;
+
+					container->GetRecord(searchKey, &key, &value, &metadata);
+
+					session->SendBinaryAnswer(&key, &value, &metadata);
+				}
+				break;
+
+				case TIO_COMMAND_POP_FRONT:
+				case TIO_COMMAND_POP_BACK:
+				{
+					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
+
+					TioData key, value, metadata;
+
+					if(command == TIO_COMMAND_POP_BACK)
+						container->PopBack(&key, &value, &metadata);
+					else if(command == TIO_COMMAND_POP_FRONT)
+						container->PopFront(&key, &value, &metadata);
+					else
+						throw std::runtime_error("INTERNAL ERROR");
+
+					session->SendBinaryAnswer(&key, &value, &metadata);
+				}
+				break;
+
+				case TIO_COMMAND_PUSH_BACK:
+				case TIO_COMMAND_PUSH_FRONT:
+				case TIO_COMMAND_SET:
+				case TIO_COMMAND_INSERT:
+				case TIO_COMMAND_DELETE:
+				case TIO_COMMAND_CLEAR:
+				{
+					TioData key, value, metadata;
+
+					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, &key, &value, &metadata);
+
+					if(command == TIO_COMMAND_PUSH_BACK)
+						container->PushBack(key, value, metadata);
+					else if(command == TIO_COMMAND_PUSH_FRONT)
+						container->PushFront(key, value, metadata);
+					else if(command == TIO_COMMAND_SET)
+						container->Set(key, value, metadata);
+					else if(command == TIO_COMMAND_INSERT)
+						container->Insert(key, value, metadata);
+					else if(command == TIO_COMMAND_DELETE)
+						container->Delete(key, value, metadata);
+					else if(command == TIO_COMMAND_CLEAR)
+						container->Clear();
+					else
+						throw std::runtime_error("INTERNAL ERROR");
+
+					session->SendBinaryAnswer();
+				}
+				break;
+
+				case TIO_COMMAND_COUNT:
+				{
+					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
+
+					int count = container->GetRecordCount();
+
+					shared_ptr<PR1_MESSAGE> answer = Pr1CreateAnswerMessage(NULL, NULL, NULL);
+					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_VALUE, count);
+
+					session->SendBinaryMessage(answer);
+				}
+				break;
+
+				case TIO_COMMAND_SUBSCRIBE:
+				{
+					bool b;
+					int handle;
+					string start;
+					b = Pr1MessageGetFieldAsInt(message, MESSAGE_FIELD_ID_HANDLE, &handle);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+
+					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_KEY, &start);
+
+					session->BinarySubscribe(handle, start);
+				}
+				break;
+
+			default:
+				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
+				return;
+			}
+		} 
+		catch(std::exception&)
+		{
+			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
+		}
 	}
 
 
@@ -916,8 +1117,7 @@ namespace tio
 		{
 			MakeAnswer(error, answer, e.what());
 			return;
-		}
-		
+		}	
 	}
 
 	void TioTcpServer::OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)

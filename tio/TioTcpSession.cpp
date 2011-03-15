@@ -24,6 +24,7 @@ namespace tio
 	
 	using std::cout;
 	using boost::shared_ptr;
+	using boost::scoped_ptr;
 	using boost::system::error_code;
 
 	using boost::lexical_cast;
@@ -144,6 +145,56 @@ namespace tio
 		ReadCommand();
 	}
 
+	
+	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
+	{
+		// this thing will delete the pointer
+		shared_ptr<PR1_MESSAGE> messageHolder(message, &pr1_message_delete);
+
+		if(CheckError(err))
+			return;
+
+		server_.OnBinaryCommand(shared_from_this(), message);
+
+		ReadBinaryProtocolMessage();
+	}
+
+	void TioTcpSession::OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err)
+	{
+		if(CheckError(err))
+			return;
+
+		void* buffer;
+		PR1_MESSAGE* message;
+
+		message = pr1_message_new_get_buffer_for_receive(header.get(), &buffer);
+
+		asio::async_read(
+					socket_, 
+					asio::buffer(buffer, header->message_size),
+					boost::bind(
+						&TioTcpSession::OnBinaryProtocolMessage, 
+						shared_from_this(), 
+						message,
+						asio::placeholders::error)
+						);
+	}
+
+	void TioTcpSession::ReadBinaryProtocolMessage()
+	{
+		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
+
+		asio::async_read(
+					socket_, 
+					asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
+					boost::bind(
+						&TioTcpSession::OnBinaryProtocolMessageHeader, 
+						shared_from_this(), 
+						header,
+						asio::placeholders::error)
+						);
+	}
+
 	void TioTcpSession::ReadCommand()
 	{
 		currentCommand_ = Command();
@@ -183,6 +234,21 @@ namespace tio
 		BOOST_ASSERT(currentCommand_.GetCommand().empty());
 		
 		currentCommand_.Parse(str.c_str());
+
+		//
+		// Check for protocol change. 
+		//
+		if(currentCommand_.GetCommand() == "protocol")
+		{
+			const Command::Parameters& parameters = currentCommand_.GetParameters();
+
+			if(parameters.size() == 1 && parameters[0] == "binary")
+			{
+				SendAnswer("going binary");
+				ReadBinaryProtocolMessage();
+				return;
+			}
+		}
 
 #ifdef _TIO_DEBUG
 		cout << "<< " << str << endl;
@@ -287,8 +353,7 @@ namespace tio
 		return stream.str();
 	}
 
-	void TioTcpSession::OnEvent(unsigned int handle, const string& eventName, 
-		const TioData& key, const TioData& value, const TioData& metadata)
+	void TioTcpSession::SendEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName )
 	{
 		stringstream answer;
 
@@ -302,9 +367,9 @@ namespace tio
 
 		if(metadata)
 			metadataString = TioDataToString(metadata);
-		
+
 		answer << "event " << handle << " " << eventName;
-		
+
 		if(!keyString.empty())
 			answer << " key " << GetDataTypeAsString(key) << " " << keyString.length();
 
@@ -326,6 +391,16 @@ namespace tio
 			answer << metadataString << "\r\n";
 
 		SendString(answer.str());
+	}
+
+	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
+		const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		if(subscriptionInfo->binaryProtocol)
+			SendBinaryEvent(subscriptionInfo->handle, key, value, metadata, eventName);
+		else
+			SendEvent(subscriptionInfo->handle, key, value, metadata, eventName);
+
 	}
 
 	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
@@ -535,7 +610,7 @@ namespace tio
 			return;
 		}
 
-		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO);
+		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO(handle));
 		subscriptionInfo->container = container;
 
 		try
@@ -588,7 +663,7 @@ namespace tio
 		try
 		{
 			subscriptionInfo->cookie = container->Subscribe(
-				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), start);
+				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
 			
 			SendString("answer ok\r\n");
 		}
@@ -601,13 +676,92 @@ namespace tio
 		return;
 	}
 
+
+	void TioTcpSession::BinarySubscribe(unsigned int handle, const string& start)
+	{
+		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
+
+		//
+		// already subscribed
+		//
+		if(subscriptions_.find(handle) != subscriptions_.end())
+			throw std::runtime_error("already subscribed");
+
+		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO(handle));
+		subscriptionInfo->container = container;
+		subscriptionInfo->binaryProtocol = true;
+
+		try
+		{
+			int numericStart = lexical_cast<int>(start);
+			
+			//
+			// lets try a query. Navigating a query is faster than accessing records
+			// using index. Imagine a linked list being accessed by index every time...
+			//
+			try
+			{
+				subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
+			}
+			catch(std::exception&)
+			{
+				//
+				// no result set, don't care. We'll carry on with the indexed access
+				//
+			}
+
+			subscriptionInfo->nextRecord = numericStart;
+
+			if(IsListContainer(container))
+				subscriptionInfo->event_name = "push_back";
+			else if(IsMapContainer(container))
+				subscriptionInfo->event_name = "set";
+			else
+				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
+
+			pendingSnapshots_[handle] = subscriptionInfo;
+			
+			subscriptions_[handle] = subscriptionInfo;
+			
+			SendBinaryAnswer();
+			
+			SendPendingSnapshots();
+
+			return;
+		}
+		catch(boost::bad_lexical_cast&)
+		{
+
+		}
+
+		//
+		// if we're here, start is not numeric. We'll let the container deal with this
+		//
+		subscriptions_[handle] = subscriptionInfo;
+
+		try
+		{
+			subscriptionInfo->cookie = container->Subscribe(
+				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
+			
+			SendBinaryAnswer();
+		}
+		catch(std::exception&)
+		{
+			subscriptions_.erase(handle);
+			throw;
+		}
+
+		return;
+	}
+
 	void TioTcpSession::SendPendingSnapshots()
 	{
 		if(pendingSnapshots_.empty())
 			return;
 
 		//
-		// TODO: hardcoded counter
+		// TODO: hard coded counter
 		//
 		for(unsigned int a = 0 ; a < 64 ; a++)
 		{
@@ -635,7 +789,7 @@ namespace tio
 					{
 						// done
 						info->cookie = info->container->Subscribe(
-							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), "");
+							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
 
 						toRemove.push_back(handle);
 					}
@@ -648,7 +802,7 @@ namespace tio
 					{
 						// done
 						info->cookie = info->container->Subscribe(
-							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), handle, _1, _2, _3, _4), "");
+							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
 
 						toRemove.push_back(handle);
 						continue;
@@ -671,7 +825,7 @@ namespace tio
 				// numeric key and it will return the real string key
 				//
 				//
-				OnEvent(handle, info->event_name, key, value, metadata);
+				OnEvent(info, info->event_name, key, value, metadata);
 
 				info->nextRecord++;
 			}
@@ -708,6 +862,43 @@ namespace tio
 	{
 		tokens_.push_back(token);
 	}
+
+	int EventNameToEventCode(const string& eventName)
+	{
+		if(eventName == "push_back")
+			return TIO_COMMAND_PUSH_BACK;
+		else if(eventName == "push_front")
+			return TIO_COMMAND_PUSH_FRONT;
+		else if(eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
+			return TIO_COMMAND_DELETE;
+		else if(eventName == "clear")
+			return TIO_COMMAND_CLEAR;
+		else if(eventName == "set")
+			return TIO_COMMAND_SET;
+		else if(eventName == "insert")
+			return TIO_COMMAND_INSERT;
+
+		return 0;
+	}
+
+	void TioTcpSession::SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName)
+	{
+		shared_ptr<PR1_MESSAGE> message = Pr1CreateMessage();
+
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_EVENT);
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT, EventNameToEventCode(eventName));
+
+		if(key) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, key);
+		if(value) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, value);
+		if(metadata) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_METADATA, metadata);
+
+		SendBinaryMessage(message);
+	}
+
+
+	
+
 } // namespace tio
 
 

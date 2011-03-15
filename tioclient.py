@@ -1,9 +1,11 @@
 # we'll not use this because it works only on 2.6+
 #from __future__ import print_function
+from decimal import Decimal
 import socket
 import functools
 from cStringIO import StringIO
 from datetime import datetime
+from decimal import Decimal
 import weakref
 
 separator = '^'
@@ -40,7 +42,7 @@ def decode(value):
         field_value = value[current_data_offset:current_data_offset+field_size]
 
         if data_type == 'D':
-            field_value = float(field_value)
+            field_value = Decimal(field_value)
         elif data_type == 'I':
             field_value = int(field_value)
         elif data_type == 'X':
@@ -54,7 +56,7 @@ def decode(value):
 
 type_map = {}
 type_map[int] = 'I'
-type_map[float] = 'D'
+type_map[Decimal] = 'D'
 type_map[str] = 'S'
 type_map[unicode] = 'S'
 
@@ -73,7 +75,8 @@ def encode(values):
     header_io.write(' ')
     header_io.write(values_io.getvalue())
 
-    return header_io.getvalue()
+    encoded_value = header_io.getvalue()
+    return encoded_value
 
 #
 # this class is meant to be inherited by container classes,
@@ -436,7 +439,7 @@ class TioServerConnection(object):
             if type == 'int':
                 value = int(dataBuffer)
             elif type == 'double':
-                value = float(dataBuffer)
+                value = Decimal(dataBuffer)
             elif type == 'string':
                 value = dataBuffer
             else:
@@ -454,7 +457,7 @@ class TioServerConnection(object):
             return (data, 'string')
         elif type(data) is int or type(data) is long:
             return (str(data), 'int')
-        elif type(data) is float:
+        elif type(data) is Decimal:
             return (str(data), 'double')
 
         raise Exception('not supported data type')

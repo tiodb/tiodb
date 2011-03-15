@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tio", "tio\tio.vcxproj", "{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tiotest", "tiotest\tiotest.vcxproj", "{616D1CF1-9A7C-4B0F-9E5C-E009FA01A49B}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -15,10 +13,6 @@ Global
 		{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}.Debug|Win32.Build.0 = Debug|Win32
 		{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}.Release|Win32.ActiveCfg = Release|Win32
 		{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}.Release|Win32.Build.0 = Release|Win32
-		{616D1CF1-9A7C-4B0F-9E5C-E009FA01A49B}.Debug|Win32.ActiveCfg = Debug|Win32
-		{616D1CF1-9A7C-4B0F-9E5C-E009FA01A49B}.Debug|Win32.Build.0 = Debug|Win32
-		{616D1CF1-9A7C-4B0F-9E5C-E009FA01A49B}.Release|Win32.ActiveCfg = Release|Win32
-		{616D1CF1-9A7C-4B0F-9E5C-E009FA01A49B}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
