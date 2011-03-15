@@ -453,20 +453,6 @@ namespace tio
 		Py_Initialize();
 		PyRun_SimpleString("print 'Python support initialized:'");
 
-		/*
-		//
-		// Show Python version
-		//
-		python::object sys = boost::python::import("sys");
-		string version = boost::python::extract<std::string>(sys.attr("version"));
-		cout << version << endl;
-
-		python::object main_module((
-			python::handle<>(python::borrowed(PyImport_AddModule("__main__")))));
-
-		python::object main_namespace = main_module.attr("__dict__");
-		*/
-
 		try
 		{
 			g_pythonContainerManager = TioContainerManagerWrapper::CreateWrapper(containerManager);
