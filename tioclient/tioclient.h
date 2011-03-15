@@ -48,6 +48,9 @@ extern "C" {
 #define TIO_COMMAND_SUBSCRIBE			0x1E
 #define TIO_COMMAND_UNSUBSCRIBE			0x1F
 
+#define TIO_COMMAND_PROPGET 			0x20
+#define TIO_COMMAND_PROPSET 			0x21
+
 #define TIO_SUCCESS						   0
 #define TIO_ERROR_GENERIC				  -1
 #define TIO_ERROR_NETWORK				  -2

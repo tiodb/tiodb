@@ -44,6 +44,31 @@ int socket_receive(SOCKET socket, void* buffer, unsigned int len)
 	return ret;
 }
 
+int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
+{
+	int ret;
+#ifdef _WIN32
+	u_long pending_bytes = 0;
+
+	ret = ioctlsocket(socket, FIONREAD, &pending_bytes);
+	if(ret == SOCKET_ERROR)
+		return ret;
+
+	if(pending_bytes < len)
+		return 0;
+
+	return socket_receive(socket, buffer, len); 
+#else
+	ret = recv(socket, (char*)buffer, len, MSG_DONTWAIT);
+
+	// nothing pending
+	if(ret == EAGAIN)
+		return 0;
+
+	return ret;
+#endif
+}
+
 
 
 
@@ -373,6 +398,41 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 }
 
 
+int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_message)
+{
+	int result;
+	struct PR1_MESSAGE_HEADER pr1_message_header;
+	void* receive_buffer;
+
+	result = socket_receive_if_available(socket, &pr1_message_header, sizeof(struct PR1_MESSAGE_HEADER));
+
+	if(result == 0)
+		return 0;
+
+	if(TIO_FAILED(result))
+		return result;
+
+	*pr1_message = pr1_message_new_get_buffer_for_receive(&pr1_message_header, &receive_buffer);
+
+	result = socket_receive(
+		socket, 
+		receive_buffer,
+		pr1_message_header.message_size);
+
+	if(TIO_FAILED(result))
+	{
+		pr1_message_delete(*pr1_message);
+		*pr1_message = NULL;
+		return result;
+	}
+
+	pr1_message_parse(*pr1_message);
+
+	return result;
+}
+
+
+
 
 
 
@@ -480,7 +540,7 @@ void tiodata_set_double(struct TIO_DATA* tiodata, double value)
 
 
 
-int tio_connect(char* host, short port, struct TIO_CONNECTION** connection)
+int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection)
 {
 	SOCKET sockfd;
 	struct sockaddr_in serv_addr;
@@ -748,6 +808,64 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 	return result;
 }
 
+int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
+{
+	int result;
+	struct PR1_MESSAGE_FIELD_HEADER* command_field;
+	struct PR1_MESSAGE* received_message;
+	int received = 0;
+
+	for(;;)
+	{
+		//
+		// if min_events > 0, we'll block until all events are received
+		// else we'll receive as many as already available on socket
+		//
+		if(min_events)
+		{
+			result = pr1_message_receive(connection->socket, &received_message);
+
+			if(TIO_FAILED(result))
+				return result;
+
+			min_events--;
+		}
+		else
+		{
+			result = pr1_message_receive_if_available(connection->socket, &received_message);
+
+			if(TIO_FAILED(result))
+				return result;
+			
+			if(result == 0)
+				return received;
+		}
+
+		received++;
+
+		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
+
+		if(!command_field) {
+			pr1_message_delete(received_message);
+			return TIO_ERROR_PROTOCOL;
+		}
+
+		// MUST be an event
+		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
+		{
+			pr1_message_delete(received_message);
+			return TIO_ERROR_PROTOCOL;
+		}
+
+		events_list_push(connection, received_message);
+		connection->pending_event_count++;
+	}
+
+	// should never get here
+	assert(0);
+
+}
+
 int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_MESSAGE** response)
 {
 	int result;
@@ -839,7 +957,7 @@ int tio_container_send_command_and_get_data_response(
 
 
 
-int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, char* name, char* type, struct TIO_CONTAINER** container)
+int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, char* type, struct TIO_CONTAINER** container)
 {
 	struct PR1_MESSAGE* pr1_message = NULL;
 	struct PR1_MESSAGE* response = NULL;
@@ -899,12 +1017,12 @@ clean_up_and_return:
 	return result;
 }
 
-int tio_create(struct TIO_CONNECTION* connection, char* name, char* type, struct TIO_CONTAINER** container)
+int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container)
 {
 	return tio_create_or_open(connection, TIO_COMMAND_CREATE, name, type, container);
 }
 
-int tio_open(struct TIO_CONNECTION* connection, char* name, char* type, struct TIO_CONTAINER** container)
+int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container)
 {
 	return tio_create_or_open(connection, TIO_COMMAND_OPEN, name, type, container);
 }
