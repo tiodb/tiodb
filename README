@@ -1,0 +1,12 @@
+A new approach to distributed system, using remote containers (vector, map, etc) and publish/subscribe model.
+
+ * Containers (maps, lists and queues) holding strings, doubles and ints. ("set" container and file support is on the way)
+ * Data is written in a key/value/metadata model. Every container has a property map, that can be used to store the value schema (or something else). You can use metadata to store the schema per record (or something else :-))
+ * Full publish/subscribe support for every change on every container. "Snapshot plus updates" model support.
+ * Metacontainers with container list, user list, statistics, etc
+ * Authorization per command per container (ACL), a user can be authorized to get items from a list but not to modify it.
+ * Persistent and volatile containers. Persistent records are *guaranteed* to be written when client receives the server response.
+ * Simple protocol, based on the memcached one. You can test Tio using a telnet connection
+ * Support for distributing workload between clients with the WaitAndPop support 
+ * Support thousands of containers, only limited by RAM
+ * Not as fast as it could be (10k inserts per seconds using volatile containers and 1.5k inserts per second using persistent containers). No optimization effort was made yet, but the code is simple, pretty hackable and with plenty room for optimizations.
