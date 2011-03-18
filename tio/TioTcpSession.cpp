@@ -430,6 +430,38 @@ namespace tio
 		}
 	}
 
+	void TioTcpSession::SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	{
+		shared_ptr<PR1_MESSAGE> answer = Pr1CreateAnswerMessage();
+		
+		pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
+
+		SendBinaryMessage(answer);
+		
+		for(;;)
+		{
+			TioData key, value, metadata;
+			shared_ptr<PR1_MESSAGE> item = Pr1CreateMessage();
+
+			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+
+			//
+			// is no more records, we'll just send an empty publication
+			//
+			if(b)
+				Pr1MessageAddFields(item, &key, &value, &metadata);
+
+			SendBinaryMessage(item);
+
+			if(!b)
+				break;
+				
+			resultSet->MoveNext();
+		}
+	}
+
 	void TioTcpSession::SendResultSetItem(unsigned int queryID, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{

@@ -18,7 +18,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #include "Container.h"
 #include "Command.h"
-#include "../tioclient/tioclient.h"
+#include "../tioclient/tioclient_internals.h"
 //#include "TioTcpServer.h"
 
 namespace tio
@@ -95,7 +95,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		return true;
 	}
 
-	inline bool Pr1MessageGetFieldAsString(const PR1_MESSAGE* message, unsigned int fieldId, string* str)
+	inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId, string* str)
 	{
 		PR1_MESSAGE_FIELD_HEADER* field = pr1_message_field_find_by_id(message, fieldId);
 
@@ -111,7 +111,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		return true;
 	}
 
-	inline bool Pr1MessageGetFieldAsInt(const PR1_MESSAGE* message, unsigned int fieldId, int* value)
+	inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId, int* value)
 	{
 		PR1_MESSAGE_FIELD_HEADER* field = pr1_message_field_find_by_id(message, fieldId);
 
@@ -131,7 +131,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		if(handle)
 		{
 			*handle = 0;
-			Pr1MessageGetFieldAsInt(message, MESSAGE_FIELD_ID_HANDLE, handle);
+			Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, handle);
 		}
 
 		if(key)
@@ -148,21 +148,33 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	{
 		return shared_ptr<PR1_MESSAGE>(pr1_message_new(), &pr1_message_delete);
 	}
-
-	inline shared_ptr<PR1_MESSAGE> Pr1CreateAnswerMessage(TioData* key, TioData* value, TioData* metadata)
+	
+	inline shared_ptr<PR1_MESSAGE> Pr1CreateAnswerMessage()
 	{
 		shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
 
 		pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
+
+		return answer;
+	}
+
+	inline void Pr1MessageAddFields(shared_ptr<PR1_MESSAGE> message, const TioData* key, const TioData* value, const TioData* metadata)
+	{
+		if(key && key->GetDataType() != TioData::None)
+			Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, *key);
+
+		if(value && value->GetDataType() != TioData::None)
+			Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, *value);
+
+		if(metadata && metadata->GetDataType() != TioData::None)
+			Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_METADATA, *metadata);
+	}
+
+	inline shared_ptr<PR1_MESSAGE> Pr1CreateAnswerMessage(TioData* key, TioData* value, TioData* metadata)
+	{
+		shared_ptr<PR1_MESSAGE> answer = Pr1CreateAnswerMessage();
 					
-		if(key)
-			Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_KEY, *key);
-
-		if(value)
-			Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_VALUE, *value);
-
-		if(metadata)
-			Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_METADATA, *metadata);
+		Pr1MessageAddFields(answer, key, value, metadata);
 
 		return answer;
 	}
@@ -473,6 +485,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			commandRunning_ = false;
 		}
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
+		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 
 		bool commandRunning_;
 	};		

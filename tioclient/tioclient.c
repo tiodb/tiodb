@@ -10,14 +10,18 @@
 	#include <assert.h>
 	#include <stdio.h>
 	#include <string.h>
-	#include <sys/types.h>
+	#include <sys/types.h> 
 	#include <sys/socket.h>
 	#include <netinet/in.h>
 	#include <netdb.h>
 	#define closesocket close
 #endif
 
+#include "tioclient_internals.h"
 #include "tioclient.h"
+
+
+
 
 
 
@@ -1281,6 +1285,73 @@ clean_up_and_return:
 	return result;
 }
 
+
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie)
+{
+	int result;
+	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* response = NULL;
+	struct PR1_MESSAGE* query_item = NULL;
+	struct PR1_MESSAGE_FIELD_HEADER* query_id_field = NULL;
+	struct TIO_DATA key, value, metadata;
+	int query_id;
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START, start);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
+
+
+	result = pr1_message_send_and_delete(container->connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(container->connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+
+	query_id_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_QUERY_ID);
+
+	if(!query_id_field || query_id_field->data_type != MESSAGE_FIELD_TYPE_INT)
+	{
+		result = TIO_ERROR_PROTOCOL;
+		goto clean_up_and_return;
+	}
+
+	query_id = pr1_message_field_get_int(query_id_field);
+
+	tiodata_init(&key); tiodata_init(&value); tiodata_init(&metadata);
+
+	for(;;)
+	{
+		result = tio_receive_until_not_event(container->connection, &query_item);
+		if(TIO_FAILED(result))
+			goto clean_up_and_return;
+
+		tiodata_set_as_none(&key); tiodata_set_as_none(&value); tiodata_set_as_none(&metadata);
+
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_KEY, &key);
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_VALUE, &value);
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_METADATA, &metadata);
+
+		//
+		// empty field means query is over
+		//
+		if(key.data_type == TIO_DATA_TYPE_NONE)
+			break;
+
+		query_callback(cookie, query_id, &key, &value, &metadata);
+	}
+
+
+clean_up_and_return:
+	tiodata_set_as_none(&key); tiodata_set_as_none(&value); tiodata_set_as_none(&metadata);
+	pr1_message_delete(response);
+	pr1_message_delete(query_item);
+
+	return result;
+}
+
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
 {
 	int result;
@@ -1353,6 +1424,7 @@ void TEST_pr1_message()
 
 void test_event_callback(void* cookie, unsigned int handle, unsigned int event_code, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
+	cookie; handle; key; value; metadata;
 	printf("event code: %d\n", event_code);
 }
 

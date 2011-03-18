@@ -196,7 +196,7 @@ namespace tio
 
 		pr1_message_parse(message);
 
-		b = Pr1MessageGetFieldAsInt(message, MESSAGE_FIELD_ID_COMMAND, &command);
+		b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_COMMAND, &command);
 
 		if(!b)
 		{
@@ -211,7 +211,7 @@ namespace tio
 			case TIO_COMMAND_PING:
 				{
 					string payload;
-					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_VALUE, &payload);
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_VALUE, &payload);
 
 					if(!b)
 					{
@@ -232,7 +232,7 @@ namespace tio
 			case TIO_COMMAND_CREATE:
 				{
 					string name, type;
-					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_NAME, &name);
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_NAME, &name);
 
 					if(!b)
 					{
@@ -240,7 +240,7 @@ namespace tio
 						break;
 					}
 
-					Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_TYPE, &type);
+					Pr1MessageGetField(message, MESSAGE_FIELD_ID_TYPE, &type);
 
 					shared_ptr<ITioContainer> container;
 
@@ -362,12 +362,34 @@ namespace tio
 				}
 				break;
 
+				case TIO_COMMAND_QUERY:
+				{
+					int start, end;
+
+					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
+					
+					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START, &start))
+						start = 0;
+
+					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
+						end = 0;
+
+					shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
+
+					//
+					// TODO: hardcoded query id
+					//
+					session->SendBinaryResultSet(resultSet, 1);
+					
+				}
+				break;
+
 				case TIO_COMMAND_SUBSCRIBE:
 				{
 					bool b;
 					int handle;
 					string start;
-					b = Pr1MessageGetFieldAsInt(message, MESSAGE_FIELD_ID_HANDLE, &handle);
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle);
 
 					if(!b)
 					{
@@ -375,7 +397,7 @@ namespace tio
 						break;
 					}
 
-					b = Pr1MessageGetFieldAsString(message, MESSAGE_FIELD_ID_KEY, &start);
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start);
 
 					session->BinarySubscribe(handle, start);
 				}
