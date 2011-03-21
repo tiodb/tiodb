@@ -4,6 +4,27 @@
 	If you're looking for the C++ version, pick the TioTcpClient.h header
 */
 
+#ifdef _WIN32
+	#define _CRT_SECURE_NO_WARNINGS
+	#include <stdio.h>
+	#include <tchar.h>
+	#include <assert.h>
+	#include <WinSock.h>
+	#pragma comment(lib ,"ws2_32.lib")
+#else
+	#include <unistd.h>
+	#include <stdlib.h>
+	#include <assert.h>
+	#include <stdio.h>
+	#include <string.h>
+	#include <sys/types.h> 
+	#include <sys/socket.h>
+	#include <netinet/in.h>
+	#include <netdb.h>
+	#define closesocket close
+#endif
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
