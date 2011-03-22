@@ -1,0 +1,34 @@
+EXPORTS
+	tiodata_init
+	tiodata_get_type
+	tiodata_set_as_none
+	tiodata_set_string_get_buffer
+	tiodata_set_string
+	tiodata_set_int
+	tiodata_set_double
+	tio_initialize
+
+	tio_connect
+	tio_create
+	tio_open
+	tio_close
+
+	tio_dispatch_pending_events
+
+	tio_ping
+
+	tio_container_propset
+	tio_container_push_back
+	tio_container_push_front
+	tio_container_pop_back
+	tio_container_pop_front
+	tio_container_set
+	tio_container_insert
+	tio_container_clear
+	tio_container_delete
+	tio_container_get
+	tio_container_propget
+	tio_container_get_count
+	tio_container_query
+	tio_container_subscribe
+	tio_container_unsubscribe
