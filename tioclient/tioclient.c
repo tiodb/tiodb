@@ -480,7 +480,7 @@ void tiodata_set_as_none(struct TIO_DATA* tiodata)
 
 char* tiodata_set_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 {
-	if(tiodata->data_type == TIO_DATA_TYPE_STRING && strlen(tiodata->string_) > min_size)
+	if(tiodata->data_type == TIO_DATA_TYPE_STRING && strlen(tiodata->string_) >= min_size)
 		return tiodata->string_;
 
 	tiodata_set_as_none(tiodata);

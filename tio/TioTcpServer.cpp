@@ -104,7 +104,7 @@ namespace tio
 	}
 
 
-	TioTcpServer::TioTcpServer(ContainerManager& containerManager, asio::io_service& io_service, tcp::endpoint& endpoint) :
+	TioTcpServer::TioTcpServer(ContainerManager& containerManager, asio::io_service& io_service, const tcp::endpoint& endpoint) :
 		containerManager_(containerManager),
 		acceptor_(io_service, endpoint),
 		io_service_(io_service),
@@ -286,6 +286,7 @@ namespace tio
 
 					session->SendBinaryAnswer();
 				}
+				break;
 
 				case TIO_COMMAND_GET:
 				case TIO_COMMAND_PROPGET:

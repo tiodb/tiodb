@@ -129,9 +129,6 @@ void RunServer(tio::ContainerManager* manager,
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
-	Timer t;
-	t.Start();
-
 #ifndef _WIN32
 	//ProfilerStart("/tmp/tio.prof");
 #endif
@@ -156,9 +153,7 @@ void RunServer(tio::ContainerManager* manager,
 
 	tio::TioTcpServer tioServer(*manager, io_service, e);
 
-	unsigned int elapsed = t.Elapsed();
-
-	cout << "now running (" << elapsed << "ms to start)" << endl;
+	cout << "now running!" << endl;
 
 	tioServer.Start();
 

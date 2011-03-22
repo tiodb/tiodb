@@ -279,6 +279,7 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
+	tiodata_set_string(&search_key, "1");
 	result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
@@ -292,7 +293,7 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	//
 	// insert first item to restore container to previous state
 	//
-	tiodata_set_int(&key, 0);
+	tiodata_set_string(&key, "0");
 	tiodata_set_int(&value, 0);
 	tiodata_set_string(&metadata, "not the first one");
 
@@ -315,7 +316,8 @@ int TEST_map(struct TIO_CONNECTION* connection)
 
 	for(a = 0 ; a < 50 ; a++)
 	{
-		tiodata_set_int(&search_key, a);
+		buffer = tiodata_set_string_get_buffer(&search_key, 64);
+		itoa(a, buffer, 10);
 
 		result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
 		if(TIO_FAILED(result)) goto clean_up_and_return;
@@ -325,6 +327,7 @@ int TEST_map(struct TIO_CONNECTION* connection)
 		assert(tiodata_get_type(&value) == TIO_DATA_TYPE_INT);
 		assert(value.int_ == a);
 	}
+
 
 	tio_dispatch_pending_events(connection, 0xFFFFFFFF);
 

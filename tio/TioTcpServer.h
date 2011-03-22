@@ -199,7 +199,7 @@ namespace tio
 		shared_ptr<ITioContainer> GetContainerAndParametersFromRequest(const PR1_MESSAGE* message, shared_ptr<TioTcpSession> session, TioData* key, TioData* value, TioData* metadata);
 
 	public:
-		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, tcp::endpoint& endpoint);
+		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint);
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
 		void OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		
