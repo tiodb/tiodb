@@ -41,6 +41,28 @@ extern "C" {
 #define TIO_ERROR_MISSING_PARAMETER       -4
 #define TIO_ERROR_NO_SUCH_OBJECT	      -5
 
+#define TIO_COMMAND_PING				0x10
+#define TIO_COMMAND_OPEN				0x11
+#define TIO_COMMAND_CREATE				0x12
+#define TIO_COMMAND_CLOSE				0x13
+#define TIO_COMMAND_SET					0x14
+#define TIO_COMMAND_INSERT				0x15
+#define TIO_COMMAND_DELETE				0x16
+#define TIO_COMMAND_PUSH_BACK			0x17
+#define TIO_COMMAND_PUSH_FRONT			0x18
+#define TIO_COMMAND_POP_BACK			0x19
+#define TIO_COMMAND_POP_FRONT			0x1A
+#define TIO_COMMAND_CLEAR				0x1B
+#define TIO_COMMAND_COUNT				0x1C
+#define TIO_COMMAND_GET					0x1D
+#define TIO_COMMAND_SUBSCRIBE			0x1E
+#define TIO_COMMAND_UNSUBSCRIBE			0x1F
+#define TIO_COMMAND_QUERY				0x20
+
+#define TIO_COMMAND_PROPGET 			0x30
+#define TIO_COMMAND_PROPSET 			0x31
+
+
 #define TIO_FAILED(x) (x < 0)
 
 
@@ -74,6 +96,9 @@ char* tiodata_set_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_s
 void tiodata_set_string(struct TIO_DATA* tiodata, const char* value);
 void tiodata_set_int(struct TIO_DATA* tiodata, int value);
 void tiodata_set_double(struct TIO_DATA* tiodata, double value);
+
+void tiodata_copy(const struct TIO_DATA* source, struct TIO_DATA* destination);
+void tiodata_convert_to_string(struct TIO_DATA* tiodata);
 
 //
 // tioclient functions

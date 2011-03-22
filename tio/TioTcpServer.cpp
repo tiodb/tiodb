@@ -269,6 +269,23 @@ namespace tio
 					session->SendBinaryMessage(answer);
 				}
 				break;
+				case TIO_COMMAND_CLOSE:
+				{
+					bool b;
+					int handle;
+					string start;
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+
+					session->CloseContainerHandle(handle);
+
+					session->SendBinaryAnswer();
+				}
 
 				case TIO_COMMAND_GET:
 				case TIO_COMMAND_PROPGET:

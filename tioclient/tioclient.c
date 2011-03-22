@@ -455,6 +455,7 @@ int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_mes
 
 void tiodata_init(struct TIO_DATA* tiodata)
 {
+	memset(tiodata, 0, sizeof(struct TIO_DATA));
 	tiodata->data_type = TIO_DATA_TYPE_NONE;
 }
 
@@ -517,6 +518,60 @@ void tiodata_set_double(struct TIO_DATA* tiodata, double value)
 
 	tiodata->double_ = value;
 }
+
+void tiodata_copy(const struct TIO_DATA* source, struct TIO_DATA* destination)
+{
+	tiodata_set_as_none(destination);
+
+	switch(source->data_type)
+	{
+	case TIO_DATA_TYPE_NONE:
+	case TIO_DATA_TYPE_INT:
+	case TIO_DATA_TYPE_DOUBLE:
+		*destination = *source;
+		break;
+	case TIO_DATA_TYPE_STRING:
+		tiodata_set_string(destination, source->string_);
+		break;
+	};
+}
+
+void tiodata_convert_to_string(struct TIO_DATA* tiodata)
+{
+	char buffer[64]; // 64 bytes will ALWAYS be enough
+
+	if(!tiodata)
+		return;
+
+	if(tiodata->data_type == TIO_DATA_TYPE_STRING)
+		return;
+
+	switch(tiodata->data_type)
+	{
+	case TIO_DATA_TYPE_NONE:
+		strcpy(buffer, "[NONE]");
+		break;
+	case TIO_DATA_TYPE_INT:
+		itoa(tiodata->int_, buffer, 10);
+		break;
+	case TIO_DATA_TYPE_DOUBLE:
+		sprintf(buffer, "%g", tiodata->double_);
+		break;
+	};
+
+	buffer[sizeof(buffer)-1] = '\0';
+
+	tiodata_set_string(tiodata, buffer);
+}
+
+
+
+
+
+
+
+
+
 
 
 
@@ -738,9 +793,26 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 	return pr1_message;
 }
 
+
+int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
+{
+	struct PR1_MESSAGE_FIELD_HEADER* error_code;
+
+	error_code = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_CODE);
+
+	if(!error_code)
+		return TIO_SUCCESS;
+
+	return pr1_message_field_get_int(error_code);
+}
+
 void tio_disconnect(struct TIO_CONNECTION* connection)
 {
 	struct PR1_MESSAGE* pending_event;
+
+	if(!connection)
+		return;
+
 	closesocket(connection->socket);
 	connection->socket = 0;
 
@@ -862,7 +934,7 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 int tio_container_send_command_and_get_response(
 	struct TIO_CONTAINER* container, unsigned int command_id, 
 	const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata,
-	struct PR1_MESSAGE** pr1_message)
+	struct PR1_MESSAGE** response)
 {
 	int result;
 	
@@ -870,7 +942,7 @@ int tio_container_send_command_and_get_response(
 	if(TIO_FAILED(result)) 
 		return result;
 
-	result = tio_receive_until_not_event(container->connection, pr1_message);
+	result = tio_receive_until_not_event(container->connection, response);
 	
 	if(TIO_FAILED(result)) 
 		return result;
@@ -885,7 +957,6 @@ int tio_container_send_command_and_get_data_response(
 	struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
 {
 	struct PR1_MESSAGE* response = NULL;
-	struct PR1_MESSAGE_FIELD_HEADER* error_code = NULL;
 	int result;
 
 	if(key) tiodata_set_as_none(key);
@@ -900,14 +971,10 @@ int tio_container_send_command_and_get_data_response(
 	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
 
-	error_code = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_ERROR_CODE);
-
-	if(error_code)
-	{
-		result = pr1_message_field_get_int(error_code);
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
-	}
-
+	
 	if(key)
 		pr1_message_field_get_as_tio_data(response, MESSAGE_FIELD_ID_KEY, key);
 
@@ -951,8 +1018,11 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
 
-	handle_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_HANDLE);
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
 
+	handle_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_HANDLE);
 	if(!handle_field) {
 		result = TIO_ERROR_PROTOCOL;
 		goto clean_up_and_return;
@@ -969,7 +1039,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 
 	//
 	// TODO: I'm indexing by handle because I really don't want to
-	// create another hash maps implementation now. This array will grow really
+	// create another hash map implementation now. This array will grow really
 	// big if the user open and close lots of containers
 	//
 	if(handle >= connection->containers_count)
@@ -997,16 +1067,38 @@ int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* ty
 
 int tio_close(struct TIO_CONTAINER* container)
 {
-	int result;
-	
-	result = tio_container_send_command(container, TIO_COMMAND_CLOSE, NULL, NULL, NULL);
+	struct PR1_MESSAGE* request = NULL;
+	struct PR1_MESSAGE* response = NULL;
+	int handle;
+	int result = TIO_SUCCESS;
 
+	if(!container)
+		goto clean_up_and_return;
+
+	handle = container->handle;
+
+	request = pr1_message_new();
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_CLOSE);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, handle);
+
+	result = pr1_message_send_and_delete(container->connection->socket, request);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(container->connection, &response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = pr1_message_get_error_code(response);
 	if(TIO_FAILED(result))
-		return result;
-	
-	free(container);
+		goto clean_up_and_return;
 
-	return TIO_SUCCESS;
+	container->connection->containers[handle] = NULL;
+
+clean_up_and_return:
+	pr1_message_delete(response);
+	free(container);
+	return result;
 }
 
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
@@ -1117,7 +1209,6 @@ clean_up_and_return:
 int tio_container_input_command(struct TIO_CONTAINER* container, unsigned short command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
 	struct PR1_MESSAGE* response = NULL;
-	struct PR1_MESSAGE_FIELD_HEADER* error_code = NULL;
 	int result;
 
 	result = tio_container_send_command_and_get_response(container, command_id, key, value, metadata, &response);
@@ -1125,13 +1216,10 @@ int tio_container_input_command(struct TIO_CONTAINER* container, unsigned short 
 	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
 
-	error_code = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_ERROR_CODE);
+	result = pr1_message_get_error_code(response);
 
-	if(error_code)
-	{
-		result = pr1_message_field_get_int(error_code);
+	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
-	}
 
 	result = TIO_SUCCESS;
 

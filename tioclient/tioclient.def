@@ -6,6 +6,10 @@ EXPORTS
 	tiodata_set_string
 	tiodata_set_int
 	tiodata_set_double
+	tiodata_convert_to_string
+	tiodata_copy
+
+
 	tio_initialize
 
 	tio_connect

@@ -624,9 +624,9 @@ namespace tio
 		if(i == handles_.end())
 			throw std::invalid_argument("invalid handle");
 
-		handles_.erase(i);
-		
 		Unsubscribe(handle);
+
+		handles_.erase(i);
 	}
 
 	void TioTcpSession::Subscribe(unsigned int handle, const string& start)
