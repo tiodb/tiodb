@@ -1,25 +1,5 @@
-#ifdef _WIN32
-	#define _CRT_SECURE_NO_WARNINGS
-	#include <stdio.h>
-	#include <tchar.h>
-	#include <assert.h>
-	#include <WinSock.h>
-#else
-	#include <unistd.h>
-	#include <stdlib.h>
-	#include <assert.h>
-	#include <stdio.h>
-	#include <string.h>
-	#include <sys/types.h>
-	#include <sys/socket.h>
-	#include <netinet/in.h>
-	#include <netdb.h>
-	#define closesocket close
-#endif
-
+#include "tioclient_internals.h"
 #include "tioclient.h"
-
-
 
 int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 {
@@ -927,6 +907,7 @@ int tio_container_send_command_and_get_data_response(
 	struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
 {
 	struct PR1_MESSAGE* response = NULL;
+	struct PR1_MESSAGE_FIELD_HEADER* error_code = NULL;
 	int result;
 
 	if(key) tiodata_set_as_none(key);
@@ -935,12 +916,19 @@ int tio_container_send_command_and_get_data_response(
 
 	result = tio_container_send_command(container, command_id, input_key, NULL, NULL);
 	if(TIO_FAILED(result)) 
-		return result;
+		goto clean_up_and_return;
 
 	result = tio_receive_until_not_event(container->connection, &response);
-
 	if(TIO_FAILED(result)) 
-		return result;
+		goto clean_up_and_return;
+
+	error_code = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_ERROR_CODE);
+
+	if(error_code)
+	{
+		result = pr1_message_field_get_int(error_code);
+		goto clean_up_and_return;
+	}
 
 	if(key)
 		pr1_message_field_get_as_tio_data(response, MESSAGE_FIELD_ID_KEY, key);
@@ -951,6 +939,8 @@ int tio_container_send_command_and_get_data_response(
 	if(metadata)
 		pr1_message_field_get_as_tio_data(response, MESSAGE_FIELD_ID_METADATA, metadata);
 
+clean_up_and_return:
+	pr1_message_delete(response);
 	return result;
 }
 
@@ -1281,6 +1271,73 @@ clean_up_and_return:
 	return result;
 }
 
+
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie)
+{
+	int result;
+	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* response = NULL;
+	struct PR1_MESSAGE* query_item = NULL;
+	struct PR1_MESSAGE_FIELD_HEADER* query_id_field = NULL;
+	struct TIO_DATA key, value, metadata;
+	int query_id;
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START, start);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
+
+
+	result = pr1_message_send_and_delete(container->connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(container->connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+
+	query_id_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_QUERY_ID);
+
+	if(!query_id_field || query_id_field->data_type != MESSAGE_FIELD_TYPE_INT)
+	{
+		result = TIO_ERROR_PROTOCOL;
+		goto clean_up_and_return;
+	}
+
+	query_id = pr1_message_field_get_int(query_id_field);
+
+	tiodata_init(&key); tiodata_init(&value); tiodata_init(&metadata);
+
+	for(;;)
+	{
+		result = tio_receive_until_not_event(container->connection, &query_item);
+		if(TIO_FAILED(result))
+			goto clean_up_and_return;
+
+		tiodata_set_as_none(&key); tiodata_set_as_none(&value); tiodata_set_as_none(&metadata);
+
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_KEY, &key);
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_VALUE, &value);
+		pr1_message_field_get_as_tio_data(query_item, MESSAGE_FIELD_ID_METADATA, &metadata);
+
+		//
+		// empty field means query is over
+		//
+		if(key.data_type == TIO_DATA_TYPE_NONE)
+			break;
+
+		query_callback(cookie, query_id, &key, &value, &metadata);
+	}
+
+
+clean_up_and_return:
+	tiodata_set_as_none(&key); tiodata_set_as_none(&value); tiodata_set_as_none(&metadata);
+	pr1_message_delete(response);
+	pr1_message_delete(query_item);
+
+	return result;
+}
+
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
 {
 	int result;
@@ -1317,185 +1374,5 @@ void tio_initialize()
 #endif
 }
 
-
-
-
-
-
-
-
-	
-void TEST_pr1_message()
-{
-	struct PR1_MESSAGE* pr1_message;
-	int i = 10;
-	double d = 1.1;
-	char str[] = "test string";
-	void* buffer;
-	unsigned int buffer_size;
-
-	pr1_message = pr1_message_new();
-
-	pr1_message_add_field(pr1_message, MESSAGE_FIELD_ID_VALUE, MESSAGE_FIELD_TYPE_INT, &i, sizeof(i));
-	pr1_message_add_field(pr1_message, MESSAGE_FIELD_ID_KEY, MESSAGE_FIELD_TYPE_STRING, str, strlen(str));
-	pr1_message_add_field(pr1_message, MESSAGE_FIELD_ID_METADATA, MESSAGE_FIELD_TYPE_DOUBLE, &d, sizeof(d));
-
-	pr1_message_get_buffer(pr1_message, &buffer, &buffer_size);
-
-	pr1_message_parse(pr1_message);
-
-	assert(pr1_message->field_array[0]->data_type == MESSAGE_FIELD_TYPE_INT);
-	assert(pr1_message->field_array[1]->data_type == MESSAGE_FIELD_TYPE_STRING);
-	assert(pr1_message->field_array[2]->data_type == MESSAGE_FIELD_TYPE_DOUBLE);
-
-	pr1_message_delete(pr1_message);
-}
-
-void test_event_callback(void* cookie, unsigned int handle, unsigned int event_code, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
-{
-	printf("event code: %d\n", event_code);
-}
-
-
-int TEST_tio()
-{
-	struct TIO_CONNECTION* connection = NULL;
-	struct TIO_CONTAINER* meta_containers = NULL;
-	struct TIO_CONTAINER* test_container = NULL;
-	struct TIO_DATA search_key, key, value, metadata;
-	int a;
-	int result;
-
-	tio_initialize();
-
-	tiodata_init(&search_key);
-	tiodata_init(&key);
-	tiodata_init(&value);
-	tiodata_init(&metadata);
-
-	result = tio_connect("127.0.0.1", 6666, &connection);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	result = tio_ping(connection, "asdasdasdasdASDASDASDASDasdasdASDASDPOIYQFOHPAS*(FY(#RPSACTASC");
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	result = tio_open(connection, "meta/containers", NULL, &meta_containers);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	//
-	// get metadata container meta information
-	//
-	tiodata_set_string(&search_key, "meta/containers");
-	
-	result = tio_container_get(meta_containers, &search_key, &key, &value, &metadata);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	assert(tiodata_get_type(&value) == TIO_DATA_TYPE_STRING);
-	assert(strcmp(value.string_, "volatile_map") == 0);
-
-	//
-	// create test container, add items
-	//
-	result = tio_create(connection, "test_container", "volatile_list", &test_container);
-	if(TIO_FAILED(result)) goto clean_up_and_return;
-
-	result = tio_container_subscribe(test_container, NULL, &test_event_callback, NULL);
-	if(TIO_FAILED(result)) goto clean_up_and_return;
-
-	result = tio_container_clear(test_container);
-	if(TIO_FAILED(result)) goto clean_up_and_return;
-
-	for(a = 0 ; a < 50 ; a++)
-	{
-		tiodata_set_int(&value, a);
-		result = tio_container_push_back(test_container, NULL, &value, NULL);
-	}
-
-	//
-	// check if the count is ok
-	//
-	result = tio_container_get_count(test_container, &a);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	assert(a == 50);
-
-
-	//
-	// delete first item and checks
-	//
-	tiodata_set_int(&search_key, 0);
-
-	result = tio_container_delete(test_container, &search_key);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	assert(tiodata_get_type(&key) == TIO_DATA_TYPE_INT);
-	assert(key.int_ == 0);
-
-	assert(tiodata_get_type(&value) == TIO_DATA_TYPE_INT);
-	assert(value.int_ == 1);
-
-	//
-	// insert first item to restore container to previous state
-	//
-	tiodata_set_int(&key, 0);
-	tiodata_set_int(&value, 0);
-	tiodata_set_string(&metadata, "not the first one");
-
-	result = tio_container_insert(test_container, &key, &value, NULL);
-	if(TIO_FAILED(result))
-		goto clean_up_and_return;
-
-	for(a = 0 ; a < 50 ; a++)
-	{
-		tiodata_set_int(&search_key, a);
-		
-		result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
-		if(TIO_FAILED(result)) goto clean_up_and_return;
-
-		assert(tiodata_get_type(&key) == TIO_DATA_TYPE_INT);
-		assert(value.int_ == a);
-
-		assert(tiodata_get_type(&value) == TIO_DATA_TYPE_INT);
-		assert(value.int_ == a);
-	}
-
-	//
-	// not dispatching all pending events, to check if disconnect() code
-	// is releasing them
-	//
-	tio_dispatch_pending_events(connection, 50);
-
-clean_up_and_return:
-	tiodata_set_as_none(&search_key);
-	tiodata_set_as_none(&key);
-	tiodata_set_as_none(&value);
-	tiodata_set_as_none(&metadata);
-
-	tio_close(meta_containers);
-	tio_close(test_container);
-	tio_disconnect(connection);
-
-	return 0;
-}
-
-
-#ifdef _TIO_CLIENT_TEST
-int main()
-{
-	TEST_pr1_message();
-
-	TEST_tio();
-}
-#endif
 
 
