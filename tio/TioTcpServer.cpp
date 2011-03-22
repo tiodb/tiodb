@@ -403,13 +403,32 @@ namespace tio
 				}
 				break;
 
+				case TIO_COMMAND_UNSUBSCRIBE:
+				{
+					bool b;
+					int handle;
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+
+					session->Unsubscribe(handle);
+
+					session->SendBinaryAnswer();
+				}
+				break;
+
 			default:
 				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
 				return;
 			}
 		} 
-		catch(std::exception&)
+		catch(std::exception& ex)
 		{
+			ex;
 			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
 		}
 	}

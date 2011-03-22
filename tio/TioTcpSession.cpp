@@ -773,10 +773,15 @@ namespace tio
 
 		try
 		{
+			//
+			// TODO: this isn't really right, I`m just doing this to send the
+			// answer before the events. Is the the subscription fails, we're screwed,
+			// since we're sending a success answer before doing the subscription
+			//
+			SendBinaryAnswer();
+
 			subscriptionInfo->cookie = container->Subscribe(
 				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
-			
-			SendBinaryAnswer();
 		}
 		catch(std::exception&)
 		{

@@ -790,60 +790,38 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 
 int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
 {
-	int result;
+	int result = 0;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
-	int received = 0;
 
-	for(;;)
+	for(; min_events != 0; min_events--)
 	{
-		//
-		// if min_events > 0, we'll block until all events are received
-		// else we'll receive as many as already available on socket
-		//
-		if(min_events)
-		{
-			result = pr1_message_receive(connection->socket, &received_message);
+		result = pr1_message_receive(connection->socket, &received_message);
 
-			if(TIO_FAILED(result))
-				return result;
-
-			min_events--;
-		}
-		else
-		{
-			result = pr1_message_receive_if_available(connection->socket, &received_message);
-
-			if(TIO_FAILED(result))
-				return result;
-			
-			if(result == 0)
-				return received;
-		}
-
-		received++;
+		if(TIO_FAILED(result))
+			return result;
 
 		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
 
 		if(!command_field) {
 			pr1_message_delete(received_message);
-			return TIO_ERROR_PROTOCOL;
+			result = TIO_ERROR_PROTOCOL;
+			break;
 		}
 
 		// MUST be an event
 		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
 		{
 			pr1_message_delete(received_message);
-			return TIO_ERROR_PROTOCOL;
+			result = TIO_ERROR_PROTOCOL;
+			break;
 		}
 
 		events_list_push(connection, received_message);
 		connection->pending_event_count++;
 	}
 
-	// should never get here
-	assert(0);
-
+	return result;
 }
 
 int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_MESSAGE** response)
@@ -1031,7 +1009,7 @@ int tio_close(struct TIO_CONTAINER* container)
 	return TIO_SUCCESS;
 }
 
-void tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
+int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
 {
 	unsigned int a;
 	struct PR1_MESSAGE* event_message;
@@ -1083,6 +1061,8 @@ void tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int
 	tiodata_set_as_none(&key);
 	tiodata_set_as_none(&value);
 	tiodata_set_as_none(&metadata);
+
+	return a;
 }
 
 

@@ -457,7 +457,7 @@ class TioServerConnection(object):
             return (data, 'string')
         elif type(data) is int or type(data) is long:
             return (str(data), 'int')
-        elif type(data) is Decimal:
+        elif type(data) in (Decimal, float):
             return (str(data), 'double')
 
         raise Exception('not supported data type')

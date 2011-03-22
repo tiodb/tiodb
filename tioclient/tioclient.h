@@ -87,7 +87,8 @@ int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* 
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_close(struct TIO_CONTAINER* container);
 
-void tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events);
+int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events);
+int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events);
 
 
 int tio_ping(struct TIO_CONNECTION* connection, char* payload);
