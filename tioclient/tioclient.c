@@ -552,7 +552,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 		strcpy(buffer, "[NONE]");
 		break;
 	case TIO_DATA_TYPE_INT:
-		itoa(tiodata->int_, buffer, 10);
+		sprintf(buffer, "%d", tiodata->int_);
 		break;
 	case TIO_DATA_TYPE_DOUBLE:
 		sprintf(buffer, "%g", tiodata->double_);
