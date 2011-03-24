@@ -11,16 +11,32 @@ int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 	return ret;
 }
 
-int socket_receive(SOCKET socket, void* buffer, unsigned int len)
+int socket_receive(SOCKET socket, void* buffer, int len)
 {
-	int ret = recv(socket, (char*)buffer, len, 0);
+	int ret = 0;
+	char* char_buffer = (char*)buffer;
+	int received = 0;
 
-	//
-	// receiving nothing in considered an error in our api, hence the -1
-	//
-	if(ret <= 0)
-		ret = TIO_ERROR_NETWORK;
-	
+#ifdef _DEBUG
+	memset(char_buffer, 0xFF, len);
+#endif
+
+	while(received < len)
+	{
+		//
+		// Windows supports MSG_WAITALL only on Windows Server 2008 or superior... :-(
+		// So I need to emulate it here
+		//
+		ret = recv(socket, char_buffer + received, len - received, 0);
+
+		if(ret <= 0)
+			return TIO_ERROR_NETWORK;
+
+		received += ret;
+	}
+
+	assert(ret < 0 || received == len);
+		
 	return ret;
 }
 
@@ -581,7 +597,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	int result;
-	char buffer[] = "going binary";
+	char buffer[sizeof("going binary") -1];
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) 
@@ -600,7 +616,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
 		return TIO_ERROR_NETWORK;
 
-	result = socket_send(sockfd, "protocol binary\r\n", sizeof("protocol binary\r\n" -1));
+	result = socket_send(sockfd, "protocol binary\r\n", sizeof("protocol binary\r\n") -1);
 	if(TIO_FAILED(result)) 
 	{
 		closesocket(sockfd);
@@ -615,10 +631,10 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	}
 
 	// invalid answer
-	if(memcmp(buffer, "going binary", sizeof(buffer)) !=0)
+	if(memcmp(buffer, "going binary", sizeof("going binary")-1) !=0)
 	{
 		closesocket(sockfd);
-		return result;
+		return TIO_ERROR_PROTOCOL;
 	}
 
 	*connection = (struct TIO_CONNECTION*)malloc(sizeof(struct TIO_CONNECTION));

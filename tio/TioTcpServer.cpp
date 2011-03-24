@@ -406,7 +406,8 @@ namespace tio
 				{
 					bool b;
 					int handle;
-					string start;
+					string start_string;
+					int start_int;
 					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle);
 
 					if(!b)
@@ -415,9 +416,12 @@ namespace tio
 						break;
 					}
 
-					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start);
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start_string);
+					if(!b)
+						if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start_int))
+							start_string = lexical_cast<string>(start_int);
 
-					session->BinarySubscribe(handle, start);
+					session->BinarySubscribe(handle, start_string);
 				}
 				break;
 
