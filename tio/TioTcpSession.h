@@ -407,11 +407,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			unsigned int bufferSize;
 
 			pr1_message_get_buffer(message.get(), &buffer, &bufferSize);
-
+/*
 			asio::async_write(
 				socket_,
 				asio::buffer(buffer, bufferSize),
-				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), message, asio::placeholders::error, asio::placeholders::bytes_transferred));
+				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), message, asio::placeholders::error, asio::placeholders::bytes_transferred)); */
+
+            asio::write(socket_,asio::buffer(buffer, bufferSize));
 		}
 
 		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata)
