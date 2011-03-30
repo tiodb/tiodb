@@ -79,6 +79,8 @@ struct TIO_CONNECTION
 
 	struct TIO_CONTAINER** containers;
 	int containers_count;
+
+	int dispatch_events_on_receive;
 };
 
 //

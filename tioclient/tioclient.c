@@ -644,6 +644,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->containers_count = 1;
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
+	(*connection)->dispatch_events_on_receive = 1;
 
 	return TIO_SUCCESS;
 }
@@ -876,6 +877,15 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 	return result;
 }
 
+void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* event_message)
+{
+	events_list_push(connection, event_message);
+	connection->pending_event_count++;
+
+	if(connection->dispatch_events_on_receive)
+		tio_dispatch_pending_events(connection, 1);
+}
+
 int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
 {
 	int result = 0;
@@ -905,8 +915,7 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 			break;
 		}
 
-		events_list_push(connection, received_message);
-		connection->pending_event_count++;
+		on_event_receive(connection, received_message);
 	}
 
 	return result;
@@ -940,8 +949,7 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 			break;
 		}
 
-		events_list_push(connection, received_message);
-		connection->pending_event_count++;
+		on_event_receive(connection, received_message);
 	}
 
 	return result;
@@ -1136,10 +1144,10 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	{
 		event_message = events_list_pop(connection);
 
-		connection->pending_event_count--;
-
 		if(!event_message)
 			break;
+
+		connection->pending_event_count--;
 
 		handle_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_HANDLE);
 		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT);
