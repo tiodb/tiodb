@@ -333,6 +333,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
         unsigned int pendingSendSize_;
 
         std::queue<std::string> pendingSendData_;
+		std::queue<shared_ptr<PR1_MESSAGE>> pendingBinarySendData_;
 
 		struct SUBSCRIPTION_INFO
 		{
@@ -388,32 +389,49 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			SendBinaryMessage(answer);
 		}
 
-		void OnBinaryMessageSend()
+		void SendBinaryMessageNow(shared_ptr<PR1_MESSAGE> message)
 		{
+			void* buffer;
+			unsigned int bufferSize;
 
+			pr1_message_get_buffer(message.get(), &buffer, &bufferSize);
+
+			pendingSendSize_ += bufferSize;
+
+			asio::async_write(
+				socket_,
+				asio::buffer(buffer, bufferSize),
+				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), message, asio::placeholders::error, asio::placeholders::bytes_transferred));
 		}
 
-		void OnBinaryMessageSent(shared_ptr<PR1_MESSAGE> message, const error_code& err, size_t read)
+		void OnBinaryMessageSent(shared_ptr<PR1_MESSAGE> message, const error_code& err, size_t sent)
 		{
 			if(CheckError(err))
 				return;
 
-			SendPendingSnapshots();
+			void* buffer;
+			unsigned int bufferSize;
+
+			pr1_message_get_buffer(message.get(), &buffer, &bufferSize);
+
+			pendingSendSize_ -= bufferSize;
+
+			if(!pendingBinarySendData_.empty())
+			{
+				shared_ptr<PR1_MESSAGE> pendingMessage = pendingBinarySendData_.front();
+				pendingBinarySendData_.pop();
+				SendBinaryMessageNow(pendingMessage);
+			}
+			else
+				SendPendingSnapshots();
 		}
 
 		void SendBinaryMessage(shared_ptr<PR1_MESSAGE> message)
 		{
-			void * buffer;
-			unsigned int bufferSize;
-
-			pr1_message_get_buffer(message.get(), &buffer, &bufferSize);
-/*
-			asio::async_write(
-				socket_,
-				asio::buffer(buffer, bufferSize),
-				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), message, asio::placeholders::error, asio::placeholders::bytes_transferred)); */
-
-            asio::write(socket_,asio::buffer(buffer, bufferSize));
+			if(pendingSendSize_ == 0)
+				SendBinaryMessageNow(message);
+			else
+				pendingBinarySendData_.push(message);
 		}
 
 		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata)
