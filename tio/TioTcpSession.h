@@ -333,7 +333,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
         unsigned int pendingSendSize_;
 
         std::queue<std::string> pendingSendData_;
-		std::queue<shared_ptr<PR1_MESSAGE>> pendingBinarySendData_;
+		std::queue< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 
 		struct SUBSCRIPTION_INFO
 		{
