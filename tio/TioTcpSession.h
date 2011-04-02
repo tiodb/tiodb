@@ -333,7 +333,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
         unsigned int pendingSendSize_;
 
         std::queue<std::string> pendingSendData_;
-		std::queue< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
+		
+		std::vector< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
+		std::vector< asio::const_buffer > beingSendData_;
 
 		struct SUBSCRIPTION_INFO
 		{
@@ -389,48 +391,53 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			SendBinaryMessage(answer);
 		}
 
-		void SendBinaryMessageNow(shared_ptr<PR1_MESSAGE> message)
+		void SendPendingBinaryData()
 		{
-			void* buffer;
-			unsigned int bufferSize;
+			if(!beingSendData_.empty())
+				return;
 
-			pr1_message_get_buffer(message.get(), &buffer, &bufferSize);
+			if(pendingBinarySendData_.empty())
+				return;
 
-			pendingSendSize_ += bufferSize;
+			for(vector< shared_ptr<PR1_MESSAGE> >::const_iterator i = pendingBinarySendData_.begin() ; 
+				i != pendingBinarySendData_.end() ; 
+				++i)
+			{
+				void* buffer;
+				unsigned int bufferSize;
+
+				pr1_message_get_buffer((*i).get(), &buffer, &bufferSize);
+
+				beingSendData_.push_back(asio::buffer(buffer, bufferSize));
+			}
 
 			asio::async_write(
 				socket_,
-				asio::buffer(buffer, bufferSize),
-				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), message, asio::placeholders::error, asio::placeholders::bytes_transferred));
+				beingSendData_,
+				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), asio::placeholders::error, asio::placeholders::bytes_transferred));
 		}
 
-		void OnBinaryMessageSent(shared_ptr<PR1_MESSAGE> message, const error_code& err, size_t sent)
+		void OnBinaryMessageSent(const error_code& err, size_t sent)
 		{
 			if(CheckError(err))
 				return;
+			
+			//
+			// remove sent data from pending vector
+			//
+			pendingBinarySendData_.erase(pendingBinarySendData_.begin(), pendingBinarySendData_.begin() + beingSendData_.size());
 
-			pendingSendSize_ -= stream_buffer_space_used(message->stream_buffer);
+			beingSendData_.clear();
 
-			if(pendingBinarySendData_.empty())
-				SendPendingSnapshots();
+			SendPendingSnapshots();
 
-			while(!pendingBinarySendData_.empty() &&
-					(pendingSendSize_ == 0 
-					|| pendingSendSize_ + stream_buffer_space_used(pendingBinarySendData_.front()->stream_buffer) <= 4096))
-			{
-				shared_ptr<PR1_MESSAGE> pendingMessage = pendingBinarySendData_.front();
-				pendingBinarySendData_.pop();
-				SendBinaryMessageNow(pendingMessage);
-			}
-				
+			SendPendingBinaryData();
 		}
 
 		void SendBinaryMessage(shared_ptr<PR1_MESSAGE> message)
 		{
-			if(pendingSendSize_ == 0 || stream_buffer_space_used(message->stream_buffer) + pendingSendSize_ <= 4096)
-				SendBinaryMessageNow(message);
-			else
-				pendingBinarySendData_.push(message);
+			pendingBinarySendData_.push_back(message);
+			SendPendingBinaryData();
 		}
 
 		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata)

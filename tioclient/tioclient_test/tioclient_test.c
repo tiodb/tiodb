@@ -121,7 +121,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	struct TIO_DATA search_key, key, value, metadata;
 	int a;
 	int result;
-	int TEST_COUNT = 50 * 1000;
+	int TEST_COUNT = 10 * 1000;
 
 	tiodata_init(&search_key);
 	tiodata_init(&key);
