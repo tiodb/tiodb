@@ -82,7 +82,6 @@ def encode(values):
 # this class is meant to be inherited by container classes,
 # just to make than more pythonic
 #
-
 class ContainerPythonizer(object):
     def __del__(self):
         self.Close()
@@ -150,11 +149,11 @@ class RemoteContainer(ContainerPythonizer):
     def __repr__(self):
         return '<tioclient.RemoteContainer name="%s", type="%s">' % (self.name, self.type)
         
-    def get_property(self, key, withKeyAndMetadata=False):
+    def propget(self, key, withKeyAndMetadata=False):
         key, value, metadata = self.send_data_command('get_property', key, None, None)
         return value if not withKeyAndMetadata else (key, value, metadata)    
         
-    def set_property(self, key, value, metadata=None):
+    def propset(self, key, value, metadata=None):
         return self.send_data_command('set_property', key, value, metadata)
 
     def get(self, key, withKeyAndMetadata=False):
@@ -640,7 +639,7 @@ def SpeedTest(func, count, bytes, useKey = False):
 
     for x in xrange(count):
         func(key=str(x) if useKey else None, value=v)
-        if x % log_step == 0:
+        if x % log_step == 0 and x != 0:
             d = datetime.now() - mark
             print "%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0))
             mark = datetime.now()
@@ -650,8 +649,7 @@ def SpeedTest(func, count, bytes, useKey = False):
     return count / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)
 
 def MasterSpeedTest():
-    man = TioServerConnection()  
-    man.Connect('localhost', 6666)
+    man = connect('tio://127.0.0.1:6666')
 
     tests = (
               {'type': 'volatile_map',      'hasKey': True},
@@ -661,7 +659,7 @@ def MasterSpeedTest():
               {'type': 'persistent_list',    'hasKey': False},
             )
 
-    count = 50 * 1000
+    count = 20 * 1000
     bytes = 30
     namePerfix = datetime.now().strftime('%Y%m%d%H%M%S') + '_'
 
@@ -696,7 +694,7 @@ def TestWaitAndPop():
         
     man.DispatchAllEvents()
 
-def ParseUrl(url):
+def parse_url(url):
     if url[:6] != 'tio://':
         raise Exception ('protocol not supported')
 
@@ -719,8 +717,8 @@ def ParseUrl(url):
         print ex
         raise Exception ('Not supported. Format must be "tio://host:port/[container_name]"')
 
-def OpenByUrl(url, create_container_type=None):
-    address, port, container = ParseUrl(url)
+def open_by_url(url, create_container_type=None):
+    address, port, container = parse_url(url)
 
     if not container:
         raise Exception('url "%s" doesn\'t have a container specification' % url)
@@ -731,8 +729,8 @@ def OpenByUrl(url, create_container_type=None):
     else:
         return server.open(container)
 
-def Connect(url):
-    address, port, container = ParseUrl(url)
+def connect(url):
+    address, port, container = parse_url(url)
     if container:
         raise Exception('container specified, you must inform a url with just the server/port')
     
@@ -833,13 +831,13 @@ def DoTest():
 
        
 if __name__ == '__main__':
-    Connect('tio://127.0.0.1:6666').ping()
-    DiffTest()
+    #Connect('tio://127.0.0.1:6666').ping()
+    #DiffTest()
     #TestQuery()
     #DoTest()
     #BdbTest()
-    #ParseUrl('tio://127.0.0.1:6666/xpto/asas')
-    #MasterSpeedTest()
+    #parse_url('tio://127.0.0.1:6666/xpto/asas')
+    MasterSpeedTest()
     #TestOrderManager()
-    #TioConnectionsManager().ParseUrl('tio://localhost:6666')
+    #TioConnectionsManager().parse_url('tio://localhost:6666')
     #TestWaitAndPop()

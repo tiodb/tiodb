@@ -13,6 +13,7 @@ EXPORTS
 	tio_initialize
 
 	tio_connect
+	tio_disconnect
 	tio_create
 	tio_open
 	tio_close

@@ -443,6 +443,7 @@ namespace tio
 			TioData key, value, metadata;
 			shared_ptr<PR1_MESSAGE> item = Pr1CreateMessage();
 
+			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY_ITEM);
 			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
 
 			bool b = resultSet->GetRecord(&key, &value, &metadata);

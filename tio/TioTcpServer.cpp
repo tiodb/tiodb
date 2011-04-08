@@ -182,7 +182,7 @@ namespace tio
 		Pr1MessageGetHandleKeyValueAndMetadata(message, &handle, key, value, metadata);
 
 		if(!handle)
-			throw std::runtime_error("");
+			throw std::runtime_error("handle?");
 
 		return session->GetRegisteredContainer(handle);
 	}

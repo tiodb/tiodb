@@ -1371,10 +1371,12 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 	struct PR1_MESSAGE* response = NULL;
 	struct PR1_MESSAGE* query_item = NULL;
 	struct PR1_MESSAGE_FIELD_HEADER* query_id_field = NULL;
+	struct PR1_MESSAGE_FIELD_HEADER* command_field = NULL;
 	struct TIO_DATA key, value, metadata;
 	int query_id;
 
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, container->handle);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START, start);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
 
@@ -1403,8 +1405,18 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 	for(;;)
 	{
 		result = tio_receive_until_not_event(container->connection, &query_item);
+		
 		if(TIO_FAILED(result))
 			goto clean_up_and_return;
+
+		command_field = pr1_message_field_find_by_id(query_item, MESSAGE_FIELD_ID_COMMAND);
+		if(!command_field || 
+		   command_field->data_type != TIO_DATA_TYPE_INT ||
+		   pr1_message_field_get_int(command_field) != TIO_COMMAND_QUERY_ITEM)
+		{
+			result = TIO_ERROR_PROTOCOL;
+			goto clean_up_and_return;
+		}
 
 		tiodata_set_as_none(&key); tiodata_set_as_none(&value); tiodata_set_as_none(&metadata);
 

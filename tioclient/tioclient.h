@@ -80,7 +80,7 @@ struct TIO_DATA
 };
 
 
-typedef void (*event_callback_t)(void* /*cookie*/, unsigned int, unsigned int, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 typedef void (*query_callback_t)(void* /*cookie*/, unsigned int /*queryid*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
 struct TIO_CONNECTION;
