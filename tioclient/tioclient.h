@@ -108,7 +108,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata);
 // MUST call it before using tio
 void tio_initialize();
 
-int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection);;
+int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection);
 int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_close(struct TIO_CONTAINER* container);
