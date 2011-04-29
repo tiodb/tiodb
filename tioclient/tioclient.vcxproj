@@ -79,6 +79,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="tioclient.h" />
+    <ClInclude Include="tioclient.hpp" />
     <ClInclude Include="tioclient_internals.h" />
   </ItemGroup>
   <ItemGroup>
