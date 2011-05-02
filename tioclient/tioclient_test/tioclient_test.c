@@ -349,13 +349,14 @@ clean_up_and_return:
 
 
 
-
-
+extern void run_cpp_tests();
 
 int main()
 {
 	int result;
 	struct TIO_CONNECTION* connection = NULL;
+
+	run_cpp_tests();
 
 	tio_initialize();
 

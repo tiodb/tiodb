@@ -131,7 +131,7 @@ public:
 			throw std::invalid_argument("value??");
 	}
 
-	ListType::iterator GetOffset(const TioData& key)
+	ListType::iterator GetOffset(const TioData& key, bool canBeTheEnd = false)
 	{
 		int index = NormalizeIndex(key.AsInt(), data_.size());
 		ListType::iterator i;
@@ -140,7 +140,7 @@ public:
 		// advance a list iterator is expensive. If it's near the end, will
 		// walk backwards
 		//
-		if(index < static_cast<int>(data_.size() / 2))
+		if(index <= static_cast<int>(data_.size() / 2))
 		{
 			i = data_.begin();
 			for(int x = 0  ; x < index ; ++x, ++i)
@@ -176,9 +176,17 @@ public:
 
 	virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		ListType::iterator i = GetOffset(key);
+		size_t index = key.AsInt();
 
-		data_.insert(i, ValueAndMetadata(value, metadata));
+		if(index == 0)
+			data_.push_front(ValueAndMetadata(value, metadata));
+		else if (index == data_.size())
+			data_.push_back(ValueAndMetadata(value, metadata));
+		else
+		{
+			ListType::iterator i = GetOffset(key);
+			data_.insert(i, ValueAndMetadata(value, metadata));
+		}
 
 		dispatcher_.RaiseEvent("insert", key, value, metadata); 
 	}

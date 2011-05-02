@@ -576,20 +576,20 @@ namespace tio
 	// support for negative indexes, just like python. -1 is the last,
 	// -2 is the one before the last, and so on...
 	//
-	inline unsigned int NormalizeIndex(int index, int size)
+	inline unsigned int NormalizeIndex(int index, int size, bool checkBounds = true)
 	{	
 		if(index < 0)
 		{
 			index = abs(index);
 
-			if(index > size)
+			if(checkBounds && index > size)
 				throw std::invalid_argument("out of bounds");
 
 			index = size - index;
 		}
 		else
 		{
-			if(index >= size)
+			if(checkBounds && index >= size)
 				throw std::invalid_argument("out of bounds");
 		}
 

@@ -25,7 +25,6 @@
 	#define closesocket close
 #endif
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif

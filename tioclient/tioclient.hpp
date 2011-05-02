@@ -29,7 +29,7 @@ namespace tio
 		tiodata_set_string(tiodata, v.c_str());
 	}
 
-	void FromTioData(const TIO_DATA* tiodata, int* value)
+	inline void FromTioData(const TIO_DATA* tiodata, int* value)
 	{
 		if(tiodata->data_type != TIO_DATA_TYPE_INT)
 			throw runtime_error("wrong data type");
@@ -37,7 +37,7 @@ namespace tio
 		*value = tiodata->int_;
 	}
 
-	void FromTioData(const TIO_DATA* tiodata, string* value)
+	inline void FromTioData(const TIO_DATA* tiodata, string* value)
 	{
 		if(tiodata->data_type != TIO_DATA_TYPE_STRING)
 			throw runtime_error("wrong data type");
@@ -99,6 +99,7 @@ namespace tio
 	public:
 		Connection() : connection_(NULL)
 		{
+			tio_initialize();
 		}
 
 		void Connect(const string& host, short port)
@@ -128,34 +129,48 @@ namespace tio
 	class ServerValue
 	{
 		TKey key_;
-		TValue value_;
 		TContainer& container_;
 
 		typedef ServerValue<TContainer, TKey, TValue> this_type;
 	public:
-		ServerValue(TContainer& container, const TKey& key, const TValue& value) :
+		ServerValue(TContainer& container, const TKey& key) :
 			container_(container),
-			key_(key), 
-			value_(value)
+			key_(key)
 		{}
+
+		TValue value()
+		{
+			return container_.at(key_);
+		}
 
 		this_type& operator=(const TValue& v)
 		{
-			value_ = v;
-			container_.set(key_, value_);
+			container_.set(key_, v);
 			return *this;
+		}
+
+		bool operator==(const TValue& v)
+		{
+			return value() == v;
+		}
+
+		bool operator==(const this_type& v)
+		{
+			return value_() == v.value();
 		}
 	};
 
-	template<typename TKey, typename TValue, typename TMetadata>
+	template<typename TKey, typename TValue, typename TMetadata, typename SelfT>
 	class TioContainerImpl
 	{
 	public:
 		typedef TKey key_type;
 		typedef TValue value_type;
 		typedef TMetadata metadata_type;
+		typedef ServerValue<SelfT, TKey, TValue> server_value_type;
 	protected:
 		TIO_CONTAINER* container_;
+
 	public:
 		TioContainerImpl() : container_(NULL)
 		{
@@ -164,6 +179,12 @@ namespace tio
 		~TioContainerImpl()
 		{
 		}
+
+		TIO_CONTAINER* handle()
+		{
+			return container_;
+		}
+
 		void open(Connection* connection, const string& name)
 		{
 			int result;
@@ -181,12 +202,20 @@ namespace tio
 
 			ThrowOnTioClientError(result);
 		}
-	};
 
-	template<typename TKey, typename TValue, typename TMetadata>
-	class TioContainerSetterImpl
-	{
-	public:
+		void insert(const key_type& key, const value_type& value)
+		{
+			int result;
+
+			result = tio_container_insert(
+				container_, 
+				TioDataConverter<key_type>(key).inptr(),
+				TioDataConverter<value_type>(value).inptr(),
+				NULL);
+
+			ThrowOnTioClientError(result);
+		}
+
 		void set(const key_type& key, const value_type& value)
 		{
 			int result;
@@ -200,37 +229,56 @@ namespace tio
 			ThrowOnTioClientError(result);
 		}
 
-		const value_type at(key_type index)
+		value_type at(const key_type& index)
 		{
 			int result;
-			TioDataConverter<string> value;
+			TioDataConverter<value_type> value;
 
 			result = tio_container_get(
 				container_, 
-				TioDataConverter<size_t>(index).inptr(),
+				TioDataConverter<key_type>(index).inptr(),
 				NULL,
 				value.outptr(),
 				NULL);
 
+			ThrowOnTioClientError(result);
+
 			return value.value();
 		}
 
-		//
-		// there's no difference between
-		// 
-		server_value_type operator[](size_t index)
+		server_value_type operator[](const key_type& key)
 		{
-			return server_value_type(*this, index, at(index));
+			return server_value_type(*static_cast<SelfT*>(this), key);
 		}
 
-	};
+		void clear()
+		{
+			int result;
 
+			result = tio_container_clear(container_);
+
+			ThrowOnTioClientError(result);
+		}
+
+		size_t size()
+		{
+			int result, count;
+
+			result = tio_container_get_count(
+				container_, 
+				&count);
+
+			ThrowOnTioClientError(result);
+
+			return static_cast<size_t>(count);
+		}
+	};
+	
 	template<typename TValue, typename TMetadata=std::string>
-	class list : public TioContainerImpl<size_t, TValue, TMetadata>
+	class list : public TioContainerImpl<size_t, TValue, TMetadata, list<TValue, TMetadata> >
 	{
 	public:
 		typedef list<TValue, TMetadata> this_type;
-		typedef ServerValue<this_type, size_t, TValue> server_value_type;
 	
 	public:
 		void push_back(const value_type& value)
@@ -259,7 +307,44 @@ namespace tio
 			ThrowOnTioClientError(result);
 		}
 
-		
+		value_type pop_back()
+		{
+			int result;
+			TioDataConverter<value_type> value;
+
+			result = tio_container_pop_back(
+				container_, 
+				NULL,
+				value.outptr(),
+				NULL);
+
+			ThrowOnTioClientError(result);
+
+			return value.value();
+		}
+
+		value_type pop_front()
+		{
+			int result;
+			TioDataConverter<value_type> value;
+
+			result = tio_container_pop_front(
+				container_, 
+				NULL,
+				value.outptr(),
+				NULL);
+
+			ThrowOnTioClientError(result);
+
+			return value.value();
+		}
+	};
+
+	template<typename TKey, typename TValue, typename TMetadata=std::string>
+	class map : public TioContainerImpl<TKey, TValue, TMetadata, map<TKey, TValue, TMetadata> >
+	{
+	public:
+		typedef map<TKey, TValue, TMetadata> this_type;
 	};
 
 }
