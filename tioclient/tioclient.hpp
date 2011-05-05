@@ -90,11 +90,125 @@ namespace tio
 		}
 	};
 
+	struct IContainerManager
+	{
+		virtual int create(const char* name, const char* type, void** handle)=0;
+		virtual int open(const char* name, const char* type, void** handle)=0;
+		virtual int close(void* handle)=0;
+
+		virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)=0;
+		virtual int container_push_back(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
+		virtual int container_push_front(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
+		virtual int container_pop_back(void* handle, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)=0;
+		virtual int container_pop_front(void* handle, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)=0;
+		virtual int container_set(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
+		virtual int container_insert(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
+		virtual int container_clear(void* handle)=0;
+		virtual int container_delete(void* handle, const struct TIO_DATA* key)=0;
+		virtual int container_get(void* handle, const struct TIO_DATA* search_key, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)=0;
+		virtual int container_propget(void* handle, const struct TIO_DATA* search_key, struct TIO_DATA* value)=0;
+		virtual int container_get_count(void* handle, int* count)=0;
+		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)=0;
+		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)=0;
+		virtual int container_unsubscribe(void* handle)=0;
+	};
 
 
-	class Connection
+
+	class Connection : private IContainerManager
 	{
 		TIO_CONNECTION* connection_;
+
+	protected:
+		virtual int create(const char* name, const char* type, void** handle)
+		{
+			return tio_create(connection_, name, type, (TIO_CONTAINER**)handle);
+		}
+
+		virtual int open(const char* name, const char* type, void** handle)
+		{
+			return tio_open(connection_, name, type, (TIO_CONTAINER**)handle);
+		}
+
+		virtual int close(void* handle)
+		{
+			return tio_close((TIO_CONTAINER*)handle);
+		}
+
+		virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)
+		{
+			return tio_container_propset((TIO_CONTAINER*)handle, key, value);
+		}
+
+		virtual int container_push_back(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+		{
+			return tio_container_push_back((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_push_front(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+		{
+			return tio_container_push_front((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_pop_back(void* handle, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
+		{
+			return tio_container_pop_back((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_pop_front(void* handle, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
+		{
+			return tio_container_pop_front((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_set(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+		{
+			return tio_container_set((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_insert(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+		{
+			return tio_container_insert((TIO_CONTAINER*)handle, key, value, metadata);
+		}
+
+		virtual int container_clear(void* handle)
+		{
+			return tio_container_clear((TIO_CONTAINER*)handle);
+		}
+
+		virtual int container_delete(void* handle, const struct TIO_DATA* key)
+		{
+			return tio_container_delete((TIO_CONTAINER*)handle, key);
+		}
+
+		virtual int container_get(void* handle, const struct TIO_DATA* search_key, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
+		{
+			return tio_container_get((TIO_CONTAINER*)handle, search_key, key, value, metadata);
+		}
+
+		virtual int container_propget(void* handle, const struct TIO_DATA* search_key, struct TIO_DATA* value)
+		{
+			return tio_container_propget((TIO_CONTAINER*)handle, search_key, value);
+		}
+
+		virtual int container_get_count(void* handle, int* count)
+		{
+			return tio_container_get_count((TIO_CONTAINER*)handle, count);
+		}
+
+		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)
+		{
+			return tio_container_query((TIO_CONTAINER*)handle, start, end, query_callback, cookie);
+		}
+
+		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
+		{
+			return tio_container_subscribe((TIO_CONTAINER*)handle, start, event_callback, cookie);
+		}
+
+		virtual int container_unsubscribe(void* handle)
+		{
+			return tio_container_unsubscribe((TIO_CONTAINER*)handle);
+		}
 
 	public:
 		Connection() : connection_(NULL)
@@ -122,6 +236,11 @@ namespace tio
 		TIO_CONNECTION* cnptr()
 		{
 			return connection_;
+		}
+
+		IContainerManager* container_manager()
+		{
+			return this;
 		}
 	};
 
@@ -160,191 +279,210 @@ namespace tio
 		}
 	};
 
-	template<typename TKey, typename TValue, typename TMetadata, typename SelfT>
-	class TioContainerImpl
+
+	namespace containers
 	{
-	public:
-		typedef TKey key_type;
-		typedef TValue value_type;
-		typedef TMetadata metadata_type;
-		typedef ServerValue<SelfT, TKey, TValue> server_value_type;
-	protected:
-		TIO_CONTAINER* container_;
 
-	public:
-		TioContainerImpl() : container_(NULL)
+		template<typename TKey, typename TValue, typename TMetadata, typename SelfT>
+		class TioContainerImpl
 		{
-		}
+		public:
+			typedef TKey key_type;
+			typedef TValue value_type;
+			typedef TMetadata metadata_type;
+			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
+		protected:
+			void* container_;
+			IContainerManager* containerManager_;
 
-		~TioContainerImpl()
-		{
-		}
+			IContainerManager* container_manager()
+			{
+				if(!containerManager_)
+					throw std::runtime_error("no container manager");
 
-		TIO_CONTAINER* handle()
-		{
-			return container_;
-		}
+				return containerManager_;
+			}
 
-		void open(Connection* connection, const string& name)
-		{
-			int result;
+		public:
+			TioContainerImpl() : container_(NULL), containerManager_(NULL)
+			{
+			}
 
-			result = tio_open(connection->cnptr(), name.c_str(), NULL, &container_);
+			~TioContainerImpl()
+			{
+			}
 
-			ThrowOnTioClientError(result);
-		}
+			TIO_CONTAINER* handle()
+			{
+				return container_;
+			}
 
-		void create(Connection* connection, const string& name, const string& type)
-		{
-			int result;
+			template<typename TConnection>
+			void open(TConnection* cn, const string& name)
+			{
+				int result;
 
-			result = tio_create(connection->cnptr(), name.c_str(), type.c_str(), &container_);
+				containerManager_ = cn->container_manager();
 
-			ThrowOnTioClientError(result);
-		}
+				result = container_manager()->tio_open(name.c_str(), NULL, &container_);
 
-		void insert(const key_type& key, const value_type& value)
-		{
-			int result;
+				ThrowOnTioClientError(result);
+			}
 
-			result = tio_container_insert(
-				container_, 
-				TioDataConverter<key_type>(key).inptr(),
-				TioDataConverter<value_type>(value).inptr(),
-				NULL);
+			template<typename TConnection>
+			void create(TConnection* cn, const string& name, const string& type)
+			{
+				int result;
 
-			ThrowOnTioClientError(result);
-		}
+				containerManager_ = cn->container_manager();
 
-		void set(const key_type& key, const value_type& value)
-		{
-			int result;
+				result = container_manager()->create(name.c_str(), type.c_str(), &container_);
 
-			result = tio_container_set(
-				container_, 
-				TioDataConverter<key_type>(key).inptr(),
-				TioDataConverter<value_type>(value).inptr(),
-				NULL);
+				ThrowOnTioClientError(result);
+			}
 
-			ThrowOnTioClientError(result);
-		}
+			void insert(const key_type& key, const value_type& value)
+			{
+				int result;
 
-		value_type at(const key_type& index)
-		{
-			int result;
-			TioDataConverter<value_type> value;
+				result = container_manager()->container_insert(
+					container_, 
+					TioDataConverter<key_type>(key).inptr(),
+					TioDataConverter<value_type>(value).inptr(),
+					NULL);
 
-			result = tio_container_get(
-				container_, 
-				TioDataConverter<key_type>(index).inptr(),
-				NULL,
-				value.outptr(),
-				NULL);
+				ThrowOnTioClientError(result);
+			}
 
-			ThrowOnTioClientError(result);
+			void set(const key_type& key, const value_type& value)
+			{
+				int result;
 
-			return value.value();
-		}
+				result = container_manager()->container_set(
+					container_, 
+					TioDataConverter<key_type>(key).inptr(),
+					TioDataConverter<value_type>(value).inptr(),
+					NULL);
 
-		server_value_type operator[](const key_type& key)
-		{
-			return server_value_type(*static_cast<SelfT*>(this), key);
-		}
+				ThrowOnTioClientError(result);
+			}
 
-		void clear()
-		{
-			int result;
+			value_type at(const key_type& index)
+			{
+				int result;
+				TioDataConverter<value_type> value;
 
-			result = tio_container_clear(container_);
+				result = container_manager()->container_get(
+					container_, 
+					TioDataConverter<key_type>(index).inptr(),
+					NULL,
+					value.outptr(),
+					NULL);
 
-			ThrowOnTioClientError(result);
-		}
+				ThrowOnTioClientError(result);
 
-		size_t size()
-		{
-			int result, count;
+				return value.value();
+			}
 
-			result = tio_container_get_count(
-				container_, 
-				&count);
+			server_value_type operator[](const key_type& key)
+			{
+				return server_value_type(*static_cast<SelfT*>(this), key);
+			}
 
-			ThrowOnTioClientError(result);
+			void clear()
+			{
+				int result;
 
-			return static_cast<size_t>(count);
-		}
-	};
+				result = container_manager()->container_clear(container_);
+
+				ThrowOnTioClientError(result);
+			}
+
+			size_t size()
+			{
+				int result, count;
+
+				result = container_manager()->container_get_count(
+					container_, 
+					&count);
+
+				ThrowOnTioClientError(result);
+
+				return static_cast<size_t>(count);
+			}
+		};
 	
-	template<typename TValue, typename TMetadata=std::string>
-	class list : public TioContainerImpl<size_t, TValue, TMetadata, list<TValue, TMetadata> >
-	{
-	public:
-		typedef list<TValue, TMetadata> this_type;
+		template<typename TValue, typename TMetadata=std::string>
+		class list : public TioContainerImpl<size_t, TValue, TMetadata, list<TValue, TMetadata> >
+		{
+		public:
+			typedef list<TValue, TMetadata> this_type;
 	
-	public:
-		void push_back(const value_type& value)
+		public:
+			void push_back(const value_type& value)
+			{
+				int result;
+
+				result = container_manager()->container_push_back(
+					container_, 
+					NULL,
+					TioDataConverter<TValue>(value).inptr(),
+					NULL);
+
+				ThrowOnTioClientError(result);
+			}
+
+			void push_front(const value_type& value)
+			{
+				int result;
+
+				result = container_manager()->container_push_front(
+					container_, 
+					NULL,
+					TioDataConverter<TValue>(value).inptr(),
+					NULL);
+
+				ThrowOnTioClientError(result);
+			}
+
+			value_type pop_back()
+			{
+				int result;
+				TioDataConverter<value_type> value;
+
+				result = container_manager()->container_pop_back(
+					container_, 
+					NULL,
+					value.outptr(),
+					NULL);
+
+				ThrowOnTioClientError(result);
+
+				return value.value();
+			}
+
+			value_type pop_front()
+			{
+				int result;
+				TioDataConverter<value_type> value;
+
+				result = container_manager()->container_pop_front(
+					container_, 
+					NULL,
+					value.outptr(),
+					NULL);
+
+				ThrowOnTioClientError(result);
+
+				return value.value();
+			}
+		};
+
+		template<typename TKey, typename TValue, typename TMetadata=std::string>
+		class map : public TioContainerImpl<TKey, TValue, TMetadata, map<TKey, TValue, TMetadata> >
 		{
-			int result;
-
-			result = tio_container_push_back(
-				container_, 
-				NULL,
-				TioDataConverter<TValue>(value).inptr(),
-				NULL);
-
-			ThrowOnTioClientError(result);
-		}
-
-		void push_front(const value_type& value)
-		{
-			int result;
-
-			result = tio_container_push_front(
-				container_, 
-				NULL,
-				TioDataConverter<TValue>(value).inptr(),
-				NULL);
-
-			ThrowOnTioClientError(result);
-		}
-
-		value_type pop_back()
-		{
-			int result;
-			TioDataConverter<value_type> value;
-
-			result = tio_container_pop_back(
-				container_, 
-				NULL,
-				value.outptr(),
-				NULL);
-
-			ThrowOnTioClientError(result);
-
-			return value.value();
-		}
-
-		value_type pop_front()
-		{
-			int result;
-			TioDataConverter<value_type> value;
-
-			result = tio_container_pop_front(
-				container_, 
-				NULL,
-				value.outptr(),
-				NULL);
-
-			ThrowOnTioClientError(result);
-
-			return value.value();
-		}
-	};
-
-	template<typename TKey, typename TValue, typename TMetadata=std::string>
-	class map : public TioContainerImpl<TKey, TValue, TMetadata, map<TKey, TValue, TMetadata> >
-	{
-	public:
-		typedef map<TKey, TValue, TMetadata> this_type;
-	};
-
+		public:
+			typedef map<TKey, TValue, TMetadata> this_type;
+		};
+	}
 }

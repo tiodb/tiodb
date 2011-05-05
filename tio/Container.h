@@ -185,8 +185,6 @@ namespace tio
 			return type_ != None;
 		}
 
-	    
-
 		TioData& operator = (const TioData& data)
 		{
 			CopyFrom(data);

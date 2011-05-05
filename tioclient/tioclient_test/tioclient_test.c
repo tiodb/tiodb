@@ -1,6 +1,6 @@
-#include "../tioclient.c"
+#include "../tioclient.h"
 
-
+/*
 void TEST_pr1_message()
 {
 	struct PR1_MESSAGE* pr1_message;
@@ -26,6 +26,7 @@ void TEST_pr1_message()
 
 	pr1_message_delete(pr1_message);
 }
+*/
 
 const char* event_code_to_string(unsigned int event_code)
 {
@@ -345,10 +346,6 @@ clean_up_and_return:
 	return 0;
 }
 
-
-
-
-
 extern void run_cpp_tests();
 
 int main()
@@ -368,7 +365,7 @@ int main()
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
-	TEST_pr1_message();
+	//TEST_pr1_message();
 
 	TEST_list(connection);
 

@@ -31,8 +31,10 @@ void test_structs()
 
 	cn.Connect("127.0.0.1", 6666);
 
-	tio::list<XPTO::TEST_STRUCT> l;
+	tio::containers::list<XPTO::TEST_STRUCT> l;
 	XPTO::TEST_STRUCT t;
+
+	l.create(&cn, "xpto", "volatile_list");
 
 	t.i = 10;
 	t.s = "test";
@@ -41,37 +43,40 @@ void test_structs()
 
 }
 
-void test_cpp_client()
+extern "C" 
 {
-	tio::Connection cn;
-	tio::list<string> l;
+	void test_cpp_client()
+	{
+		tio::Connection cn;
+		tio::containers::list<string> l;
 
-	cn.Connect("127.0.0.1", 6666);
+		cn.Connect("127.0.0.1", 6666);
 
-	l.create(&cn, "test_list", "volatile_list");
-	l.clear();
+		l.create(&cn, "test_list", "volatile_list");
+		l.clear();
 
-	l.push_back("0");
-	assert(l[0] == "0");
+		l.push_back("0");
+		assert(l[0] == "0");
 
-	l.push_back("1");
-	assert(l[l.size()-1] == "1");
+		l.push_back("1");
+		assert(l[l.size()-1] == "1");
 
-	l[0] = "xpto";
-	assert(l[0] == "xpto");
+		l[0] = "xpto";
+		assert(l[0] == "xpto");
 
-	assert(l.pop_back() == "1");
-	assert(l.pop_front() == "xpto");
+		assert(l.pop_back() == "1");
+		assert(l.pop_front() == "xpto");
 
-	tio::map<string, string> m;
+		tio::containers::map<string, string> m;
 
-	m.create(&cn, "test_map", "volatile_map");
+		m.create(&cn, "test_map", "volatile_map");
 
-	m["a"] = "b";
-	assert(m["a"] == "b");
+		m["a"] = "b";
+		assert(m["a"] == "b");
 
 
-	return;
+		return;
+	}
 }
 
 int main()
