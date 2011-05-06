@@ -103,6 +103,35 @@ void RunServer(tio::ContainerManager* manager,
 #endif
 }
 
+class cpp2c
+{
+	TIO_DATA c_;
+public:
+	cpp2c(const TioData& v)
+	{
+		tiodata_set_as_none(&c_);
+
+		switch(v.GetDataType())
+		{
+		case TioData::Sz:
+			tiodata_set_string(&c_, v.AsSz());
+			break;
+		case TioData::Int:
+			tiodata_set_int(&c_, v.AsInt());
+			break;
+		case TioData::Double:
+			tiodata_set_double(&c_, v.AsDouble());
+			break;
+		}
+	}
+
+	operator TIO_DATA*()
+	{
+		return &c_;
+	}
+
+};
+
 class c2cpp
 {
 	TioData cpp_;
@@ -174,6 +203,7 @@ class LocalContainerManager : private IContainerManager
 {
 private:
 	tio::ContainerManager& containerManager_;
+	std::map<
 
 public:
 
@@ -383,28 +413,110 @@ protected:
 
 	virtual int container_propget(void* handle, const struct TIO_DATA* search_key, struct TIO_DATA* value)
 	{
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+		std::string ret;
+
+		try
+		{
+			ret = container->GetProperty(static_cast<TioData>(c2cpp(search_key)).AsSz());
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		tiodata_set_string(value, ret.c_str());
 
 		return 0;
 	}
 
 	virtual int container_get_count(void* handle, int* count)
 	{
-		return tio_container_get_count((TIO_CONTAINER*)handle, count);
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+
+		try
+		{
+			*count = container->GetRecordCount();
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		return 0;
 	}
 
 	virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)
 	{
-		return tio_container_query((TIO_CONTAINER*)handle, start, end, query_callback, cookie);
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+
+		try
+		{
+			shared_ptr<ITioResultSet> resultset = container->Query(start, end, TIONULL);
+
+			TioData key, value, metadata;
+
+			while(resultset->GetRecord(&key, &value, &metadata))
+			{
+				query_callback(cookie, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+				resultset->MoveNext();
+			}
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		return 0;
+	}
+
+	static void SubscribeBridge(event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		
 	}
 
 	virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
 	{
-		return tio_container_subscribe((TIO_CONTAINER*)handle, start, event_callback, cookie);
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+
+		string startString;
+
+		if(start && start->data_type != TIO_DATA_TYPE_STRING)
+			return -1;
+
+		if(start)
+			startString = start->string_;
+
+		unsigned int cppHandle;
+
+		try
+		{
+			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, event_callback, _1, _2, _3, _4), startString);
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		*handle = reinterpret_cast<void*>(cppHandle);
+
+		return 0;
 	}
 
 	virtual int container_unsubscribe(void* handle)
 	{
-		return tio_container_unsubscribe((TIO_CONTAINER*)handle);
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+
+		try
+		{
+			container->Unsubscribe(reinterpret_cast<unsigned int>(handle));
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		return 0;
 	}
 };
 
