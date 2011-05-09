@@ -262,6 +262,11 @@ namespace tio
 			return container_.at(key_);
 		}
 
+		operator TValue()
+		{
+			return container_.at(key_);
+		}
+
 		this_type& operator=(const TValue& v)
 		{
 			container_.set(key_, v);
@@ -282,18 +287,20 @@ namespace tio
 
 	namespace containers
 	{
-
 		template<typename TKey, typename TValue, typename TMetadata, typename SelfT>
 		class TioContainerImpl
 		{
 		public:
+			typedef TioContainerImpl<TKey, TValue, TMetadata, SelfT> this_type;
 			typedef TKey key_type;
 			typedef TValue value_type;
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
+			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
 		protected:
 			void* container_;
 			IContainerManager* containerManager_;
+			EventCallbackT eventCallback_;
 
 			IContainerManager* container_manager()
 			{
@@ -304,7 +311,10 @@ namespace tio
 			}
 
 		public:
-			TioContainerImpl() : container_(NULL), containerManager_(NULL)
+			TioContainerImpl() : 
+			    container_(NULL), 
+				containerManager_(NULL),
+				eventCallback_(NULL)
 			{
 			}
 
@@ -322,9 +332,9 @@ namespace tio
 			{
 				int result;
 
-				containerManager_ = cn->container_manager();
+				containerManager_ = cn;
 
-				result = container_manager()->tio_open(name.c_str(), NULL, &container_);
+				result = container_manager()->open(name.c_str(), NULL, &container_);
 
 				ThrowOnTioClientError(result);
 			}
@@ -339,6 +349,27 @@ namespace tio
 				result = container_manager()->create(name.c_str(), type.c_str(), &container_);
 
 				ThrowOnTioClientError(result);
+			}
+
+			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*)
+			{
+				this_type* me = (this_type*)cookie;
+				
+				me->eventCallback_("event", "k", "v");
+
+			}
+
+			void subscribe(EventCallbackT callback)
+			{
+				int result;
+
+				eventCallback_ = callback;
+
+				result = container_manager()->container_subscribe(
+					container_,
+					NULL,
+					&this_type::EventCallback,
+					this);
 			}
 
 			void insert(const key_type& key, const value_type& value)

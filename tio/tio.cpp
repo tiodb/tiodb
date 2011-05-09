@@ -143,6 +143,9 @@ public:
 		c_ = const_cast<TIO_DATA*>(c);
 		out_ = false;
 
+		if(!c_)
+			return;
+
 		switch(c->data_type)
 		{
 		case TIO_DATA_TYPE_DOUBLE:
@@ -191,7 +194,7 @@ public:
 
 	TioData* outptr()
 	{
-		if(cpp_.IsNull())
+		if(!c_)
 			return NULL;
 
 		out_ = true;
@@ -199,11 +202,11 @@ public:
 	}
 };
 
-class LocalContainerManager : private IContainerManager
+class LocalContainerManager : public IContainerManager
 {
 private:
 	tio::ContainerManager& containerManager_;
-	std::map<
+	std::map<void*, unsigned int> subscriptionHandles_;
 
 public:
 
@@ -238,7 +241,7 @@ protected:
 	{
 		try
 		{
-			shared_ptr<ITioContainer> container = containerManager_.OpenContainer(type, name);
+			shared_ptr<ITioContainer> container = containerManager_.OpenContainer(type ? std::string(type) : string(), name);
 			*handle = new shared_ptr<ITioContainer>(container);
 		}
 		catch(std::exception&)
@@ -401,7 +404,7 @@ protected:
 
 		try
 		{
-			container->GetRecord(c2cpp(key), c2cpp(key).outptr(), c2cpp(value).outptr(), c2cpp(metadata).outptr());
+			container->GetRecord(c2cpp(search_key), c2cpp(key).outptr(), c2cpp(value).outptr(), c2cpp(metadata).outptr());
 		}
 		catch(std::exception&)
 		{
@@ -492,13 +495,12 @@ protected:
 		try
 		{
 			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, event_callback, _1, _2, _3, _4), startString);
+			subscriptionHandles_[handle] = cppHandle;
 		}
 		catch(std::exception&)
 		{
 			return -1;
 		}
-
-		*handle = reinterpret_cast<void*>(cppHandle);
 
 		return 0;
 	}
@@ -509,7 +511,7 @@ protected:
 
 		try
 		{
-			container->Unsubscribe(reinterpret_cast<unsigned int>(handle));
+			container->Unsubscribe(subscriptionHandles_[handle]);
 		}
 		catch(std::exception&)
 		{
@@ -522,19 +524,10 @@ protected:
 
 
 
-
-
-
-
-
-
-
-
-
 typedef void (*tio_plugin_start)(void* container_manager);
 
 #ifdef _WIN32	
-void LoadPlugin(const string path)
+void LoadPlugin(const string path, tio::IContainerManager* containerManager)
 {
 	tio_plugin_start pluginStartFunction = NULL;
 
@@ -555,14 +548,18 @@ void LoadPlugin(const string path)
 		throw std::runtime_error("plugin doesn't export the \"tio_plugin_start\"");
 	}
 
+	pluginStartFunction(containerManager);
+
+	CloseHandle(hdll);
+
 }
 #endif //_WIN32
 
-void LoadPlugins(const std::vector<std::string>& plugins)
+void LoadPlugins(const std::vector<std::string>& plugins, tio::IContainerManager* containerManager)
 {
 	BOOST_FOREACH(const string& pluginPath, plugins)
 	{
-		LoadPlugin(pluginPath);
+		LoadPlugin(pluginPath, containerManager);
 	}
 }
 
@@ -633,13 +630,14 @@ int main(int argc, char* argv[])
 		{
 			cout << "Starting Tio Infrastructure... " << endl;
 			tio::ContainerManager containerManager;
+			LocalContainerManager localContainerManager(containerManager);
 			
 			SetupContainerManager(&containerManager, vm["data-path"].as<string>(), aliases);
 
 			if(vm.count("plugin"))
 			{
 				cout << "Loading plugins... " << endl;
-				LoadPlugins(vm["plugin"].as< vector<string> >());
+				LoadPlugins(vm["plugin"].as< vector<string> >(), &localContainerManager);
 			}
 
 			if(vm.count("python-plugin"))
