@@ -142,6 +142,8 @@ namespace tio
 		#ifdef _DEBUG
 		std::cout << "<< new connection" << std::endl;
 		#endif
+
+		socket_.set_option(tcp::no_delay(true));
 		ReadCommand();
 	}
 

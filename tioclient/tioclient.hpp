@@ -324,7 +324,7 @@ namespace tio
 
 			TIO_CONTAINER* handle()
 			{
-				return container_;
+				return (TIO_CONTAINER*)container_;
 			}
 
 			template<typename TConnection>
@@ -370,6 +370,34 @@ namespace tio
 					NULL,
 					&this_type::EventCallback,
 					this);
+			}
+
+			void propset(const string& key, const string& value)
+			{
+				int result;
+
+				result = container_manager()->container_propset(
+					container_, 
+					TioDataConverter<string>(key).inptr(),
+					TioDataConverter<string>(value).inptr());
+
+				ThrowOnTioClientError(result);
+			}
+
+			string propget(const string& key)
+			{
+				int result;
+				TioDataConverter<string> value;
+
+				result = container_manager()->container_propget(
+					container_, 
+					TioDataConverter<key_type>(key).inptr(),
+					value.outptr(),
+					NULL);
+
+				ThrowOnTioClientError(result);
+
+				return value.value();
 			}
 
 			void insert(const key_type& key, const value_type& value)

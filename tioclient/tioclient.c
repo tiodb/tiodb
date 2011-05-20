@@ -637,6 +637,11 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 		return TIO_ERROR_PROTOCOL;
 	}
 
+#ifdef _WIN32
+	result = 1;
+	setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char*)&result, 4);
+#endif
+
 	*connection = (struct TIO_CONNECTION*)malloc(sizeof(struct TIO_CONNECTION));
 	(*connection)->socket = sockfd;
 	(*connection)->serv_addr = serv_addr;
