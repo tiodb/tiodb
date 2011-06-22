@@ -32,6 +32,8 @@ namespace tio
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
+	using boost::recursive_mutex;
+
 	using std::string;
 	using std::vector;
 	using std::map;
@@ -92,7 +94,9 @@ namespace tio
 		typedef map< string /* key */, deque<KeyPopperInfo> > KeyPoppersByKey;
 		typedef map< string /* full qualified name*/, KeyPoppersByKey  > KeyPoppersPerContainerMap;
 		
+		
 		KeyPoppersPerContainerMap keyPoppersPerContainer_;
+		recursive_mutex keyPoppersPerContainerMutex_;
 
 
 		struct NextPopperInfo
@@ -115,6 +119,7 @@ namespace tio
 		// map<diff handle, DiffSessionInfo >
 		typedef map< unsigned int, DiffSessionInfo > DiffSessions;
 		DiffSessions diffSessions_;
+		recursive_mutex diffSessionsMutex_;
 
 		unsigned int lastSessionID_;
 		unsigned int lastQueryID_;
@@ -122,6 +127,7 @@ namespace tio
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;
+		recursive_mutex nextPoppersMutex_;
 
 		typedef std::map<string, CommandFunction> CommandFunctionMap;
 		CommandFunctionMap dispatchMap_;
@@ -133,6 +139,7 @@ namespace tio
 		
 		typedef std::set< shared_ptr<TioTcpSession> > SessionsSet;
 		SessionsSet sessions_;
+		recursive_mutex sessionsMutex_;
 
 		ContainerManager& containerManager_;
 
@@ -197,6 +204,9 @@ namespace tio
 		void InitializeMetaContainers();
 
 		shared_ptr<ITioContainer> GetContainerAndParametersFromRequest(const PR1_MESSAGE* message, shared_ptr<TioTcpSession> session, TioData* key, TioData* value, TioData* metadata);
+
+		unsigned int GenerateSessionId();
+		unsigned int GenerateDiffId();
 
 	public:
 		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint);

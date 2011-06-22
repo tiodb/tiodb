@@ -28,8 +28,10 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 using namespace tio;
 
 using boost::shared_ptr;
+using boost::scoped_array;
 using std::cout;
 using std::endl;
+using std::queue;
 
 void LoadStorageTypes(ContainerManager* containerManager, const string& dataPath)
 {
@@ -92,7 +94,7 @@ void RunServer(tio::ContainerManager* manager,
 
 	tio::TioTcpServer tioServer(*manager, io_service, e);
 
-	cout << "now running!" << endl;
+	cout << "running on port " << port << "." << endl;
 
 	tioServer.Start();
 
@@ -473,9 +475,9 @@ protected:
 		return 0;
 	}
 
-	static void SubscribeBridge(event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	static void SubscribeBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		
+		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
 	virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
@@ -494,7 +496,7 @@ protected:
 
 		try
 		{
-			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, event_callback, _1, _2, _3, _4), startString);
+			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4), startString);
 			subscriptionHandles_[handle] = cppHandle;
 		}
 		catch(std::exception&)
@@ -522,14 +524,35 @@ protected:
 	}
 };
 
+class PluginThread
+{
+	tio_plugin_start_t func_;
+	tio::IContainerManager* containerManager_;
+	queue<boost::function<void()> > eventQueue_;
+	boost::condition_variable hasWork_;
 
+public:
+	PluginThread(tio_plugin_start_t func, tio::IContainerManager* containerManager) : func_(func), containerManager_(containerManager)
+	{
 
-typedef void (*tio_plugin_start)(void* container_manager);
+	}
+
+	void AnyThreadCallback(EventSink sink, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+
+	}
+
+	void start()
+	{
+		
+		
+	}
+};
 
 #ifdef _WIN32	
-void LoadPlugin(const string path, tio::IContainerManager* containerManager)
+void LoadPlugin(const string path, tio::IContainerManager* containerManager, const map<string, string>& pluginParameters)
 {
-	tio_plugin_start pluginStartFunction = NULL;
+	tio_plugin_start_t pluginStartFunction = NULL;
 
 	HMODULE hdll = LoadLibrary(path.c_str());
 	
@@ -540,26 +563,34 @@ void LoadPlugin(const string path, tio::IContainerManager* containerManager)
 		throw std::runtime_error(str.str());
 	}
 
-	pluginStartFunction = (tio_plugin_start)GetProcAddress(hdll, "tio_plugin_start");
+	pluginStartFunction = (tio_plugin_start_t)GetProcAddress(hdll, "tio_plugin_start");
 
 	if(!pluginStartFunction)
 	{
-		CloseHandle(hdll);
 		throw std::runtime_error("plugin doesn't export the \"tio_plugin_start\"");
 	}
 
-	pluginStartFunction(containerManager);
+	scoped_array<KEY_AND_VALUE> kv(new KEY_AND_VALUE[pluginParameters.size() + 1]);
 
-	CloseHandle(hdll);
+	int a = 0;
+	for(map<string, string>::const_iterator i = pluginParameters.begin() ; i != pluginParameters.end() ; ++i, a++)
+	{
+		kv[a].key = i->first.c_str();
+		kv[a].value = i->second.c_str();
+	}
 
+	// last one must have key = NULL
+	kv[pluginParameters.size()].key = NULL;
+
+	pluginStartFunction(containerManager, kv.get());
 }
 #endif //_WIN32
 
-void LoadPlugins(const std::vector<std::string>& plugins, tio::IContainerManager* containerManager)
+void LoadPlugins(const std::vector<std::string>& plugins, const map<string, string>& pluginParameters, tio::IContainerManager* containerManager)
 {
 	BOOST_FOREACH(const string& pluginPath, plugins)
 	{
-		LoadPlugin(pluginPath, containerManager);
+		LoadPlugin(pluginPath, containerManager, pluginParameters);
 	}
 }
 
@@ -574,11 +605,13 @@ int main(int argc, char* argv[])
 		po::options_description desc("Options");
 
 		desc.add_options()
-			("alias", po::value< vector<string> >(), "set an alias for a container type, using syntax alias:container_type")
+			("alias", po::value< vector<string> >(), "set an alias for a container type, using syntax alias=container_type")
 			("user", po::value< vector<string> >(), "add user, using syntax user:password")
 			("python-plugin", po::value< vector<string> >(), "load and run a python plugin")
 			("plugin", po::value< vector<string> >(), "load and run a plugin")
+			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
 			("port", po::value<unsigned short>(), "listening port")
+			("threads", po::value<unsigned short>(), "number of running threads")
 			("data-path", po::value<string>(), "sets data path");
 
 		po::variables_map vm;
@@ -597,7 +630,7 @@ int main(int argc, char* argv[])
 		{
 			BOOST_FOREACH(const string& alias, vm["alias"].as< vector<string> >())
 			{
-				string::size_type sep = alias.find(':', 0);
+				string::size_type sep = alias.find('=', 0);
 
 				if(sep == string::npos)
 				{
@@ -634,10 +667,28 @@ int main(int argc, char* argv[])
 			
 			SetupContainerManager(&containerManager, vm["data-path"].as<string>(), aliases);
 
+			//
+			// Parse plugin parameters
+			//
+			map<string, string> pluginParameters;
+
+			BOOST_FOREACH(const string& parameter, vm["plugin-parameter"].as< vector<string> >())
+			{
+				string::size_type sep = parameter.find('=', 0);
+
+				if(sep == string::npos)
+				{
+					cout << "invalid plugin parameter syntax: \"" << parameter << "\"" << endl;
+					return 1;
+				}
+
+				pluginParameters[parameter.substr(0, sep)] = parameter.substr(sep+1);
+			}
+
 			if(vm.count("plugin"))
 			{
 				cout << "Loading plugins... " << endl;
-				LoadPlugins(vm["plugin"].as< vector<string> >(), &localContainerManager);
+				LoadPlugins(vm["plugin"].as< vector<string> >(), pluginParameters, &localContainerManager);
 			}
 
 			if(vm.count("python-plugin"))
@@ -646,7 +697,7 @@ int main(int argc, char* argv[])
 				InitializePythonSupport(argv[0], &containerManager);
 
 				cout << "Loading Python plugins... " << endl;
-				LoadPythonPlugins(vm["python-plugin"].as< vector<string> >());
+				LoadPythonPlugins(vm["python-plugin"].as< vector<string> >(), pluginParameters);
 			}
 		
 			RunServer(

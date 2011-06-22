@@ -271,8 +271,6 @@ public:
 				  if(startIterator == data_.end())
 					  throw std::invalid_argument("key not found");
 			  }
-
-			  throw std::invalid_argument("invalid start");
 		  }
 
 		  for(DataMap::const_iterator i = startIterator ; i != data_.end() ; ++i)

@@ -320,6 +320,7 @@ namespace tio
 
 			~TioContainerImpl()
 			{
+				unsubscribe();
 			}
 
 			TIO_CONTAINER* handle()
@@ -351,12 +352,16 @@ namespace tio
 				ThrowOnTioClientError(result);
 			}
 
-			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*)
+			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
-				
-				me->eventCallback_("event", "k", "v");
+				TKey typedKey;
+				TValue typedValue;
 
+				FromTioData(key, &typedKey);
+				FromTioData(value, &typedValue);
+				
+				me->eventCallback_("event", typedKey, typedValue);
 			}
 
 			void subscribe(EventCallbackT callback)
@@ -370,6 +375,16 @@ namespace tio
 					NULL,
 					&this_type::EventCallback,
 					this);
+			}
+
+			void unsubscribe()
+			{
+				int result;
+
+				result = container_manager()->container_unsubscribe(
+					container_);
+
+				// we'll ignore any error, because it can be called from the destructor
 			}
 
 			void propset(const string& key, const string& value)

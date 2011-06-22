@@ -67,6 +67,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/thread.hpp>
+#include <boost/thread/mutex.hpp>
 
 #include <boost/program_options.hpp>
 

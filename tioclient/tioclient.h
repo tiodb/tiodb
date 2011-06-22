@@ -1,7 +1,7 @@
 #pragma once
 /*
 	This is the C LANGUAGE Tio client.
-	If you're looking for the C++ version, pick the TioTcpClient.h header
+	If you're looking for the C++ version, pick the tioclient.hpp header
 */
 
 #ifdef _WIN32
@@ -136,6 +136,18 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie);
 int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 
+
+//
+// for plugins
+//
+struct KEY_AND_VALUE
+{
+	const char* key;
+	const char* value;
+};
+
+typedef void (*tio_plugin_start_t)(void* container_manager, struct KEY_AND_VALUE* parameters);
+typedef void (*tio_plugin_stop_t)();
 
 
 #ifdef __cplusplus

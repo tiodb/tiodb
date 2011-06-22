@@ -68,20 +68,29 @@ namespace tio
 
 	void TioTcpServer::RemoveClient(shared_ptr<TioTcpSession> client)
 	{
-		SessionsSet::iterator i = sessions_.find(client);
+		{
+			recursive_mutex::scoped_lock lock(sessionsMutex_);
+
+			SessionsSet::iterator i = sessions_.find(client);
+
+			//
+			// it can happen if we receive more than one error notification
+			// for this connection
+			//
+			if(i == sessions_.end())
+				return; // something is VERY wrong...
+
+	#ifdef _DEBUG
+			std::cout << "disconnect" << std::endl;
+	#endif
+			sessions_.erase(i);
+		}
 
 		//
-		// it can happen if we receive more than one error notification
-		// for this connection
-		//
-		if(i == sessions_.end())
-			return; // something is VERY wrong...
-
-#ifdef _DEBUG
-		std::cout << "disconnect" << std::endl;
-#endif
+		// don't need to sync this, shared_ptr is already sync'ed, container are sync'ed too
+		// 
 		metaContainers_.sessions->Delete(lexical_cast<string>(client->GetID()), TIONULL, TIONULL);
-		sessions_.erase(i);
+		
 
 #if 0
 		//
@@ -142,18 +151,26 @@ namespace tio
 		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "meta/sessions");
 
 		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "meta/session_last_command");
-
-
 	}
 
 	Auth& TioTcpServer::GetAuth()
 	{
 		return auth_;
 	}
+
+	unsigned int TioTcpServer::GenerateSessionId()
+	{
+		return ++lastSessionID_;
+	}
+
+	unsigned int TioTcpServer::GenerateDiffId()
+	{
+		return ++lastDiffID_;
+	}
 	
 	void TioTcpServer::DoAccept()
 	{
-		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, ++lastSessionID_));
+		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, GenerateSessionId()));
 
 		acceptor_.async_accept(session->GetSocket(),
 			boost::bind(&TioTcpServer::OnAccept, this, session, asio::placeholders::error));
@@ -166,7 +183,10 @@ namespace tio
 			throw err;
 		}
 
-		sessions_.insert(session);
+		{
+			recursive_mutex::scoped_lock lock(sessionsMutex_);
+			sessions_.insert(session);
+		}
 
 		metaContainers_.sessions->Insert(lexical_cast<string>(session->GetID()), TIONULL, TIONULL);
 
@@ -458,12 +478,13 @@ namespace tio
 
 	void TioTcpServer::OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
+		/*
 		if(cmd.GetCommand() == "stop")
 		{
 			io_service_.stop();
 			return;
 		}
-
+		*/
 		CommandFunctionMap::iterator i = dispatchMap_.find(cmd.GetCommand());
 
 		if(i != dispatchMap_.end())
@@ -757,19 +778,22 @@ namespace tio
 			//
 			// generating a unique name for destination container
 			//
-			unsigned int diffID = ++lastDiffID_;
-			destinationName << "__/diff/" << container->GetName() << "/" << diffID;
+			unsigned int diffId = GenerateDiffId();
+			destinationName << "__/diff/" << container->GetName() << "/" << diffId;
 			
 			diffContainer = containerManager_.CreateContainer(destinationContainerType, destinationName.str());
 
 			DiffSessionInfo info;
 			info.firstQuerySent = false;
-			info.diffID = diffID;
+			info.diffID = diffId;
 			info.source = container;
 			info.destination = diffContainer;
 			info.diffType = diffType;
 
-			diffSessions_[info.diffID] = info;
+			{
+				recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+				diffSessions_[info.diffID] = info;
+			}
 
 			MakeAnswer(success, answer, diffHandleType, lexical_cast<string>(info.diffID));
 		}
@@ -786,7 +810,7 @@ namespace tio
 	}
 
 	//
-	// The record command asks the server to record all events from a container is another container
+	// The record command asks the server to record all events from a container into another container
 	// It will create a kind of transaction log. Even if the client disconnects, the events will continue to
 	// be recorded. It's for clients that can't loose events even in case of disconnection and
 	// clients that want to receive events but can stay connected (subscription by polling)
@@ -811,42 +835,55 @@ namespace tio
 			return;
 		}
 
-		DiffSessions::iterator i = diffSessions_.find(diffID);
 
-		if(i == diffSessions_.end())
+		DiffSessionInfo infoCopy;
+		bool found = false;
+
+		{
+			recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+			DiffSessions::iterator i = diffSessions_.find(diffID);
+			if(i != diffSessions_.end())
+				infoCopy = i->second;
+		}
+
+		if(!found)
 		{
 			MakeAnswer(error, answer, "invalid diff handle");
 			return;
 		}
 
-		DiffSessionInfo& info = i->second;
+		unsigned int subscriptionCookie = 0;
 
 		//
 		// if it's the first query, will send the entire content of container
 		// and setup the incremental recording
 		//
-
-		if(!info.firstQuerySent)
+		if(!infoCopy.firstQuerySent)
 		{
-			if(info.diffType == DiffSessionType_List)
+			if(infoCopy.diffType == DiffSessionType_List)
 			{
-				info.subscriptionCookie = 
-					info.source->Subscribe(boost::bind(&ListChangeRecorder, info, _1, _2, _3, _4), "0");
+				subscriptionCookie =
+					infoCopy.source->Subscribe(boost::bind(&ListChangeRecorder, infoCopy, _1, _2, _3, _4), "0");
 			}
-			else if(info.diffType == DiffSessionType_Map)
+			else if(infoCopy.diffType == DiffSessionType_Map)
 			{
-				info.subscriptionCookie = 
-					info.source->Subscribe(boost::bind(&MapChangeRecorder, info, _1, _2, _3, _4), "");
+				subscriptionCookie =
+					infoCopy.source->Subscribe(boost::bind(&MapChangeRecorder, infoCopy, _1, _2, _3, _4), "");
 			}
 
-			SendResultSet(session, info.destination->Query(0, 0, TIONULL));
+			SendResultSet(session, infoCopy.destination->Query(0, 0, TIONULL));
 
-			info.firstQuerySent = true;
+			{
+				recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+				DiffSessions::iterator i = diffSessions_.find(diffID);
+				if(i != diffSessions_.end())
+					i->second.firstQuerySent = true;
+			}
 		}
 		else
 		{
-			SendResultSet(session, info.destination->Query(0, 0, TIONULL));
-			info.destination->Clear();
+			SendResultSet(session, infoCopy.destination->Query(0, 0, TIONULL));
+			infoCopy.destination->Clear(); //it's a struct copy but points to the same container
 		}
 
 		/*
@@ -932,34 +969,61 @@ namespace tio
 			return;
 		}
 
-		deque<NextPopperInfo>& q = nextPoppers_[GetFullQualifiedName(container)];
+		bool popped = false;
 
-		//
-		// he's the only one popping and there's a record to pop,
-		// the best scenario
-		//
-		if(q.size() == 0 && container->GetRecordCount() > 0)
 		{
-			TioData key, value, metadata;
-			
-			container->PopFront(&key, &value, &metadata);
+			recursive_mutex::scoped_lock lock(nextPoppersMutex_);
 
-			//
-			// send answer before the event
-			//
-			MakeAnswer(success, answer);
+			deque<NextPopperInfo>& q = nextPoppers_[GetFullQualifiedName(container)];
 
-			MakeEventAnswer("wnp_next", handle, key, value, metadata, answer);
-		}
-		else
-		{
 			//
 			// if there are other poppers (or no data), will go to the queue
 			//
-			q.push_back(NextPopperInfo(session, handle));
-			MakeAnswer(success, answer);
+			if(q.size() || container->GetRecordCount() == 0)
+			{
+				q.push_back(NextPopperInfo(session, handle));
+				popped = false;
+			}
+			else
+				popped = true;
 		}
 
+		if(!popped)
+		{
+			MakeAnswer(success, answer);
+			return;
+		}
+		
+		TioData key, value, metadata;
+		
+		//
+		// We checked container for records before, but now we're multithreaded baby, 
+		// maybe the records are gone by now.
+		// /
+		try
+		{
+			container->PopFront(&key, &value, &metadata);
+			popped = true;
+
+		}
+		catch(std::exception&)
+		{
+			//
+			// Not able to pop. Send to the queue
+			// 
+			recursive_mutex::scoped_lock lock(nextPoppersMutex_);
+			nextPoppers_[GetFullQualifiedName(container)].push_back(NextPopperInfo(session, handle));
+
+			popped = false;
+		}
+
+		//
+		// send answer before the event
+		//
+		MakeAnswer(success, answer);
+
+		if(popped)
+			MakeEventAnswer("wnp_next", handle, key, value, metadata, answer);
 	}
 
 
@@ -967,7 +1031,6 @@ namespace tio
 	{
 		try
 		{
-		
 			string containerName, containerType;
 			shared_ptr<ITioContainer> container;
 			TioData key, value, metadata;
@@ -997,28 +1060,32 @@ namespace tio
 			}
 
 			string fullQualifiedName = GetFullQualifiedName(container);
-
-			KeyPoppersPerContainerMap::iterator i = keyPoppersPerContainer_.find(fullQualifiedName);
-
-			//
-			// any popper waiting?
-			//
 			bool popNow = false;
-			
-			if(i == keyPoppersPerContainer_.end() || i->second.size() == 0)
+
 			{
-				//
-				// no... let's see if the wanted key is here
-				//
+				recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
 				
-				try
+				KeyPoppersPerContainerMap::iterator i = keyPoppersPerContainer_.find(fullQualifiedName);
+
+				if(i == keyPoppersPerContainer_.end() || i->second.size() == 0)
 				{
-					container->GetRecord(key, NULL, &value, &metadata);
-					popNow = true;
-				}
-				catch (std::invalid_argument)
-				{
-					popNow = false;			
+					//
+					// no... let's see if the wanted key is here
+					//
+				
+					try
+					{
+						//
+						// I tried to avoid accessing a container inside a lock, but I must
+						// hold the lock on the situation
+						// 
+						container->GetRecord(key, NULL, &value, &metadata);
+						popNow = true;
+					}
+					catch (std::invalid_argument)
+					{
+						popNow = false;			
+					}
 				}
 			}
 				
@@ -1029,7 +1096,14 @@ namespace tio
 				//
 				MakeAnswer(success, answer);
 
-				container->Delete(key);
+				try
+				{
+					container->Delete(key);
+				}
+				catch(std::exception&)
+				{
+					// if the record was delete meanwhile, it's not a problem
+				}
 
 				MakeEventAnswer("wnp_key", handle, key, value, metadata, answer);
 			}
@@ -1039,7 +1113,10 @@ namespace tio
 				// there are other pops waiting. He'll need to stay in the queue and pray
 				//
 				string keyAsString = key.AsSz();
-				keyPoppersPerContainer_[fullQualifiedName][keyAsString].push_back(KeyPopperInfo(session, handle, keyAsString));
+				{
+					recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
+					keyPoppersPerContainer_[fullQualifiedName][keyAsString].push_back(KeyPopperInfo(session, handle, keyAsString));
+				}
 
 				MakeAnswer(success, answer);
 			}
@@ -1707,55 +1784,61 @@ namespace tio
 		if(key.GetDataType() != TioData::Sz)
 			return;
 
-		//
-		// support for "wait and pop key" (wnp_key)
-		//
-		KeyPoppersPerContainerMap::iterator i = keyPoppersPerContainer_.find(GetFullQualifiedName(container));
-
-		if(i == keyPoppersPerContainer_.end())
-			return;
-
-		//
-		// anyone one waiting for this key?
-		//
-		KeyPoppersByKey& thisKeyPoppers = i->second;
-		KeyPoppersByKey::iterator iByKey = thisKeyPoppers.find(key.AsSz());
-
-		//
-		// anyone waiting to pop?
-		//
-		if(iByKey != thisKeyPoppers.end() && !iByKey->second.empty())
 		{
-			deque<KeyPopperInfo>& q = iByKey->second;
+			//
+			// TODO: find a way to not hold this lock for so long
+			// 
+			recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
+			//
+			// support for "wait and pop key" (wnp_key)
+			//
+			KeyPoppersPerContainerMap::iterator i = keyPoppersPerContainer_.find(GetFullQualifiedName(container));
+
+			if(i == keyPoppersPerContainer_.end())
+				return;
 
 			//
-			// find first popper still alive
+			// anyone waiting for this key?
 			//
-			bool pop = false;
+			KeyPoppersByKey& thisKeyPoppers = i->second;
+			KeyPoppersByKey::iterator iByKey = thisKeyPoppers.find(key.AsSz());
 
-			while(!q.empty())
+			//
+			// anyone waiting to pop?
+			//
+			if(iByKey != thisKeyPoppers.end() && !iByKey->second.empty())
 			{
-				KeyPopperInfo popper = q.front(); // not a reference because we'll pop right now
-				q.pop_front();
+				deque<KeyPopperInfo>& q = iByKey->second;
 
-				if(popper.session.expired())
-					continue;
+				//
+				// find first popper still alive
+				//
+				bool pop = false;
 
-				stringstream eventStream;
+				while(!q.empty())
+				{
+					KeyPopperInfo popper = q.front(); // not a reference because we'll pop right now
+					q.pop_front();
 
-				MakeEventAnswer("wnp_key", popper.handle, key, value, metadata, eventStream);
+					if(popper.session.expired())
+						continue;
 
-				popper.session.lock()->SendAnswer(eventStream);
+					stringstream eventStream;
 
-				pop = true;
-				break;
+					MakeEventAnswer("wnp_key", popper.handle, key, value, metadata, eventStream);
+
+					popper.session.lock()->SendAnswer(eventStream);
+
+					pop = true;
+					break;
+				}
+
+				if(q.empty())
+					thisKeyPoppers.erase(iByKey);
+
+				if(pop)
+					container->Delete(key);
 			}
-
-			if(q.empty())
-				thisKeyPoppers.erase(iByKey);
-
-			if(pop)
-				container->Delete(key);
 		}
 	}
 		
@@ -1839,46 +1922,52 @@ namespace tio
 
 				MakeAnswer(success, answer);
 
-				//
-				// support for "wait and pop next" (wnp_next)
-				//
-				NextPoppersMap::iterator i = nextPoppers_.find(GetFullQualifiedName(container));
-
-				//
-				// anyone waiting to pop?
-				//
-				if(i != nextPoppers_.end() && !i->second.empty())
 				{
-					deque<NextPopperInfo>& q = i->second;
+					//
+					// TODO: BIGLOCK
+					// 
+					recursive_mutex::scoped_lock lock(nextPoppersMutex_);
+					//
+					// support for "wait and pop next" (wnp_next)
+					//
+					NextPoppersMap::iterator i = nextPoppers_.find(GetFullQualifiedName(container));
 
 					//
-					// find first popper still alive
+					// anyone waiting to pop?
 					//
-					bool pop = false;
-
-					while(!q.empty())
+					if(i != nextPoppers_.end() && !i->second.empty())
 					{
-						NextPopperInfo popper = q.front(); // not a reference because we'll pop right now
-						q.pop_front();
+						deque<NextPopperInfo>& q = i->second;
 
-						if(popper.session.expired())
-							continue;
+						//
+						// find first popper still alive
+						//
+						bool pop = false;
 
-						stringstream eventStream;
+						while(!q.empty())
+						{
+							NextPopperInfo popper = q.front(); // not a reference because we'll pop right now
+							q.pop_front();
+
+							if(popper.session.expired())
+								continue;
+
+							stringstream eventStream;
 						
-						MakeEventAnswer("wnp_next", popper.handle, key, value, metadata, eventStream);
+							MakeEventAnswer("wnp_next", popper.handle, key, value, metadata, eventStream);
 
-						popper.session.lock()->SendAnswer(eventStream);
+							popper.session.lock()->SendAnswer(eventStream);
 
-						pop = true;
-						break;
+							pop = true;
+							break;
+						}
+
+						if(q.empty())
+							nextPoppers_.erase(i);
+
+						if(pop)
+							container->PopFront(&key, &value, &metadata);
 					}
-
-					if(q.empty())
-						nextPoppers_.erase(i);
-
-					if(pop)
-						container->PopFront(&key, &value, &metadata);
 				}
 
 				//

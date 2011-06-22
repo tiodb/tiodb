@@ -464,17 +464,24 @@ namespace tio
 		}
 	}
 
-	void LoadPythonPlugins(const vector<string>& plugins)
+	void LoadPythonPlugins(const vector<string>& plugins, const std::map<std::string, std::string>& parameters)
 	{
 		boost::python::object imp = boost::python::import("imp");
 		boost::python::object load_source = imp.attr("load_source");
+		boost::python::dict pythonParameters;
+
+		//
+		// Convert map to python's dict
+		//
+		for(std::map<std::string, std::string>::const_iterator i = parameters.begin() ; i != parameters.end() ; ++i)
+			pythonParameters[i->first] = i->second;
 	
 		BOOST_FOREACH(const string& pluginPath, plugins)
 		{
 			try
 			{
 				boost::python::object pluginModule = load_source(boost::filesystem::path(pluginPath).stem(), pluginPath);
-				pluginModule.attr("TioPluginMain")(g_pythonContainerManager);
+				pluginModule.attr("TioPluginMain")(g_pythonContainerManager, pythonParameters);
 			}
 			catch(boost::python::error_already_set&)
 			{
