@@ -29,8 +29,6 @@ namespace tio
 	using std::pair;
 	using boost::function;
 	using boost::shared_ptr;
-	using boost::recursive_mutex;
-
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -776,7 +774,7 @@ namespace tio
 	{
 		shared_ptr<ITioPropertyMap> propertyMap_;
 		shared_ptr<ITioStorage> storage_;
-		recursive_mutex mutex_;
+		tio::recursive_mutex mutex_;
 
 		inline size_t GetRealRecordNumber(int recNumber)
 		{
@@ -809,110 +807,110 @@ namespace tio
 		
 		virtual string GetName()
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->GetName();
 		}
 
 		virtual string GetType()
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->GetType();
 		}
 
 		virtual size_t GetRecordCount()
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->GetRecordCount();
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->GetRecord(searchKey, key, value, metadata);
 		}
 
 		virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PopBack(key, value, metadata);
 		}
 
 		virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PopFront(key, value, metadata);
 		}
 
 				
 		virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PushBack(key, value, metadata);
 		}
 
 		virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PushFront(key, value, metadata);
 		}
 
 		
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Insert(key, value, metadata);
 		}
 
 		virtual void Set(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Set(key, value, metadata);
 		}
 
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Delete(key, value, metadata);
 		}
 
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->Query(startOffset, endOffset, query);
 		}
 
 		virtual void Clear()
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Clear();
 		}
 
 		virtual string Command(const string& command)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->Command(command);
 		}
 
 		virtual void SetProperty(const string& key, const string& value)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			propertyMap_->Set(key, value);
 		}
 
 		virtual string GetProperty(const string& key)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return propertyMap_->Get(key);
 		}
 
 		virtual unsigned int Subscribe(EventSink sink, const string& start)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			return storage_->Subscribe(sink, start);
 		}
 		virtual void Unsubscribe(unsigned int cookie)
 		{
-			recursive_mutex::scoped_lock lock(mutex_);
+			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Unsubscribe(cookie);
 		}
 	};

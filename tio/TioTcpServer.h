@@ -32,8 +32,6 @@ namespace tio
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
-	using boost::recursive_mutex;
-
 	using std::string;
 	using std::vector;
 	using std::map;
@@ -96,7 +94,7 @@ namespace tio
 		
 		
 		KeyPoppersPerContainerMap keyPoppersPerContainer_;
-		recursive_mutex keyPoppersPerContainerMutex_;
+		tio::recursive_mutex keyPoppersPerContainerMutex_;
 
 
 		struct NextPopperInfo
@@ -119,7 +117,7 @@ namespace tio
 		// map<diff handle, DiffSessionInfo >
 		typedef map< unsigned int, DiffSessionInfo > DiffSessions;
 		DiffSessions diffSessions_;
-		recursive_mutex diffSessionsMutex_;
+		tio::recursive_mutex diffSessionsMutex_;
 
 		unsigned int lastSessionID_;
 		unsigned int lastQueryID_;
@@ -127,7 +125,7 @@ namespace tio
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;
-		recursive_mutex nextPoppersMutex_;
+		tio::recursive_mutex nextPoppersMutex_;
 
 		typedef std::map<string, CommandFunction> CommandFunctionMap;
 		CommandFunctionMap dispatchMap_;
@@ -139,7 +137,7 @@ namespace tio
 		
 		typedef std::set< shared_ptr<TioTcpSession> > SessionsSet;
 		SessionsSet sessions_;
-		recursive_mutex sessionsMutex_;
+		tio::recursive_mutex sessionsMutex_;
 
 		ContainerManager& containerManager_;
 

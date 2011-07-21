@@ -129,3 +129,19 @@ bool key_found(T& container, V& value)
 #ifndef min
 template<typename T1, typename T2> inline T1 min (T1 l, T2 r) { return l < r ? l : r; }
 #endif
+
+//
+// fake mutex, so we can switch mutithread on and off
+//
+namespace tio
+{
+	class recursive_mutex
+	{
+	public:
+		class scoped_lock
+		{
+		public:
+			scoped_lock(recursive_mutex& m){}
+		};
+	};
+}

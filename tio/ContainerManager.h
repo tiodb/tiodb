@@ -22,14 +22,13 @@ namespace tio
 {
 	using boost::shared_ptr;
 	using boost::weak_ptr;
-	using boost::recursive_mutex;
 
 	class ContainerManager
 	{
 		typedef std::map<string, shared_ptr<ITioStorageManager> > ManagerByType;
 		typedef map< string, string > AliasesMap;
 
-		recursive_mutex bigLock_;
+		tio::recursive_mutex bigLock_;
 		ManagerByType managerByType_;
 		AliasesMap aliases_;
 

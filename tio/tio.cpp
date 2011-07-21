@@ -672,17 +672,20 @@ int main(int argc, char* argv[])
 			//
 			map<string, string> pluginParameters;
 
-			BOOST_FOREACH(const string& parameter, vm["plugin-parameter"].as< vector<string> >())
+			if(vm.count("plugin-parameter") != 0)
 			{
-				string::size_type sep = parameter.find('=', 0);
-
-				if(sep == string::npos)
+				BOOST_FOREACH(const string& parameter, vm["plugin-parameter"].as< vector<string> >())
 				{
-					cout << "invalid plugin parameter syntax: \"" << parameter << "\"" << endl;
-					return 1;
-				}
+					string::size_type sep = parameter.find('=', 0);
 
-				pluginParameters[parameter.substr(0, sep)] = parameter.substr(sep+1);
+					if(sep == string::npos)
+					{
+						cout << "invalid plugin parameter syntax: \"" << parameter << "\"" << endl;
+						return 1;
+					}
+
+					pluginParameters[parameter.substr(0, sep)] = parameter.substr(sep+1);
+				}
 			}
 
 			if(vm.count("plugin"))

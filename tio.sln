@@ -2,6 +2,9 @@
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tio", "tio\tio.vcxproj", "{0BCE3343-0883-4A6E-8D23-1FEE78786F4E}"
+	ProjectSection(ProjectDependencies) = postProject
+		{ADE00886-E163-4A48-BCFF-687154FBEEFD} = {ADE00886-E163-4A48-BCFF-687154FBEEFD}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tioclient", "tioclient\tioclient.vcxproj", "{ADE00886-E163-4A48-BCFF-687154FBEEFD}"
 EndProject
