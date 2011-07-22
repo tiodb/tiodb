@@ -320,7 +320,13 @@ namespace tio
 
 			~TioContainerImpl()
 			{
-				unsubscribe();
+				if(connected())
+					unsubscribe();
+			}
+
+			bool connected()
+			{
+				return !!containerManager_;
 			}
 
 			TIO_CONTAINER* handle()
