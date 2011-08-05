@@ -1,6 +1,6 @@
-
-
 #include "pch.h"
+
+#if TIO_PYTHON_PLUGIN_SUPPORT
 #include "TioPython.h"
 #include "ContainerManager.h"
 
@@ -493,3 +493,4 @@ namespace tio
 
 }
 
+#endif //TIO_PYTHON_PLUGIN_SUPPORT

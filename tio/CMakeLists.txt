@@ -2,18 +2,57 @@ cmake_minimum_required(VERSION 2.6)
 
 PROJECT(tio)
 
-INCLUDE_DIRECTORIES(/usr/include/python2.6)
+SET(TIO_PYTHON_PLUGIN_SUPPORT 0)
 
-LINK_LIBRARIES (tio debug boost_system optimized boost_system)
-LINK_LIBRARIES (tio debug boost_program_options optimized boost_program_options)
-LINK_LIBRARIES (tio debug boost_python optimized boost_python)
-LINK_LIBRARIES (tio debug boost_filesystem optimized boost_filesystem)
-LINK_LIBRARIES (tio pthread)
-LINK_LIBRARIES (tio python2.6)
+ADD_DEFINITIONS(-DTIO_PYTHON_PLUGIN_SUPPORT=${TIO_PYTHON_PLUGIN_SUPPORT})
 
+IF(${WIN32})
+    SET(BOOST_INCLUDEDIR d:/boost/boost_1_44_0)
+		SET(BOOST_LIBDIR D:/boost/boost_1_44_0/stage/lib)
 
-#LINK_LIBRARIES (tio tcmalloc) # google's tcmalloc
-#LINK_LIBRARIES (tio profiler) # google's cpu profiler
+		IF(${TIO_PYTHON_PLUGIN_SUPPORT})
+			SET(PYTHON_INCLUDEDIR
+					D:/temp/Python-2.7/Include
+					D:/temp/Python-2.7/PC)
+   
+			SET(PYTHON_LIBDIR D:/temp/Python-2.7/PCbuild)
+		ENDIF(${TIO_PYTHON_PLUGIN_SUPPORT})
+	
+		
 
-ADD_EXECUTABLE(tio Command.cpp ContainerManager.cpp TioTcpServer.cpp TioTcpSession.cpp TioPython.cpp pch.cpp tio.cpp ../tioclient/tioclient.c)
+ELSE(${WIN32})
+    LINK_LIBRARIES (tio debug boost_system optimized boost_system)
+    LINK_LIBRARIES (tio debug boost_program_options optimized boost_program_options)
+    LINK_LIBRARIES (tio debug boost_python optimized boost_python)
+    LINK_LIBRARIES (tio debug boost_filesystem optimized boost_filesystem)
+    LINK_LIBRARIES (tio pthread)
+    LINK_LIBRARIES (tio python2.6)
+    #LINK_LIBRARIES (tio tcmalloc) # google's tcmalloc
+    #LINK_LIBRARIES (tio profiler) # google's cpu profiler
+ENDIF(${WIN32})
 
+INCLUDE_DIRECTORIES(${BOOST_INCLUDEDIR} ${PYTHON_INCLUDEDIR})
+LINK_DIRECTORIES(${BOOST_LIBDIR} ${PYTHON_LIBDIR})
+
+SET(Boost_USE_STATIC_LIBS ON)
+FIND_PACKAGE(Boost REQUIRED)
+
+ADD_EXECUTABLE(tio
+	  pch.cpp
+    Command.cpp
+    ContainerManager.cpp
+    TioTcpServer.cpp
+    TioTcpSession.cpp
+    TioPython.cpp
+    tio.cpp
+    ../tioclient/tioclient.c)
+	
+# I can't get it to work, help is appreciated. Since tioclient.c is C and not C++, it can't
+# use the pch. /TP was supposed to force it to be compiled as C++, what is OK. But it doesn't work
+#	
+# precompiled header
+#	IF (MSVC)
+#		SET_TARGET_PROPERTIES(tio PROPERTIES COMPILE_FLAGS "/Yupch.h")
+#		SET_SOURCE_FILES_PROPERTIES(pch.cpp PROPERTIES COMPILE_FLAGS "/Ycpch.h")
+#		SET_SOURCE_FILES_PROPERTIES(tioclient.c PROPERTIES COMPILE_FLAGS "/TP")
+#	endif(MSVC)
