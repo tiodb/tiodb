@@ -21,9 +21,11 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "MemoryStorage.h"
 //#include "BdbStorage.h"
 #include "LogDbStorage.h"
-#include "TioPython.h"
 #include "../tioclient/tioclient.hpp"
 
+#if TIO_PYTHON_PLUGIN_SUPPORT
+#include "TioPython.h"
+#endif
 
 using namespace tio;
 
@@ -584,12 +586,6 @@ void LoadPlugin(const string path, tio::IContainerManager* containerManager, con
 
 	pluginStartFunction(containerManager, kv.get());
 }
-
-#else
-void LoadPlugin(const string path, tio::IContainerManager* containerManager, const map<string, string>& pluginParameters)
-{
-	//nada
-}
 #endif //_WIN32
 
 void LoadPlugins(const std::vector<std::string>& plugins, const map<string, string>& pluginParameters, tio::IContainerManager* containerManager)
@@ -613,7 +609,9 @@ int main(int argc, char* argv[])
 		desc.add_options()
 			("alias", po::value< vector<string> >(), "set an alias for a container type, using syntax alias=container_type")
 			("user", po::value< vector<string> >(), "add user, using syntax user:password")
+#if TIO_PYTHON_PLUGIN_SUPPORT
 			("python-plugin", po::value< vector<string> >(), "load and run a python plugin")
+#endif
 			("plugin", po::value< vector<string> >(), "load and run a plugin")
 			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
 			("port", po::value<unsigned short>(), "listening port")
@@ -700,6 +698,7 @@ int main(int argc, char* argv[])
 				LoadPlugins(vm["plugin"].as< vector<string> >(), pluginParameters, &localContainerManager);
 			}
 
+#if TIO_PYTHON_PLUGIN_SUPPORT
 			if(vm.count("python-plugin"))
 			{
 				cout << "Starting Python support... " << endl;
@@ -708,6 +707,7 @@ int main(int argc, char* argv[])
 				cout << "Loading Python plugins... " << endl;
 				LoadPythonPlugins(vm["python-plugin"].as< vector<string> >(), pluginParameters);
 			}
+#endif
 		
 			RunServer(
 				&containerManager,

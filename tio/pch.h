@@ -16,13 +16,17 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 */
 #pragma once
 
+//
+// Python plugin support. Need Python and Boost Python
+//
+#ifndef TIO_PYTHON_PLUGIN_SUPPORT
+#define TIO_PYTHON_PLUGIN_SUPPORT 1
+#endif
+
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _SCL_SECURE_NO_WARNINGS
 //#define _SECURE_SCL 0
-
-//#define BOOST_ALL_DYN_LINK
-//#define BOOST_ALL_NO_LIB
 
 #define _WIN32_WINNT 0x0500
 #define WIN32_LEAN_AND_MEAN
@@ -39,7 +43,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #pragma warning(disable: 4267)
 
 //
-// "non standard extension" every time, but GCC is happy as well, so fuck off
+// "non standard extension" every time, but GCC is happy as well
 //
 #pragma warning(disable: 4238) 
 
@@ -79,8 +83,9 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include <boost/typeof/std/utility.hpp>
 #include <boost/typeof/std/vector.hpp>
 
-//#define BOOST_DEBUG_PYTHON
+#if TIO_PYTHON_PLUGIN_SUPPORT
 #include <boost/python.hpp>
+#endif
 
 #include <iostream>
 #include <iomanip>

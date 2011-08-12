@@ -80,7 +80,7 @@ def encode(values):
 
 #
 # this class is meant to be inherited by container classes,
-# just to make than more pythonic
+# just to make them more pythonic
 #
 class ContainerPythonizer(object):
     def __del__(self):
@@ -129,14 +129,6 @@ class ContainerPythonizer(object):
         container.__dict__['extend'] = extend
         container.__dict__['values'] = values
         container.__dict__['keys'] = keys
-
-
-class PluginContainer(ContainerPythonizer):
-    def __init__(self, container):
-        self.container = container
-
-    def push_back(self, key, value, metadata):
-        self.container.push_back(key, value, metadata)
 
 
 class RemoteContainer(ContainerPythonizer):
@@ -192,7 +184,7 @@ class RemoteContainer(ContainerPythonizer):
     def subscribe(self, sink, event_filter='*', start = None):
         self.manager.Subscribe(self.handle, sink, event_filter, start)
 
-    def unsubscribe(self, sink):
+    def unsubscribe(self):
         self.manager.Unsubscribe(self.handle)
 
     def close(self):
@@ -251,6 +243,12 @@ class TioServerConnection(object):
 
     def close(self):
         self.s.close()
+        
+    def create(self, name, type):
+        return self.__CreateOropen('create', name, type)
+
+    def open(self, name, type = ''):
+        return self.__CreateOropen('open', name, type)
 
     def __ReceiveLine(self):
         i = self.receiveBuffer.find('\r\n')
@@ -581,12 +579,6 @@ class TioServerConnection(object):
     def CloseContainer(self, handle):
         self.SendCommand('close', handle)
 
-    def create(self, name, type):
-        return self.__CreateOropen('create', name, type)
-
-    def open(self, name, type = ''):
-        return self.__CreateOropen('open', name, type)
-
     def Query(self, handle, startOffset=None, endOffset=None):
         l = []
         l.append('query')
@@ -737,7 +729,7 @@ def connect(url):
     return TioServerConnection(address, port)
 
 def TestQuery():
-    tio = Connect('tio://127.0.0.1:6666')
+    tio = connect('tio://127.0.0.1:6666')
 
     def do_all_queries(container):
         print container
@@ -772,7 +764,7 @@ def TestQuery():
 
 def DiffTest():
     def DiffTest_Map():
-        tio = Connect('tio://127.0.0.1:6666')
+        tio = connect('tio://127.0.0.1:6666')
         vm = tio.create('vm', 'volatile_map')
         diff = vm.diff_start()
 
@@ -787,7 +779,7 @@ def DiffTest():
         print vm.diff_query(diff)
 
     def DiffTest_List():
-        tio = Connect('tio://127.0.0.1:6666')
+        tio = connect('tio://127.0.0.1:6666')
         vl = tio.create('vl', 'volatile_list')
         diff = vl.diff_start()
 
@@ -805,8 +797,8 @@ def DiffTest():
     DiffTest_Map()
 
 def DoTest():
-    man = Connect('tio://127.0.0.1:6666')
-    container = man.create('test123', 'volatile_list')
+    server = connect('tio://127.0.0.1:6666')
+    container = server.create('test123', 'volatile_list')
 
     container.clear()    
 
@@ -825,7 +817,7 @@ def DoTest():
 
         key, value, metadata = container.get(0, withKeyAndMetadata=True)        
 
-    man.DispatchAllEvents();
+    server.DispatchAllEvents();
 
     return
 
@@ -834,10 +826,10 @@ if __name__ == '__main__':
     #Connect('tio://127.0.0.1:6666').ping()
     #DiffTest()
     #TestQuery()
-    #DoTest()
+    DoTest()
     #BdbTest()
     #parse_url('tio://127.0.0.1:6666/xpto/asas')
-    MasterSpeedTest()
+    #MasterSpeedTest()
     #TestOrderManager()
     #TioConnectionsManager().parse_url('tio://localhost:6666')
     #TestWaitAndPop()

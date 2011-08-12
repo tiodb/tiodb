@@ -1,6 +1,6 @@
-#include "../tioclient.h"
+#include "../tioclient.c"
 
-/*
+
 void TEST_pr1_message()
 {
 	struct PR1_MESSAGE* pr1_message;
@@ -26,7 +26,6 @@ void TEST_pr1_message()
 
 	pr1_message_delete(pr1_message);
 }
-*/
 
 const char* event_code_to_string(unsigned int event_code)
 {
@@ -63,7 +62,6 @@ void test_event_callback(void* cookie, unsigned int handle, unsigned int event_c
 	tiodata_convert_to_string(&v);
 	tiodata_convert_to_string(&m);
 	
-	/*
 	printf("cookie: %d, handle: %d, event_code: %s, key: %s, value: %s, metadata: %s\n", 
 		cookie, 
 		handle, 
@@ -71,7 +69,6 @@ void test_event_callback(void* cookie, unsigned int handle, unsigned int event_c
 		k.string_,
 		v.string_,
 		m.string_);
-		*/
 
 	tiodata_set_as_none(&k); tiodata_set_as_none(&v); tiodata_set_as_none(&m); 
 }
@@ -122,7 +119,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	struct TIO_DATA search_key, key, value, metadata;
 	int a;
 	int result;
-	int TEST_COUNT = 10 * 1000;
+	int TEST_COUNT = 1 * 1000;
 
 	tiodata_init(&search_key);
 	tiodata_init(&key);
@@ -154,7 +151,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
-	assert(a == 50);
+	assert(a == TEST_COUNT);
 
 
 	//
@@ -346,14 +343,17 @@ clean_up_and_return:
 	return 0;
 }
 
-extern void run_cpp_tests();
+
+
+
+
+
+
 
 int main()
 {
 	int result;
 	struct TIO_CONNECTION* connection = NULL;
-
-	run_cpp_tests();
 
 	tio_initialize();
 
@@ -365,7 +365,7 @@ int main()
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
-	//TEST_pr1_message();
+	TEST_pr1_message();
 
 	TEST_list(connection);
 
