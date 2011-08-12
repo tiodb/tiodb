@@ -586,6 +586,13 @@ void LoadPlugin(const string path, tio::IContainerManager* containerManager, con
 
 	pluginStartFunction(containerManager, kv.get());
 }
+#else
+void LoadPlugin(const string path, tio::IContainerManager* containerManager, const map<string, string>& pluginParameters)
+{
+//nada
+//
+}
+
 #endif //_WIN32
 
 void LoadPlugins(const std::vector<std::string>& plugins, const map<string, string>& pluginParameters, tio::IContainerManager* containerManager)
