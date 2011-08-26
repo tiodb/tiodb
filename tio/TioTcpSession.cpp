@@ -45,6 +45,7 @@ namespace tio
 
 	
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
+		io_service_(io_service),
 		socket_(io_service),
 		server_(server),
 		lastHandle_(0),
@@ -264,7 +265,7 @@ namespace tio
 
 			if(buf_.size() >= moreDataSize)
 			{
-				socket_.io_service().post(
+				io_service_.post(
 					boost::bind(&TioTcpSession::OnCommandData, shared_from_this(), 
 					moreDataSize, boost::system::error_code(), moreDataSize));
 			}

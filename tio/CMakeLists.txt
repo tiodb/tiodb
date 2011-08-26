@@ -7,29 +7,26 @@ SET(TIO_PYTHON_PLUGIN_SUPPORT 0)
 ADD_DEFINITIONS(-DTIO_PYTHON_PLUGIN_SUPPORT=${TIO_PYTHON_PLUGIN_SUPPORT})
 
 IF(${WIN32})
-    SET(BOOST_INCLUDEDIR d:/boost/boost_1_44_0)
-		SET(BOOST_LIBDIR D:/boost/boost_1_44_0/stage/lib)
+    SET(BOOST_INCLUDEDIR x:/boost/boost_1_47)
+	SET(BOOST_LIBDIR x:/boost/boost_1_47/lib)
 
-		IF(${TIO_PYTHON_PLUGIN_SUPPORT})
-			SET(PYTHON_INCLUDEDIR
-					D:/temp/Python-2.7/Include
-					D:/temp/Python-2.7/PC)
+	IF(${TIO_PYTHON_PLUGIN_SUPPORT})
+		SET(PYTHON_INCLUDEDIR
+				D:/temp/Python-2.7/Include
+				D:/temp/Python-2.7/PC)
    
-			SET(PYTHON_LIBDIR D:/temp/Python-2.7/PCbuild)
-		ENDIF(${TIO_PYTHON_PLUGIN_SUPPORT})
+		SET(PYTHON_LIBDIR D:/temp/Python-2.7/PCbuild)
+	ENDIF(${TIO_PYTHON_PLUGIN_SUPPORT})
 		
-		#
-		# Link with the static version of Visual C++ runtime, so we'll
-		# have a standalone executable.
-		#
-		FOREACH(flag_var CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-			IF(${flag_var} MATCHES "/MD")
-				STRING(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-			ENDIF(${flag_var} MATCHES "/MD")
-		ENDFOREACH(flag_var)
-
-	
-		
+	#
+	# Link with the static version of Visual C++ runtime, so we'll
+	# have a standalone executable.
+	#
+	FOREACH(flag_var CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+		IF(${flag_var} MATCHES "/MD")
+			STRING(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+		ENDIF(${flag_var} MATCHES "/MD")
+	ENDFOREACH(flag_var)
 
 ELSE(${WIN32})
     LINK_LIBRARIES (tio debug boost_system optimized boost_system)
@@ -49,9 +46,6 @@ ENDIF(${WIN32})
 
 INCLUDE_DIRECTORIES(${BOOST_INCLUDEDIR} ${PYTHON_INCLUDEDIR})
 LINK_DIRECTORIES(${BOOST_LIBDIR} ${PYTHON_LIBDIR})
-
-SET(Boost_USE_STATIC_LIBS ON)
-FIND_PACKAGE(Boost REQUIRED)
 
 ADD_EXECUTABLE(tio
 	  pch.cpp
