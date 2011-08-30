@@ -299,6 +299,7 @@ namespace tio
 			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
 		protected:
 			void* container_;
+			std::string name_;
 			IContainerManager* containerManager_;
 			EventCallbackT eventCallback_;
 
@@ -344,6 +345,8 @@ namespace tio
 				result = container_manager()->open(name.c_str(), NULL, &container_);
 
 				ThrowOnTioClientError(result);
+
+				name_ = name;
 			}
 
 			template<typename TConnection>
@@ -356,6 +359,18 @@ namespace tio
 				result = container_manager()->create(name.c_str(), type.c_str(), &container_);
 
 				ThrowOnTioClientError(result);
+
+				name_ = name;
+			}
+
+			void close()
+			{
+				if(!connected())
+					return;
+
+				container_manager()->close(container_);
+
+				name_.clear();
 			}
 
 			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
@@ -462,6 +477,17 @@ namespace tio
 				ThrowOnTioClientError(result);
 
 				return value.value();
+			}
+
+			void erase(const key_type& index)
+			{
+				int result;
+
+				result = container_manager()->container_delete(
+					container_, 
+					TioDataConverter<key_type>(index).inptr());
+
+				ThrowOnTioClientError(result);
 			}
 
 			server_value_type operator[](const key_type& key)
