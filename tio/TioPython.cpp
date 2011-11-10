@@ -80,8 +80,8 @@ namespace tio
 	{
 		switch(v.GetDataType())
 		{
-		case TioData::Sz:
-			return python::object(v.AsSz());
+		case TioData::String:
+			return python::str(v.AsSz(), v.GetSize());
 		case TioData::Int:
 			return python::object(v.AsInt());
 		case TioData::Double:
@@ -481,7 +481,7 @@ namespace tio
 		{
 			try
 			{
-				boost::python::object pluginModule = load_source(boost::filesystem::path(pluginPath).stem(), pluginPath);
+				boost::python::object pluginModule = load_source(boost::filesystem::path(pluginPath).stem().string(), pluginPath);
 				pluginModule.attr("TioPluginMain")(g_pythonContainerManager, pythonParameters);
 			}
 			catch(boost::python::error_already_set&)

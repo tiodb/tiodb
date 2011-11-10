@@ -382,7 +382,7 @@ namespace tio {
 						recordIndex = ldb_.GetByIndex(tableInfo_, searchKey.AsInt(), 
 							helper.GetLdbKey(), helper.GetLdbValue(), helper.GetLdbMetadata());
 					}
-					else if(searchKey.GetDataType() == TioData::Sz)
+					else if(searchKey.GetDataType() == TioData::String)
 					{
 						recordIndex = ldb_.Get(tableInfo_, 0, *helper.GetLdbKey(), 
 							helper.GetLdbValue(), helper.GetLdbMetadata());

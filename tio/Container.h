@@ -103,23 +103,20 @@ namespace tio
 	public:
 		enum Type
 		{
-			Int, Double, Sz, Raw, None, Invalid
+			Int, Double, String, None, Invalid
 		};
 	private:
 		Type type_;
 		
-		const char* sz_;
+		char* string_;
+		size_t stringSize_;
 		int int_;
 		double double_;
-		const unsigned char* raw_;
-		size_t rawSize_;
-		bool bufferOwnership_;
 	public:
 
 		TioData()
 		{
 			type_ = None;
-			bufferOwnership_ = false;
 		}
 
 		TioData(int i)
@@ -143,13 +140,13 @@ namespace tio
 		TioData(const void* v, size_t size)
 		{
 			type_ = None;
-			Set(v, size, true);
+			Set(v, size);
 		}
 
-		TioData(const char* sz, bool copy = true)
+		TioData(const char* sz)
 		{
 			type_ = None;
-			Set(sz, copy);
+			Set(sz);
 		}
 
 		TioData(const string& str)
@@ -165,7 +162,6 @@ namespace tio
 
 		TioData(const TioData& data)
 		{
-			bufferOwnership_ = false;
 			type_ = None;
 
 			if(data.GetDataType() == None)
@@ -205,11 +201,9 @@ namespace tio
 			case Double:
 				double_ = data.double_;
 				break;
-			case Sz:
-				Set(data.AsSz(), true);
+			case String:
+				Set(data.string_, data.stringSize_);
 				break;
-			case Raw:
-				Set(data.AsRaw(), data.GetRawSize(), true);
 			default:
 				Free();
 			}
@@ -224,31 +218,7 @@ namespace tio
 
 		size_t GetSerializedSize() const
 		{
-			size_t needSize;
-			switch(type_)
-			{
-			case TioData::Double:
-				needSize = sizeof(AsDouble());
-				break;
-
-			case TioData::Int:
-				needSize = sizeof(AsInt());
-				break;
-
-			case TioData::Sz:
-				needSize = strlen(AsSz());
-				break;
-
-			case TioData::Raw:
-				return GetRawSize();
-
-			default:
-				//
-				// let AsRaw throw the exception
-				//
-				AsRaw();
-				return 69;
-			}
+			size_t needSize = GetSize();
 
 			needSize += sizeof(unsigned int) * 2; // size + type
 
@@ -266,7 +236,7 @@ namespace tio
 
 			unsigned int* data = (unsigned int*)buffer;
 
-			size_t rawSize = GetRawSize();
+			size_t rawSize = GetSize();
 
 			data[0] = static_cast<unsigned int>(GetDataType());
 			data[1] = static_cast<unsigned int>(rawSize);
@@ -296,13 +266,18 @@ namespace tio
 
 			switch(type)
 			{
-				case TioData::Sz:
-					this->type_ = TioData::Sz;
-					this->sz_ = new char[size + 1];
-					this->bufferOwnership_ = true;
+				case TioData::String:
+					this->type_ = TioData::String;
+					this->stringSize_ = size;
+					this->string_ = new char[size + 1];
 					
-					memcpy((void*)this->sz_, &data[2], size);
-					((char*)this->sz_)[size] = '\0';
+					memcpy((void*)this->string_, &data[2], size);
+					
+					//
+					// We'll keep string zero terminated just in case. But
+					// the final \0 is not considered part of the data
+					//
+					((char*)this->string_)[size] = '\0';
 
 					break;
 
@@ -321,15 +296,6 @@ namespace tio
 
 					this->double_ = *reinterpret_cast<double*>(&data[2]);
 					this->type_ = TioData::Double;
-
-					break;
-
-				case TioData::Raw:
-					this->type_ = TioData::Raw;
-					this->raw_ = new unsigned char[size];
-					this->bufferOwnership_ = true;
-
-					memcpy((void*)this->raw_, &data[2], size);
 
 					break;
 				
@@ -356,8 +322,8 @@ namespace tio
 			}
 
 			return type_ == rs.type_ && 
-				   GetRawSize() == rs.GetRawSize() &&
-				   memcmp(AsRaw(), rs.AsRaw(), GetRawSize()) == 0;
+				   GetSize() == rs.GetSize() &&
+				   memcmp(AsRaw(), rs.AsRaw(), GetSize()) == 0;
 		}
 
 		void Clear()
@@ -370,22 +336,13 @@ namespace tio
 			if(type_ == None)
 				return;
 
-			if(bufferOwnership_)
+			if(type_ == String)
 			{
-				if(type_ == Sz)
-				{
-					delete sz_;
-					sz_ = 0;
-				}
-				else if(type_ == Raw)
-				{
-					delete raw_;
-					sz_ = 0;
-				}
-				
-				bufferOwnership_ = false;
+				delete string_;
+				string_ = NULL;
+				stringSize_ = 0;
 			}
-
+				
 			type_ = None;
 		}
 
@@ -408,43 +365,26 @@ namespace tio
 			double_ = v;
 		}
 
-		void Set(const char* v, bool copy)
+		void Set(const char* v)
 		{
-			Free();
-			if(copy)
-			{
-				size_t len = strlen(v) + 1;
-				sz_ = new char[len];
-				memcpy(const_cast<char*>(sz_), v, len);
-			}
-			else
-				sz_ = v;
-
-			bufferOwnership_ = copy;
-			
-			type_ = Sz;
+			Set(v, strlen(v));
 		}
 
 		void Set(const string& str)
 		{
-			Set(str.c_str(), true);
+			Set(str.c_str(), str.size());
 		}
 
-		void Set(const void* v, size_t size, bool copy)
+		void Set(const void* v, size_t size)
 		{
 			Free();
 
-			if(copy)
-			{
-				raw_ = new unsigned char[size];
-				memcpy((void*)raw_, v, size);
-				bufferOwnership_ = true;
-			}
-			else
-				raw_ = (const unsigned char*)v;
+			string_= new char[size+1];
+			memcpy(string_, v, size);
+			string_[size] = '\0';
 			
-			type_ = Raw;
-			rawSize_ = size;
+			type_ = String;
+			stringSize_ = size;
 		}
 
 		void CheckDataType(Type t) const 
@@ -477,8 +417,8 @@ namespace tio
 
 		const char* AsSz() const 
 		{
-			CheckDataType(Sz);
-			return sz_;
+			CheckDataType(String);
+			return string_;
 		}
 
 		const void* AsRaw() const 
@@ -487,21 +427,19 @@ namespace tio
 			{
 				case Int : return const_cast<const int*>(&int_);
 				case Double : return &double_;
-				case Sz : return sz_;
-				case Raw: return raw_;
+				case String : return string_;
 			}
 
 			throw std::runtime_error("wrong data type");
 		}
 
-		size_t GetRawSize() const
+		size_t GetSize() const
 		{
 			switch(type_)
 			{
 				case Int : return sizeof(int);
 				case Double : return sizeof(double);
-				case Sz : return strlen(sz_);
-				case Raw: return rawSize_;
+				case String : return stringSize_;
 			}
 			
 			throw std::runtime_error("wrong data type");
@@ -517,16 +455,13 @@ namespace tio
 		case TioData::Int:
 			stream << td.AsInt();
 			break;
-		case TioData::Sz:
-			stream << td.AsSz();
-			break;
 		case TioData::Double:
 			stream << td.AsDouble();
 		    break;
-		case TioData::Raw:
+		case TioData::String:
 			stream.rdbuf()->sputn(
 				reinterpret_cast<const char*>(td.AsRaw()), 
-				static_cast<std::streamsize>(td.GetRawSize()));
+				static_cast<std::streamsize>(td.GetSize()));
 		    break;
 		case TioData::None:
 			stream << "**NULL**";
@@ -561,9 +496,8 @@ namespace tio
 		switch(data.GetDataType())
 		{
 		case TioData::Int: return "int";
-		case TioData::Raw: return "raw";
 		case TioData::Double: return "double";
-		case TioData::Sz: return "string";
+		case TioData::String: return "string";
 		}
 
 		return "INTERNAL_ERROR";

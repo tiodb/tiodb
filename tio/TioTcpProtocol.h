@@ -152,21 +152,19 @@ namespace tio
 
 	inline void SetTioData(TioData* tioData, const FieldInfo& fieldInfo, const unsigned char* buffer)
 	{
-		if(fieldInfo.type == "raw")
-			tioData->Set(buffer, fieldInfo.size, true);
-		else
-		{
-			string str(buffer, buffer + fieldInfo.size);
+		string str(buffer, buffer + fieldInfo.size);
 
-			if(fieldInfo.type == "int")
-				tioData->Set(lexical_cast<int>(str));
-			else if(fieldInfo.type == "double")
-				tioData->Set(lexical_cast<double>(str));
-			else if(fieldInfo.type == "string")
-				tioData->Set(str.c_str(), true);
-			else
-				throw std::invalid_argument("invalid data type");
-		}
+		//
+		// TODO: replace lexical_cast with something else, it's very slow
+		//
+		if(fieldInfo.type == "int")
+			tioData->Set(lexical_cast<int>(str));
+		else if(fieldInfo.type == "double")
+			tioData->Set(lexical_cast<double>(str));
+		else if(fieldInfo.type == "string")
+			tioData->Set(str.c_str(), str.size());
+		else
+			throw std::invalid_argument("invalid data type");
 	}
 
 

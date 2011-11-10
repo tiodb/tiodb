@@ -532,8 +532,8 @@ namespace tio
 	{
 		size_t answerSize = str.size();
 
-		char* buffer = new char[answerSize+1];
-		strcpy(buffer, str.c_str());
+		char* buffer = new char[answerSize];
+		memcpy(buffer, str.c_str(), answerSize);
 
         pendingSendSize_ += answerSize;
 

@@ -35,7 +35,7 @@ namespace tio
 			break;
 		case TIO_DATA_TYPE_STRING:
 			stringBuffer = (char*) (&field[1]);
-			ret.Set(string(stringBuffer, stringBuffer + field->data_size));
+			ret.Set(stringBuffer, field->data_size);
 			break;
 		case TIO_DATA_TYPE_INT:
 			ret.Set(pr1_message_field_get_int(field));
@@ -64,7 +64,7 @@ namespace tio
 
 		switch(tiodata.GetDataType())
 		{
-		case TioData::Sz:
+		case TioData::String:
 			fieldType = TIO_DATA_TYPE_STRING;
 			break;
 		case TioData::Int:
@@ -79,7 +79,7 @@ namespace tio
 			return;
 		}
 
-		pr1_message_add_field(message, fieldId, fieldType, tiodata.AsRaw(), tiodata.GetRawSize());
+		pr1_message_add_field(message, fieldId, fieldType, tiodata.AsRaw(), tiodata.GetSize());
 	}
 
 

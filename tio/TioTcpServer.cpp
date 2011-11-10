@@ -375,7 +375,7 @@ namespace tio
 						container->Clear();
 					else if(command == TIO_COMMAND_PROPSET)
 					{
-						if(key.GetDataType() != TioData::Sz	|| value.GetDataType() != TioData::Sz)
+						if(key.GetDataType() != TioData::String	|| value.GetDataType() != TioData::String)
 							throw std::runtime_error("properties key and value should be strings");
 
 						container->SetProperty(key.AsSz(), value.AsSz());
@@ -510,7 +510,7 @@ namespace tio
 		{
 			metaContainers_.sessionLastCommand->Set(
 				lexical_cast<string>(session->GetID()),
-				TioData(cmd.GetSource().c_str(), false),
+				TioData(cmd.GetSource().c_str()),
 				cmd.GetDataBuffer()->GetSize() ? 
 					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :
 					TIONULL);
@@ -592,7 +592,7 @@ namespace tio
 			{	
 				switch(field->GetDataType())
 				{
-				case TioData::Sz:
+				case TioData::String:
 					values << field->AsSz();
 					dataTypeCode = 'S';
 					break;
@@ -1053,7 +1053,7 @@ namespace tio
 				return;
 			}
 
-			if(key.GetDataType() != TioData::Sz)
+			if(key.GetDataType() != TioData::String)
 			{
 				MakeAnswer(error, answer, "invalid data type, must be string");
 				return;
@@ -1728,7 +1728,7 @@ namespace tio
 				return;
 			}
 
-			if(value.GetDataType() != TioData::Sz && value.GetRawSize() < 2)
+			if(value.GetDataType() != TioData::String && value.GetSize() < 2)
 			{
 				MakeAnswer(error, answer, "invalid data");
 				return;
@@ -1781,7 +1781,7 @@ namespace tio
 		//
 		// we support wait and pop just for string keys
 		//
-		if(key.GetDataType() != TioData::Sz)
+		if(key.GetDataType() != TioData::String)
 			return;
 
 		{

@@ -4,7 +4,7 @@
 	If you're looking for the C++ version, pick the tioclient.hpp header
 */
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 	#define _CRT_SECURE_NO_WARNINGS
 	#include <stdio.h>
 	#include <tchar.h>
@@ -75,6 +75,7 @@ struct TIO_DATA
 	unsigned int data_type;
 	int int_;
 	char* string_;
+	unsigned int string_size_;
 	double double_;
 };
 
@@ -92,8 +93,18 @@ struct TIO_CONTAINER;
 void tiodata_init(struct TIO_DATA* tiodata);
 unsigned int tiodata_get_type(struct TIO_DATA* tiodata);
 void tiodata_set_as_none(struct TIO_DATA* tiodata);
-char* tiodata_set_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size);
+
+//
+// It works the same way MFC (argh) string. You ask for the buffer to
+// write and must call release() after using so it can set the size of the
+// string accordingly. If you don't do this, the string will have mim_size bytes
+// and will contain the garbage on unused bytes
+//
+char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size);
+void  tiodata_string_release_buffer(struct TIO_DATA* tiodata);
+
 void tiodata_set_string(struct TIO_DATA* tiodata, const char* value);
+void tiodata_set_string_and_size(struct TIO_DATA* tiodata, const void* buffer, unsigned int len);
 void tiodata_set_int(struct TIO_DATA* tiodata, int value);
 void tiodata_set_double(struct TIO_DATA* tiodata, double value);
 

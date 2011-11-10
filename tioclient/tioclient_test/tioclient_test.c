@@ -120,6 +120,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	int a;
 	int result;
 	int TEST_COUNT = 1 * 1000;
+	const char binary_data[] = "\r\na\0b\0\r\n";
 
 	tiodata_init(&search_key);
 	tiodata_init(&key);
@@ -129,11 +130,27 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	//
 	// create test container, add items
 	//
-	result = tio_create(connection, "test_list", "volatile_list", &test_container);
+	result = tio_create(connection, "test_list", "persistent_list", &test_container);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
 
 	result = tio_container_subscribe(test_container, NULL, &test_event_callback, NULL);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	//
+	// Add binary data
+	//
+	tiodata_set_string_and_size(&value, binary_data, sizeof(binary_data));
+	result = tio_container_push_back(test_container, NULL, &value, NULL);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	tiodata_set_int(&search_key, -1);
+	tiodata_set_as_none(&value);
+
+	result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	assert(memcmp(value.string_, binary_data, sizeof(binary_data)) == 0);
+
 
 	result = tio_container_clear(test_container);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
@@ -249,13 +266,21 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	result = tio_container_subscribe(test_container, NULL, &test_event_callback, NULL);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
 
+	//
+	// Add binary data
+	//
+	tiodata_set_string(&key, "binary");
+	tiodata_set_string_and_size(&value, "a\0b\0", 4);
+	tio_container_set(test_container, &key, &value, NULL);
+
 	result = tio_container_clear(test_container);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
 
 	for(a = 0 ; a < 50 ; a++)
 	{
-		buffer = tiodata_set_string_get_buffer(&key, 64);
+		buffer = tiodata_string_get_buffer(&key, 64);
 		sprintf(buffer,"%d", a);
+		tiodata_string_release_buffer(&key);
 
 		tiodata_set_int(&value, a);
 		result = tio_container_set(test_container, &key, &value, NULL);
@@ -317,7 +342,7 @@ int TEST_map(struct TIO_CONNECTION* connection)
 
 	for(a = 0 ; a < 50 ; a++)
 	{
-		buffer = tiodata_set_string_get_buffer(&search_key, 64);
+		buffer = tiodata_string_get_buffer(&search_key, 64);
 		sprintf(buffer, "%d", a);
 
 		result = tio_container_get(test_container, &search_key, &key, &value, &metadata);

@@ -117,7 +117,7 @@ public:
 
 		switch(v.GetDataType())
 		{
-		case TioData::Sz:
+		case TioData::String:
 			tiodata_set_string(&c_, v.AsSz());
 			break;
 		case TioData::Int:
@@ -170,7 +170,7 @@ public:
 		{
 			switch(cpp_.GetDataType())
 			{
-			case TioData::Sz:
+			case TioData::String:
 				tiodata_set_string(c_, cpp_.AsSz());
 				break;
 			case TioData::Int:
@@ -524,6 +524,11 @@ protected:
 
 		return 0;
 	}
+
+	virtual bool connected()
+	{
+		return true;
+	}
 };
 
 class PluginThread
@@ -607,7 +612,7 @@ int main(int argc, char* argv[])
 {
 	namespace po = boost::program_options;
 
-	cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
+	//cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
 
 	try
 	{
@@ -672,7 +677,7 @@ int main(int argc, char* argv[])
 		}
 
 		{
-			cout << "Starting Tio Infrastructure... " << endl;
+			cout << "Starting infrastructure... " << endl;
 			tio::ContainerManager containerManager;
 			LocalContainerManager localContainerManager(containerManager);
 			

@@ -489,32 +489,64 @@ void tiodata_set_as_none(struct TIO_DATA* tiodata)
 	{
 		free(tiodata->string_);
 		tiodata->string_ = NULL;
+		tiodata->string_size_ = 0;
 	}
 
 	tiodata->data_type = TIO_DATA_TYPE_NONE;
 }
 
-char* tiodata_set_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
+
+char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 {
-	if(tiodata->data_type == TIO_DATA_TYPE_STRING && strlen(tiodata->string_) >= min_size)
+	if(tiodata->data_type == TIO_DATA_TYPE_STRING && tiodata->string_size_ >= min_size)
 		return tiodata->string_;
 
 	tiodata_set_as_none(tiodata);
 	tiodata->data_type = TIO_DATA_TYPE_STRING;
-	tiodata->string_ = (char*)malloc(min_size + 1);
+	tiodata->string_size_ = min_size + 1;
+	tiodata->string_ = (char*)malloc(tiodata->string_size_);
 
 	return tiodata->string_;
 }
 
+void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
+{
+	unsigned int a;
+	
+	if(tiodata->data_type != TIO_DATA_TYPE_STRING)
+		return;
+
+	for(a = 0 ; a < tiodata->string_size_ ; a++) 
+	{
+		if(tiodata->string_[a] == '\0')
+		{
+			tiodata->string_size_ = a;
+			break;
+		}
+	}
+}
+
+
 void tiodata_set_string(struct TIO_DATA* tiodata, const char* value)
+{
+	tiodata_set_string_and_size(tiodata, value, strlen(value));
+}
+
+void tiodata_set_string_and_size(struct TIO_DATA* tiodata, const void* buffer, unsigned int len)
 {
 	tiodata_set_as_none(tiodata);
 
 	tiodata->data_type = TIO_DATA_TYPE_STRING;
 
-	tiodata->string_ = (char*)malloc(strlen(value) + 1);
+	tiodata->string_size_ = len;
+	tiodata->string_ = (char*)malloc(tiodata->string_size_ + 1);
+	memcpy(tiodata->string_, buffer, tiodata->string_size_);
 
-	strcpy(tiodata->string_, value);	
+	//
+	// Tio string can have a \0 inside. But we're going to add a \0 to
+	// the end, just in case
+	//
+	tiodata->string_[tiodata->string_size_] = '\0';
 }
 
 void tiodata_set_int(struct TIO_DATA* tiodata, int value)
@@ -547,14 +579,14 @@ void tiodata_copy(const struct TIO_DATA* source, struct TIO_DATA* destination)
 		*destination = *source;
 		break;
 	case TIO_DATA_TYPE_STRING:
-		tiodata_set_string(destination, source->string_);
+		tiodata_set_string_and_size(destination, source->string_, source->string_size_);
 		break;
 	};
 }
 
 void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 {
-	char buffer[64]; // 64 bytes will ALWAYS be enough
+	char buffer[64]; // 64 bytes will ALWAYS be enough. I'm sure.
 
 	if(!tiodata)
 		return;
@@ -671,7 +703,7 @@ void tio_data_add_to_pr1_message(struct PR1_MESSAGE* pr1_message, unsigned short
 	case TIO_DATA_TYPE_STRING:
 		message_field_type = MESSAGE_FIELD_TYPE_STRING;
 		buffer = tio_data->string_;
-		data_size = strlen(tio_data->string_);
+		data_size = tio_data->string_size_;
 		break;
 	case TIO_DATA_TYPE_INT:
 		message_field_type = MESSAGE_FIELD_TYPE_INT;
@@ -695,8 +727,6 @@ void tio_data_add_to_pr1_message(struct PR1_MESSAGE* pr1_message, unsigned short
 
 void pr1_message_field_to_tio_data(const struct PR1_MESSAGE_FIELD_HEADER* field, struct TIO_DATA* tiodata)
 {
-	char* string_buffer;
-
 	if(!tiodata)
 		return;
 
@@ -710,9 +740,7 @@ void pr1_message_field_to_tio_data(const struct PR1_MESSAGE_FIELD_HEADER* field,
 	case MESSAGE_FIELD_TYPE_NONE:
 		break;
 	case TIO_DATA_TYPE_STRING:
-		string_buffer = tiodata_set_string_get_buffer(tiodata, field->data_size + 1);
-		memcpy(string_buffer, &field[1], field->data_size);
-		string_buffer[field->data_size] = '\0';
+		tiodata_set_string_and_size(tiodata, &field[1], field->data_size);
 		break;
 	case TIO_DATA_TYPE_INT:
 		tiodata_set_int(tiodata, pr1_message_field_get_int(field));

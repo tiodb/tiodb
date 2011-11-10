@@ -2,20 +2,21 @@ cmake_minimum_required(VERSION 2.6)
 
 PROJECT(tio)
 
-SET(TIO_PYTHON_PLUGIN_SUPPORT 0)
+SET(TIO_PYTHON_PLUGIN_SUPPORT 1)
 
 ADD_DEFINITIONS(-DTIO_PYTHON_PLUGIN_SUPPORT=${TIO_PYTHON_PLUGIN_SUPPORT})
 
 IF(${WIN32})
-    SET(BOOST_INCLUDEDIR x:/boost/boost_1_47)
-	SET(BOOST_LIBDIR x:/boost/boost_1_47/lib)
+	SET(BOOST_VERSION 1_47)
+    SET(BOOST_INCLUDEDIR x:/boost/boost_${BOOST_VERSION})
+	SET(BOOST_LIBDIR x:/boost/boost_${BOOST_VERSION}/lib)
 
 	IF(${TIO_PYTHON_PLUGIN_SUPPORT})
 		SET(PYTHON_INCLUDEDIR
-				D:/temp/Python-2.7/Include
-				D:/temp/Python-2.7/PC)
+				c:/Python-2.7.2/Include
+				c:/Python-2.7.2/PC)
    
-		SET(PYTHON_LIBDIR D:/temp/Python-2.7/PCbuild)
+		SET(PYTHON_LIBDIR c:/Python-2.7.2/PCbuild)
 	ENDIF(${TIO_PYTHON_PLUGIN_SUPPORT})
 		
 	#

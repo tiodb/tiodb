@@ -1,10 +1,12 @@
 #pragma once
 #include "tioclient.h"
 #include <string>
+#include <sstream>
 
 namespace tio
 {
 	using std::string;
+	using std::stringstream;
 	using std::runtime_error;
 
 	inline void ToTioData(int v, TIO_DATA* tiodata)
@@ -26,7 +28,7 @@ namespace tio
 	inline void ToTioData(const string& v, TIO_DATA* tiodata)
 	{
 		tiodata_set_as_none(tiodata);
-		tiodata_set_string(tiodata, v.c_str());
+		tiodata_set_string_and_size(tiodata, v.c_str(), v.size());
 	}
 
 	inline void FromTioData(const TIO_DATA* tiodata, int* value)
@@ -51,7 +53,11 @@ namespace tio
 		// TODO: create a typed exception an fill it accordingly
 		// 
 		if(result < 0)
-			throw std::runtime_error("error");
+		{
+			stringstream str;
+			str << "client error " << result;
+			throw std::runtime_error(str.str());
+		}
 	}
 
 	template<typename TValue>
@@ -85,6 +91,12 @@ namespace tio
 		TValue value()
 		{
 			TValue v;
+			
+			//
+			// If you got an "could not convert "error on this line, you need to provide
+			// a specialization of the FromTioData to you data type. Check other examples
+			// on this file
+			//
 			FromTioData(&tiodata_, &v);
 			return v;
 		}
@@ -111,6 +123,7 @@ namespace tio
 		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)=0;
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)=0;
 		virtual int container_unsubscribe(void* handle)=0;
+		virtual bool connected()=0;
 	};
 
 
@@ -233,6 +246,12 @@ namespace tio
 			connection_ = NULL;
 		}
 
+		bool tio::IContainerManager::connected()
+		{
+			return !!cnptr();
+		}
+
+
 		TIO_CONNECTION* cnptr()
 		{
 			return connection_;
@@ -288,8 +307,13 @@ namespace tio
 	namespace containers
 	{
 		template<typename TKey, typename TValue, typename TMetadata, typename SelfT>
-		class TioContainerImpl
+		class TioContainerImpl 
 		{
+		private: 
+			// non copyable
+			TioContainerImpl(const TioContainerImpl&){}
+			TioContainerImpl& operator=(const TioContainerImpl&){return *this;}
+
 		public:
 			typedef TioContainerImpl<TKey, TValue, TMetadata, SelfT> this_type;
 			typedef TKey key_type;
@@ -297,6 +321,7 @@ namespace tio
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
 			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
+
 		protected:
 			void* container_;
 			std::string name_;
@@ -306,7 +331,7 @@ namespace tio
 			IContainerManager* container_manager()
 			{
 				if(!containerManager_)
-					throw std::runtime_error("no container manager");
+					throw std::runtime_error("container closed");
 
 				return containerManager_;
 			}
@@ -327,7 +352,7 @@ namespace tio
 
 			bool connected()
 			{
-				return !!containerManager_;
+				return !!containerManager_ && containerManager_->connected() && container_;
 			}
 
 			TIO_CONTAINER* handle()
@@ -340,7 +365,7 @@ namespace tio
 			{
 				int result;
 
-				containerManager_ = cn;
+				containerManager_ = cn->container_manager();
 
 				result = container_manager()->open(name.c_str(), NULL, &container_);
 
@@ -353,6 +378,8 @@ namespace tio
 			void create(TConnection* cn, const string& name, const string& type)
 			{
 				int result;
+
+				close();
 
 				containerManager_ = cn->container_manager();
 
@@ -589,8 +616,12 @@ namespace tio
 		template<typename TKey, typename TValue, typename TMetadata=std::string>
 		class map : public TioContainerImpl<TKey, TValue, TMetadata, map<TKey, TValue, TMetadata> >
 		{
+		private:
+			map(const map<TKey,TValue, TMetadata> &){}
+			map<TKey,TValue, TMetadata>& operator=(const map<TKey,TValue, TMetadata> &){return *this;}
 		public:
 			typedef map<TKey, TValue, TMetadata> this_type;
+			map(){}
 		};
 	}
 }
