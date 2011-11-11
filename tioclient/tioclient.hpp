@@ -246,7 +246,7 @@ namespace tio
 			connection_ = NULL;
 		}
 
-		bool tio::IContainerManager::connected()
+		bool connected()
 		{
 			return !!cnptr();
 		}
