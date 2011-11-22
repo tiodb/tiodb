@@ -481,7 +481,13 @@ namespace tio
 		{
 			try
 			{
-				boost::python::object pluginModule = load_source(boost::filesystem::path(pluginPath).stem().string(), pluginPath);
+				boost::python::object pluginModule = 
+					load_source(
+						boost::filesystem::path(pluginPath).stem()
+#if(BOOST_VERSION >= 104700)
+							.string()
+#endif
+					, pluginPath);
 				pluginModule.attr("TioPluginMain")(g_pythonContainerManager, pythonParameters);
 			}
 			catch(boost::python::error_already_set&)

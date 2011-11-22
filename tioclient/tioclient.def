@@ -39,3 +39,5 @@ EXPORTS
 	tio_container_query
 	tio_container_subscribe
 	tio_container_unsubscribe
+
+	tio_container_wait_and_pop_next

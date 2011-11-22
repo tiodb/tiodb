@@ -84,6 +84,19 @@ namespace tio
 
 		type = ResolveAlias(type);
 
+		OpenContainersMap::const_iterator i = openContainers_.find(name);
+
+		if(i != openContainers_.end() && !i->second.expired())
+		{
+			shared_ptr<ITioContainer> container = i->second.lock();
+			
+			// check if user didn't ask for wrong type
+			if(op == create && container->GetType() != type)
+				throw std::runtime_error("invalid container type");
+
+			return container;
+		}
+
 		shared_ptr<ITioStorage> storage;
 		shared_ptr<ITioPropertyMap> propertyMap;
 
@@ -100,9 +113,6 @@ namespace tio
 		{
 			if(type.empty())
 			{
-				if(!meta_containers_)
-					throw std::runtime_error("can't find the type for this container");
-
 				TioData value;
 				meta_containers_->GetRecord(name, NULL, &value);
 				type = value.AsSz();
@@ -112,8 +122,11 @@ namespace tio
 
 			pair_assign(storage, propertyMap) = storageManager->OpenStorage(type, name);
 		}
+		shared_ptr<ITioContainer> container(new Container(storage, propertyMap));
 
-		return shared_ptr<ITioContainer>(new Container(storage, propertyMap));
+		openContainers_[name] = container;
+
+		return container;
 	}
 
 	void ContainerManager::DeleteContainer(const string& type, const string& name)
@@ -157,6 +170,9 @@ namespace tio
 	string ContainerManager::ResolveAlias(const string& type)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
+
+		if(type.empty())
+			return type;
 
 		AliasesMap::const_iterator iAlias = aliases_.find(type);
 

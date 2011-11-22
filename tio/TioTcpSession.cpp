@@ -50,7 +50,8 @@ namespace tio
 		server_(server),
 		lastHandle_(0),
         pendingSendSize_(0),
-		id_(id)
+		id_(id),
+		binaryProtocol_(false)
 	{
 		return;
 	}
@@ -162,6 +163,31 @@ namespace tio
 		ReadBinaryProtocolMessage();
 	}
 
+	
+	void TioTcpSession::BinaryWaitAndPopNext(unsigned int handle)
+	{
+		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
+
+		//
+		// already subscribed
+		//
+		if(poppers_.find(handle) != poppers_.end())
+			throw std::runtime_error("already subscribed");
+
+		unsigned int popId;
+		
+		popId = container->WaitAndPopNext(boost::bind(&TioTcpSession::OnPopEvent, shared_from_this(), handle, _1, _2, _3, _4));
+
+		//
+		// id is zero id the pop is not pending
+		//
+		if(popId)
+			poppers_[handle] = popId;
+
+		return;
+
+	}
+
 	void TioTcpSession::OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err)
 	{
 		if(CheckError(err))
@@ -248,6 +274,7 @@ namespace tio
 			if(parameters.size() == 1 && parameters[0] == "binary")
 			{
 				SendAnswer("going binary");
+				binaryProtocol_ = true;
 				ReadBinaryProtocolMessage();
 				return;
 			}
@@ -395,6 +422,12 @@ namespace tio
 
 		SendString(answer.str());
 	}
+
+	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		SendBinaryEvent(handle, key, value, metadata, eventName);
+	}
+
 
 	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
@@ -833,6 +866,8 @@ namespace tio
 							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
 
 						toRemove.push_back(handle);
+
+						continue;
 					}
 				}
 				else
@@ -918,6 +953,8 @@ namespace tio
 			return TIO_COMMAND_SET;
 		else if(eventName == "insert")
 			return TIO_COMMAND_INSERT;
+		else if(eventName == "wnp_next")
+			return TIO_COMMAND_WAIT_AND_POP_NEXT;
 
 		return 0;
 	}

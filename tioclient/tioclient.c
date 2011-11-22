@@ -1092,7 +1092,8 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 	(*container)->connection = connection;
 	(*container)->handle = handle;
 	(*container)->event_callback = NULL;
-	(*container)->cookie = NULL;
+	(*container)->wait_and_pop_next_callback = NULL;
+	(*container)->subscription_cookie = NULL;
 
 	//
 	// TODO: I'm indexing by handle because I really don't want to
@@ -1197,8 +1198,16 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_VALUE), &value);
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_METADATA), &metadata);
 
-			event_callback = connection->containers[handle]->event_callback;
-			cookie = connection->containers[handle]->cookie;
+			if(event_code == TIO_COMMAND_WAIT_AND_POP_NEXT)
+			{
+				event_callback = connection->containers[handle]->wait_and_pop_next_callback;
+				cookie = connection->containers[handle]->wait_and_pop_next_cookie;
+			}
+			else
+			{
+				event_callback = connection->containers[handle]->event_callback;
+				cookie = connection->containers[handle]->subscription_cookie;
+			}
 
 			if(event_callback)
 				event_callback(cookie, handle, event_code, &key, &value, &metadata);
@@ -1483,7 +1492,20 @@ int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* st
 	if(TIO_FAILED(result)) return result;
 
 	container->event_callback = event_callback;
-	container->cookie = cookie;
+	container->subscription_cookie = cookie;
+
+	return TIO_SUCCESS;
+}
+
+int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie)
+{
+	int result;
+
+	container->wait_and_pop_next_callback = event_callback;
+	container->wait_and_pop_next_cookie = cookie;
+
+	result = tio_container_input_command(container, TIO_COMMAND_WAIT_AND_POP_NEXT, NULL, NULL, NULL);
+	if(TIO_FAILED(result)) return result;
 
 	return TIO_SUCCESS;
 }
@@ -1494,7 +1516,7 @@ int tio_container_unsubscribe(struct TIO_CONTAINER* container)
 	int result;
 
 	container->event_callback = NULL;
-	container->cookie = NULL;
+	container->subscription_cookie = NULL;
 
 	result = tio_container_input_command(container, TIO_COMMAND_UNSUBSCRIBE, NULL, NULL, NULL);
 	if(TIO_FAILED(result)) return result;

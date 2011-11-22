@@ -220,7 +220,7 @@ public:
 	{
 	}
 
-	IContainerManager* container_manager()
+	virtual IContainerManager* container_manager()
 	{
 		return this;
 	}

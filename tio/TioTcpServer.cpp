@@ -463,6 +463,24 @@ namespace tio
 				}
 				break;
 
+				case TIO_COMMAND_WAIT_AND_POP_NEXT:
+				{
+					bool b;
+					int handle;
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle);
+
+					if(!b)
+					{
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						break;
+					}
+					
+					session->BinaryWaitAndPopNext(handle);
+
+					session->SendBinaryAnswer();
+				}
+				break;
+
 			default:
 				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
 				return;
@@ -999,7 +1017,7 @@ namespace tio
 		//
 		// We checked container for records before, but now we're multithreaded baby, 
 		// maybe the records are gone by now.
-		// /
+		//
 		try
 		{
 			container->PopFront(&key, &value, &metadata);
@@ -1775,7 +1793,7 @@ namespace tio
 		return;
 	}	
 
-	void TioTcpServer::HandleWaitAndPop(shared_ptr<ITioContainer> container, 
+	void TioTcpServer::HandleKeyValueWaitAndPop(shared_ptr<ITioContainer> container, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		//
@@ -1841,6 +1859,57 @@ namespace tio
 			}
 		}
 	}
+
+	void TioTcpServer::HandlePushBackWaitAndPop(
+		shared_ptr<ITioContainer> container, 
+		const TioData& key, 
+		const TioData& value, 
+		const TioData& metadata)
+	{
+		//
+		// TODO: BIGLOCK
+		// 
+		tio::recursive_mutex::scoped_lock lock(nextPoppersMutex_);
+
+		NextPoppersMap::iterator i = nextPoppers_.find(GetFullQualifiedName(container));
+
+		//
+		// anyone waiting to pop?
+		//
+		if(i == nextPoppers_.end() || i->second.empty())
+			return;
+		
+		deque<NextPopperInfo>& q = i->second;
+
+		//
+		// find first popper still alive
+		//
+		bool pop = false;
+
+		while(!q.empty())
+		{
+			NextPopperInfo popper = q.front(); // not a reference because we'll pop right now
+			q.pop_front();
+
+			if(popper.session.expired())
+				continue;
+
+			stringstream eventStream;
+
+			MakeEventAnswer("wnp_next", popper.handle, key, value, metadata, eventStream);
+
+			popper.session.lock()->SendAnswer(eventStream);
+
+			pop = true;
+			break;
+		}
+
+		if(q.empty())
+			nextPoppers_.erase(i);
+
+		if(pop)
+			container->PopFront(NULL, NULL, NULL);
+	}
 		
 
 	void TioTcpServer::OnAnyDataCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
@@ -1870,13 +1939,12 @@ namespace tio
 				return;
 			}
 		
-			
 			if(cmd.GetCommand() == "insert")
 			{
 				container->Insert(key, value, metadata);
 				MakeAnswer(success, answer);
 
-				HandleWaitAndPop(container, key, value, metadata);
+				HandleKeyValueWaitAndPop(container, key, value, metadata);
 
 				//
 				// we already sent the answer, so, time to return
@@ -1890,7 +1958,7 @@ namespace tio
 
 				MakeAnswer(success, answer);
 				
-				HandleWaitAndPop(container, key, value, metadata);
+				HandleKeyValueWaitAndPop(container, key, value, metadata);
 
 				//
 				// we already sent the answer, so, time to return
@@ -1922,53 +1990,7 @@ namespace tio
 
 				MakeAnswer(success, answer);
 
-				{
-					//
-					// TODO: BIGLOCK
-					// 
-					tio::recursive_mutex::scoped_lock lock(nextPoppersMutex_);
-					//
-					// support for "wait and pop next" (wnp_next)
-					//
-					NextPoppersMap::iterator i = nextPoppers_.find(GetFullQualifiedName(container));
-
-					//
-					// anyone waiting to pop?
-					//
-					if(i != nextPoppers_.end() && !i->second.empty())
-					{
-						deque<NextPopperInfo>& q = i->second;
-
-						//
-						// find first popper still alive
-						//
-						bool pop = false;
-
-						while(!q.empty())
-						{
-							NextPopperInfo popper = q.front(); // not a reference because we'll pop right now
-							q.pop_front();
-
-							if(popper.session.expired())
-								continue;
-
-							stringstream eventStream;
-						
-							MakeEventAnswer("wnp_next", popper.handle, key, value, metadata, eventStream);
-
-							popper.session.lock()->SendAnswer(eventStream);
-
-							pop = true;
-							break;
-						}
-
-						if(q.empty())
-							nextPoppers_.erase(i);
-
-						if(pop)
-							container->PopFront(&key, &value, &metadata);
-					}
-				}
+				HandlePushBackWaitAndPop(container, key, value, metadata);
 
 				//
 				// we already sent the answer, so, time to return

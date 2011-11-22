@@ -334,6 +334,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		unsigned int lastHandle_;
         unsigned int pendingSendSize_;
 
+		bool binaryProtocol_;
+
         std::queue<std::string> pendingSendData_;
 		
 		std::vector< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
@@ -362,6 +364,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		typedef std::map<unsigned int, shared_ptr<SUBSCRIPTION_INFO> > SubscriptionMap;
 		SubscriptionMap subscriptions_;
 		SubscriptionMap pendingSnapshots_;
+
+		typedef std::map<unsigned int, unsigned int > WaitAndPopNextMap;
+		WaitAndPopNextMap poppers_;
 
 		vector<string> tokens_;
 
@@ -422,7 +427,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnBinaryMessageSent(const error_code& err, size_t sent)
 		{
 			if(CheckError(err))
+			{
+				std::cerr << "ERROR sending binary data: " << err << std::endl;
 				return;
+			}
 			
 			//
 			// remove sent data from pending vector
@@ -508,6 +516,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void CloseContainerHandle(unsigned int handle);
 
 		void OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
+		void OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
 		void SendEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
 
@@ -532,7 +541,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		}
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
 		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
-
+		void BinaryWaitAndPopNext(unsigned int handle);
 		bool commandRunning_;
 	};		
 }

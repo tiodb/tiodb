@@ -15,3 +15,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
    limitations under the License.
 */
 #include "pch.h"
+
+#ifdef BOOST_MSVC
+#pragma message("using Boost version " BOOST_LIB_VERSION)
+#endif

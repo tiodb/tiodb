@@ -44,7 +44,7 @@ namespace tio
 		if(tiodata->data_type != TIO_DATA_TYPE_STRING)
 			throw runtime_error("wrong data type");
 
-		*value = tiodata->string_;
+		value->assign(tiodata->string_, tiodata->string_size_);
 	}
 
 	inline void ThrowOnTioClientError(int result)
@@ -124,6 +124,8 @@ namespace tio
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)=0;
 		virtual int container_unsubscribe(void* handle)=0;
 		virtual bool connected()=0;
+
+		virtual IContainerManager* container_manager()=0;
 	};
 
 
@@ -133,6 +135,7 @@ namespace tio
 		TIO_CONNECTION* connection_;
 
 	protected:
+
 		virtual int create(const char* name, const char* type, void** handle)
 		{
 			return tio_create(connection_, name, type, (TIO_CONTAINER**)handle);
@@ -229,6 +232,11 @@ namespace tio
 			tio_initialize();
 		}
 
+		virtual IContainerManager* container_manager()
+		{
+			return this;
+		}
+
 		void Connect(const string& host, short port)
 		{
 			int result;
@@ -257,10 +265,6 @@ namespace tio
 			return connection_;
 		}
 
-		IContainerManager* container_manager()
-		{
-			return this;
-		}
 	};
 
 	template<typename TContainer, typename TKey, typename TValue>
@@ -461,6 +465,11 @@ namespace tio
 				ThrowOnTioClientError(result);
 
 				return value.value();
+			}
+
+			const string& name()
+			{
+				return name_;
 			}
 
 			void insert(const key_type& key, const value_type& value)

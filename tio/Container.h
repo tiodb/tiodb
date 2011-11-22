@@ -108,10 +108,14 @@ namespace tio
 	private:
 		Type type_;
 		
-		char* string_;
+		union 
+		{
+			char* string_;
+			int int_;
+			double double_;
+		};
+
 		size_t stringSize_;
-		int int_;
-		double double_;
 	public:
 
 		TioData()
@@ -663,6 +667,9 @@ namespace tio
 		virtual void Unsubscribe(unsigned int cookie) = 0;
 
 		virtual string GetType() = 0;
+
+		virtual int WaitAndPopNext(EventSink sink) = 0;
+		virtual void CancelWaitAndPopNext(int id) = 0;
 	};
 
 	//
@@ -710,6 +717,31 @@ namespace tio
 		shared_ptr<ITioStorage> storage_;
 		tio::recursive_mutex mutex_;
 
+		unsigned int lastPopperId_;
+
+		struct PopperInfo
+		{
+			PopperInfo(){}
+			PopperInfo(EventSink sink, unsigned int id) : sink(sink), id(id) {}
+
+			EventSink sink;
+			unsigned int id;
+		};
+
+		struct FindPopperInfoById
+		{
+			FindPopperInfoById(unsigned int id): id(id) {}
+			
+			bool operator()(const PopperInfo& info) const
+			{
+				return this->id == info.id;
+			}
+
+			unsigned int id;
+		};
+
+		std::list<PopperInfo> poppers_;
+
 		inline size_t GetRealRecordNumber(int recNumber)
 		{
 			if(recNumber >= 0)
@@ -731,7 +763,8 @@ namespace tio
 
 		Container(shared_ptr<ITioStorage> storage, shared_ptr<ITioPropertyMap> propertyMap) :
 			storage_(storage),
-			propertyMap_(propertyMap)
+			propertyMap_(propertyMap),
+			lastPopperId_(0)
 		{}
 		
 		~Container()
@@ -775,17 +808,57 @@ namespace tio
 			storage_->PopFront(key, value, metadata);
 		}
 
+		void HandleWaitAndPopNext()
+		{
+			//
+			// We are assuming the lock is already held
+			// since it's (supposed to be) a private function
+			//
+
+			if(poppers_.empty())
+				return;
+
+			TioData key, value, metadata;
+
+			storage_->GetRecord(TioData(0), &key, &value, &metadata);
+
+			do
+			{
+				PopperInfo info = poppers_.front();
+				poppers_.pop_front();
+
+				//
+				// If the sink throws an exception, we'll
+				// try the next popper
+				//
+				try
+				{
+					info.sink("wnp_next", key, value, metadata);
+					storage_->PopFront(NULL, NULL, NULL);
+					break;
+				}
+				catch(std::exception&)
+				{
+					// nada, we'll just return to the beginning
+					// of the loop
+				}
+			
+			} while (!poppers_.empty());
+		}
+
 				
 		virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		{
 			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PushBack(key, value, metadata);
+			HandleWaitAndPopNext();
 		}
 
 		virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 		{
 			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->PushFront(key, value, metadata);
+			HandleWaitAndPopNext();
 		}
 
 		
@@ -846,6 +919,34 @@ namespace tio
 		{
 			tio::recursive_mutex::scoped_lock lock(mutex_);
 			storage_->Unsubscribe(cookie);
+		}
+
+		virtual int WaitAndPopNext(EventSink sink)
+		{
+			tio::recursive_mutex::scoped_lock lock(mutex_);
+
+			if(storage_->GetRecordCount() > 0)
+			{
+				TioData key, value, metadata;
+				
+				storage_->GetRecord(TioData(0), &key, &value, &metadata);
+				
+				sink("wnp_next", key, value, metadata);
+
+				storage_->PopFront(NULL, NULL, NULL);
+
+				return 0;
+			}
+			else
+			{
+				poppers_.push_back(PopperInfo(sink, ++lastPopperId_));
+				return lastPopperId_;
+			}
+		}
+
+		virtual void CancelWaitAndPopNext(int id)
+		{
+			poppers_.remove_if(FindPopperInfoById(id));
 		}
 	};
 

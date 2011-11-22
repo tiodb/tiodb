@@ -64,7 +64,9 @@ struct TIO_CONTAINER
 {
 	unsigned int handle;
 	event_callback_t event_callback;
-	void* cookie;
+	event_callback_t wait_and_pop_next_callback;
+	void* subscription_cookie;
+	void* wait_and_pop_next_cookie;
 	struct TIO_CONNECTION* connection;
 };
 

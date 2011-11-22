@@ -48,6 +48,7 @@ const char* event_code_to_string(unsigned int event_code)
 		case TIO_COMMAND_SUBSCRIBE: return "TIO_COMMAND_SUBSCRIBE(0x1E)";
 		case TIO_COMMAND_UNSUBSCRIBE: return "TIO_COMMAND_UNSUBSCRIBE(0x1F)";
 		case TIO_COMMAND_QUERY: return "TIO_COMMAND_QUERY(0x20)";
+		case TIO_COMMAND_WAIT_AND_POP_NEXT: return "TIO_COMMAND_WAIT_AND_POP_NEXT(0x21)";
 		default: return "UNKNOWN_COMMAND";
 	}
 }
@@ -113,6 +114,81 @@ clean_up_and_return:
 	return result;
 }
 
+int TEST_wait_and_pop(const char* host, unsigned short port)
+{
+	//static const unsigned int TEST_COUNT = 200; FUCK!!!!!!
+	
+	#define WAIT_AND_POP_TEST_COUNT 30
+
+	struct TIO_CONNECTION* connections[WAIT_AND_POP_TEST_COUNT];
+	struct TIO_CONTAINER* test_containers[WAIT_AND_POP_TEST_COUNT];
+	struct TIO_DATA value;
+
+	unsigned int a, b;
+	int result;
+
+	memset(connections, 0, sizeof(connections));
+	memset(test_containers, 0, sizeof(test_containers));
+
+	tiodata_init(&value);
+
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		result = tio_connect(host, port, &connections[a]);
+		if(TIO_FAILED(result)) goto clean_up_and_return;
+	}
+
+	//
+	// create test container, add items
+	//
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		result = tio_create(connections[a], "test_list", "volatile_list", &test_containers[a]);
+		if(TIO_FAILED(result)) goto clean_up_and_return;
+
+		result = tio_container_clear(test_containers[a]);
+		if(TIO_FAILED(result)) goto clean_up_and_return;
+	}
+
+	//result = tio_container_subscribe(test_containers[0], NULL, &test_event_callback, NULL);
+	//if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		result = tio_container_wait_and_pop_next(test_containers[a], &test_event_callback, (void*)a);
+		if(TIO_FAILED(result)) goto clean_up_and_return;
+	}
+
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		tiodata_set_int(&value, a);
+		result = tio_container_push_back(test_containers[WAIT_AND_POP_TEST_COUNT - a - 1], NULL, &value, NULL);
+		if(TIO_FAILED(result)) goto clean_up_and_return;
+	}
+
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		tio_container_get_count(test_containers[a], &b);
+		tio_dispatch_pending_events(connections[b], 42); 
+	}
+
+	result = 0;
+
+clean_up_and_return:
+	tiodata_set_as_none(&value);
+
+	
+
+	for(a = 0 ; a < WAIT_AND_POP_TEST_COUNT ; a++)
+	{
+		tio_close(test_containers[a]);
+		tio_disconnect(connections[a]);
+	}
+
+	return result;
+
+}
+
 int TEST_list(struct TIO_CONNECTION* connection)
 {
 	struct TIO_CONTAINER* test_container = NULL;
@@ -130,7 +206,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	//
 	// create test container, add items
 	//
-	result = tio_create(connection, "test_list", "persistent_list", &test_container);
+	result = tio_create(connection, "test_list", "volatile_list", &test_container);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
 
 	result = tio_container_subscribe(test_container, NULL, &test_event_callback, NULL);
@@ -151,7 +227,35 @@ int TEST_list(struct TIO_CONNECTION* connection)
 
 	assert(memcmp(value.string_, binary_data, sizeof(binary_data)) == 0);
 
+	result = tio_container_clear(test_container);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
 
+	//
+	// Wait And Pop
+	//
+	tiodata_set_int(&value, 42);
+	
+	result = tio_container_push_back(test_container, NULL, &value, NULL);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	// should pop
+	tio_container_wait_and_pop_next(test_container,  &test_event_callback, 0);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	tio_dispatch_pending_events(connection, 1);
+
+	// should not pop, no record on the
+	tio_container_wait_and_pop_next(test_container,  &test_event_callback, 0);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	tio_dispatch_pending_events(connection, 1);
+
+	result = tio_container_push_back(test_container, NULL, &value, NULL);
+	if(TIO_FAILED(result)) goto clean_up_and_return;
+
+	//
+	// Push back loop
+	//
 	result = tio_container_clear(test_container);
 	if(TIO_FAILED(result)) goto clean_up_and_return;
 
@@ -379,10 +483,12 @@ int main()
 {
 	int result;
 	struct TIO_CONNECTION* connection = NULL;
+	const char* host = "127.0.0.1";
+	unsigned short port = 6666;
 
 	tio_initialize();
 
-	result = tio_connect("127.0.0.1", 6666, &connection);
+	result = tio_connect(host, port, &connection);
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
@@ -391,6 +497,8 @@ int main()
 		goto clean_up_and_return;
 
 	TEST_pr1_message();
+
+	TEST_wait_and_pop(host, port);
 
 	TEST_list(connection);
 

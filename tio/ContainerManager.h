@@ -27,10 +27,13 @@ namespace tio
 	{
 		typedef std::map<string, shared_ptr<ITioStorageManager> > ManagerByType;
 		typedef map< string, string > AliasesMap;
+		typedef map< string, weak_ptr<ITioContainer> > OpenContainersMap;
 
 		tio::recursive_mutex bigLock_;
 		ManagerByType managerByType_;
 		AliasesMap aliases_;
+
+		OpenContainersMap openContainers_;
 
 		enum OperationType
 		{

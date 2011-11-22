@@ -6,7 +6,16 @@ SET(TIO_PYTHON_PLUGIN_SUPPORT 1)
 
 ADD_DEFINITIONS(-DTIO_PYTHON_PLUGIN_SUPPORT=${TIO_PYTHON_PLUGIN_SUPPORT})
 
+SET (TIO_BUILD_DIR ../bin)
+
+SET(EXECUTABLE_OUTPUT_PATH ${TIO_BUILD_DIR} CACHE PATH "Build directory" FORCE)
+SET(LIBRARY_OUTPUT_PATH ${TIO_BUILD_DIR} CACHE PATH "Build directory" FORCE)
+
 IF(${WIN32})
+	#
+	# I've tried to keep it compatible with Boost 1.44, but it crashes when calling python dll/so.
+	# Probably because on 1.44 Boost Python was tested with Python 2.2.
+	#
 	SET(BOOST_VERSION 1_47)
     SET(BOOST_INCLUDEDIR x:/boost/boost_${BOOST_VERSION})
 	SET(BOOST_LIBDIR x:/boost/boost_${BOOST_VERSION}/lib)
@@ -23,11 +32,13 @@ IF(${WIN32})
 	# Link with the static version of Visual C++ runtime, so we'll
 	# have a standalone executable.
 	#
-	FOREACH(flag_var CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-		IF(${flag_var} MATCHES "/MD")
-			STRING(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-		ENDIF(${flag_var} MATCHES "/MD")
-	ENDFOREACH(flag_var)
+	IF(NOT ${TIO_PYTHON_PLUGIN_SUPPORT})
+		FOREACH(flag_var CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+			IF(${flag_var} MATCHES "/MD")
+				STRING(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
+			ENDIF(${flag_var} MATCHES "/MD")
+		ENDFOREACH(flag_var)
+	ENDIF(NOT ${TIO_PYTHON_PLUGIN_SUPPORT})
 
 ELSE(${WIN32})
     LINK_LIBRARIES (tio debug boost_system optimized boost_system)

@@ -180,8 +180,6 @@ namespace tio
 		void OnCommand_WnpKey(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		string GetFullQualifiedName(shared_ptr<ITioContainer> container);
-		void HandleWaitAndPop(shared_ptr<ITioContainer> container, 
-			const TioData& key, const TioData& value, const TioData& metadata);
 
 		void OnCommand_Auth(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_SetPermission(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
@@ -206,6 +204,11 @@ namespace tio
 		unsigned int GenerateSessionId();
 		unsigned int GenerateDiffId();
 
+		void HandlePushBackWaitAndPop( shared_ptr<ITioContainer> container, const TioData& key, const TioData& value, const TioData& metadata);
+
+		void HandleKeyValueWaitAndPop(shared_ptr<ITioContainer> container, 
+			const TioData& key, const TioData& value, const TioData& metadata);
+
 	public:
 		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint);
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
@@ -216,7 +219,6 @@ namespace tio
 		void Start();
 
 		Auth& GetAuth();
-		
 
 	};
 
