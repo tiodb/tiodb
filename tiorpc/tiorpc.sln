@@ -1,0 +1,29 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tiorpc", "tiorpc.vcxproj", "{E1860358-BB2F-42E9-A057-8E456D7EF16C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test_tiorpc", "test_tiorpc\test_tiorpc.vcxproj", "{6BA1E6E1-E5CA-4060-A2A4-F18931372558}"
+	ProjectSection(ProjectDependencies) = postProject
+		{E1860358-BB2F-42E9-A057-8E456D7EF16C} = {E1860358-BB2F-42E9-A057-8E456D7EF16C}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E1860358-BB2F-42E9-A057-8E456D7EF16C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{E1860358-BB2F-42E9-A057-8E456D7EF16C}.Debug|Win32.Build.0 = Debug|Win32
+		{E1860358-BB2F-42E9-A057-8E456D7EF16C}.Release|Win32.ActiveCfg = Release|Win32
+		{E1860358-BB2F-42E9-A057-8E456D7EF16C}.Release|Win32.Build.0 = Release|Win32
+		{6BA1E6E1-E5CA-4060-A2A4-F18931372558}.Debug|Win32.ActiveCfg = Debug|Win32
+		{6BA1E6E1-E5CA-4060-A2A4-F18931372558}.Debug|Win32.Build.0 = Debug|Win32
+		{6BA1E6E1-E5CA-4060-A2A4-F18931372558}.Release|Win32.ActiveCfg = Release|Win32
+		{6BA1E6E1-E5CA-4060-A2A4-F18931372558}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
