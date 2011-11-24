@@ -527,10 +527,10 @@ void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
 }
 
 
-void tiodata_set_string(struct TIO_DATA* tiodata, const char* value)
+/*void tiodata_set_string(struct TIO_DATA* tiodata, const char* value)
 {
 	tiodata_set_string_and_size(tiodata, value, strlen(value));
-}
+}*/
 
 void tiodata_set_string_and_size(struct TIO_DATA* tiodata, const void* buffer, unsigned int len)
 {
@@ -609,7 +609,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 
 	buffer[sizeof(buffer)-1] = '\0';
 
-	tiodata_set_string(tiodata, buffer);
+	tiodata_set_string_and_size(tiodata, buffer, strlen(buffer));
 }
 
 

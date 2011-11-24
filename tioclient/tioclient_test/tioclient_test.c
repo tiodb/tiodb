@@ -94,7 +94,7 @@ int TEST_metacontainer_info(struct TIO_CONNECTION* connection)
 	//
 	// get metadata container meta information
 	//
-	tiodata_set_string(&search_key, "meta/containers");
+	tiodata_set_string_and_size(&search_key, "meta/containers", strlen("meta/containers"));
 
 	result = tio_container_get(meta_containers, &search_key, &key, &value, &metadata);
 	if(TIO_FAILED(result))
@@ -299,7 +299,7 @@ int TEST_list(struct TIO_CONNECTION* connection)
 	//
 	tiodata_set_int(&key, 0);
 	tiodata_set_int(&value, 0);
-	tiodata_set_string(&metadata, "not the first one");
+	tiodata_set_string_and_size(&metadata, "not the first one", strlen("not the first one"));
 
 	result = tio_container_insert(test_container, &key, &value, NULL);
 	if(TIO_FAILED(result))
@@ -373,7 +373,7 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	//
 	// Add binary data
 	//
-	tiodata_set_string(&key, "binary");
+	tiodata_set_string_and_size(&key, "binary", strlen("binary"));
 	tiodata_set_string_and_size(&value, "a\0b\0", 4);
 	tio_container_set(test_container, &key, &value, NULL);
 
@@ -403,13 +403,13 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	//
 	// delete first item and checks
 	//
-	tiodata_set_string(&search_key, "0");
+	tiodata_set_string_and_size(&search_key, "0", 1);
 
 	result = tio_container_delete(test_container, &search_key);
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
 
-	tiodata_set_string(&search_key, "1");
+	tiodata_set_string_and_size(&search_key, "1", 1);
 	result = tio_container_get(test_container, &search_key, &key, &value, &metadata);
 	if(TIO_FAILED(result))
 		goto clean_up_and_return;
@@ -423,9 +423,9 @@ int TEST_map(struct TIO_CONNECTION* connection)
 	//
 	// insert first item to restore container to previous state
 	//
-	tiodata_set_string(&key, "0");
+	tiodata_set_string_and_size(&key, "0", 1);
 	tiodata_set_int(&value, 0);
-	tiodata_set_string(&metadata, "not the first one");
+	tiodata_set_string_and_size(&metadata, "not the first one", strlen("not the first one"));
 
 	result = tio_container_set(test_container, &key, &value, NULL);
 	if(TIO_FAILED(result))

@@ -118,7 +118,7 @@ public:
 		switch(v.GetDataType())
 		{
 		case TioData::String:
-			tiodata_set_string(&c_, v.AsSz());
+			tiodata_set_string_and_size(&c_, v.AsSz(), v.GetSize());
 			break;
 		case TioData::Int:
 			tiodata_set_int(&c_, v.AsInt());
@@ -171,7 +171,7 @@ public:
 			switch(cpp_.GetDataType())
 			{
 			case TioData::String:
-				tiodata_set_string(c_, cpp_.AsSz());
+				tiodata_set_string_and_size(c_, cpp_.AsSz(), cpp_.GetSize());
 				break;
 			case TioData::Int:
 				tiodata_set_int(c_, cpp_.AsInt());
@@ -432,7 +432,7 @@ protected:
 			return -1;
 		}
 
-		tiodata_set_string(value, ret.c_str());
+		tiodata_set_string_and_size(value, ret.c_str(), ret.size());
 
 		return 0;
 	}
@@ -482,6 +482,11 @@ protected:
 		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
+	static void WaitAndPopNextBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+	}
+
 	virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
 	{
 		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
@@ -516,6 +521,22 @@ protected:
 		try
 		{
 			container->Unsubscribe(subscriptionHandles_[handle]);
+		}
+		catch(std::exception&)
+		{
+			return -1;
+		}
+
+		return 0;
+	}
+
+	virtual int container_wait_and_pop_next(void* handle, event_callback_t event_callback, void* cookie)
+	{
+		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
+
+		try
+		{
+			container->WaitAndPopNext(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4));
 		}
 		catch(std::exception&)
 		{

@@ -818,32 +818,26 @@ namespace tio
 			if(poppers_.empty())
 				return;
 
+			//
+			// In some previous implementation, I was getting the first
+			// record, calling the callback and then pop_back'ing the record.
+			// It doesn't work because it causes a problem if the callback
+			// calls wait'n'pop again (we must be reentrant)
+			//
+			// That's how it works: THERE'S NO GUARANTEE THAT THE RECORD
+			// FETCHED WITH WAIT_AND_POP WILL NOT GET LOST. That's how it works.
+			// If there is a need for such guarantee, the one who is pushing records
+			// to the list must be able to check for a timeout or something and
+			// push the record to the list again in case the record got lost
+			//
 			TioData key, value, metadata;
 
-			storage_->GetRecord(TioData(0), &key, &value, &metadata);
+			storage_->PopFront(&key, &value, &metadata);
 
-			do
-			{
-				PopperInfo info = poppers_.front();
-				poppers_.pop_front();
-
-				//
-				// If the sink throws an exception, we'll
-				// try the next popper
-				//
-				try
-				{
-					info.sink("wnp_next", key, value, metadata);
-					storage_->PopFront(NULL, NULL, NULL);
-					break;
-				}
-				catch(std::exception&)
-				{
-					// nada, we'll just return to the beginning
-					// of the loop
-				}
+			PopperInfo info = poppers_.front();
+			poppers_.pop_front();
 			
-			} while (!poppers_.empty());
+			info.sink("wnp_next", key, value, metadata);
 		}
 
 				

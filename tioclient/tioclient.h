@@ -105,7 +105,7 @@ void tiodata_set_as_none(struct TIO_DATA* tiodata);
 char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size);
 void  tiodata_string_release_buffer(struct TIO_DATA* tiodata);
 
-void tiodata_set_string(struct TIO_DATA* tiodata, const char* value);
+//void tiodata_set_string(struct TIO_DATA* tiodata, const char* value);
 void tiodata_set_string_and_size(struct TIO_DATA* tiodata, const void* buffer, unsigned int len);
 void tiodata_set_int(struct TIO_DATA* tiodata, int value);
 void tiodata_set_double(struct TIO_DATA* tiodata, double value);

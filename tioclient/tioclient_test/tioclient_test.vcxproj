@@ -81,7 +81,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="tioclient_test.c" />
-    <ClCompile Include="tioclient_test.cpp" />
+    <ClCompile Include="tioclient_test.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\tioclient.hpp" />

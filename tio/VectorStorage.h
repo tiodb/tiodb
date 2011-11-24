@@ -136,6 +136,9 @@ namespace MemoryStorage
 			if(data_.empty())
 				throw std::invalid_argument("empty");
 
+			if(key)
+				*key = static_cast<int>(data_.size() - 1);
+
 			_Pop(data_.end() - 1, value, metadata);
 
 			dispatcher_.RaiseEvent("pop_back", 

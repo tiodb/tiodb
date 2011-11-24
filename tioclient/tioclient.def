@@ -4,7 +4,7 @@ EXPORTS
 	tiodata_set_as_none
 	tiodata_string_get_buffer
 	tiodata_string_release_buffer
-	tiodata_set_string
+
 	tiodata_set_string_and_size
 	tiodata_set_int
 	tiodata_set_double

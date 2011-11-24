@@ -90,6 +90,9 @@ public:
 
 		ValueAndMetadata& data = data_.back();
 
+		if(key)
+			*key = static_cast<int>(data_.size() - 1);
+
 		if(value)
 			*value = data.value;
 
@@ -110,6 +113,9 @@ public:
 			throw std::invalid_argument("empty");
 
 		ValueAndMetadata& data = data_.front();
+
+		if(key)
+			*key = 0;
 
 		if(value)
 			*value = data.value;

@@ -2,6 +2,9 @@
 #include <assert.h>
 #include <iostream>
 #include <sstream>
+
+#define TIO_CLIENT_BOOST_SUPPORT 0
+
 #include "../tioclient.hpp"
 
 using std::string;
@@ -20,7 +23,7 @@ namespace XPTO
 
 		str << value.s << ";" << value.i;
 
-		tiodata_set_string(tiodata, str.str().c_str());
+		tiodata_set_string_and_size(tiodata, str.str().c_str(), str.str().size());
 	}
 }
 

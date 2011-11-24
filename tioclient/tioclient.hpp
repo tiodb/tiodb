@@ -3,6 +3,15 @@
 #include <string>
 #include <sstream>
 
+#ifndef TIO_CLIENT_BOOST_SUPPORT
+#define TIO_CLIENT_BOOST_SUPPORT 1
+#endif
+
+#ifdef TIO_CLIENT_BOOST_SUPPORT
+	#include <boost/function.hpp>
+#endif
+
+
 namespace tio
 {
 	using std::string;
@@ -37,6 +46,17 @@ namespace tio
 			throw runtime_error("wrong data type");
 
 		*value = tiodata->int_;
+	}
+
+	//
+	// TODO: maybe not correct...
+	//
+	inline void FromTioData(const TIO_DATA* tiodata, unsigned int* value)
+	{
+		if(tiodata->data_type != TIO_DATA_TYPE_INT)
+			throw runtime_error("wrong data type");
+
+		*value = static_cast<unsigned int>(tiodata->int_);
 	}
 
 	inline void FromTioData(const TIO_DATA* tiodata, string* value)
@@ -123,6 +143,7 @@ namespace tio
 		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)=0;
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)=0;
 		virtual int container_unsubscribe(void* handle)=0;
+		virtual int container_wait_and_pop_next(void* handle, event_callback_t event_callback, void* cookie)=0;
 		virtual bool connected()=0;
 
 		virtual IContainerManager* container_manager()=0;
@@ -226,6 +247,11 @@ namespace tio
 			return tio_container_unsubscribe((TIO_CONTAINER*)handle);
 		}
 
+		virtual int container_wait_and_pop_next(void* handle, event_callback_t event_callback, void* cookie)
+		{
+			return tio_container_wait_and_pop_next((TIO_CONTAINER*)handle, event_callback, cookie);
+		}
+
 	public:
 		Connection() : connection_(NULL)
 		{
@@ -324,13 +350,18 @@ namespace tio
 			typedef TValue value_type;
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
+#if TIO_CLIENT_BOOST_SUPPORT
+			typedef boost::function<void (const string&, const TKey&, const TValue&)> EventCallbackT;
+#else
 			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
+#endif
 
 		protected:
 			void* container_;
 			std::string name_;
 			IContainerManager* containerManager_;
 			EventCallbackT eventCallback_;
+			EventCallbackT waitAndPopNextCallback_;
 
 			IContainerManager* container_manager()
 			{
@@ -344,7 +375,8 @@ namespace tio
 			TioContainerImpl() : 
 			    container_(NULL), 
 				containerManager_(NULL),
-				eventCallback_(NULL)
+				eventCallback_(NULL),
+				waitAndPopNextCallback_(NULL)
 			{
 			}
 
@@ -410,10 +442,46 @@ namespace tio
 				TKey typedKey;
 				TValue typedValue;
 
-				FromTioData(key, &typedKey);
-				FromTioData(value, &typedValue);
+				if(key->data_type != TIO_DATA_TYPE_NONE)
+					FromTioData(key, &typedKey);
+
+				if(value->data_type != TIO_DATA_TYPE_NONE)
+					FromTioData(value, &typedValue);
 				
 				me->eventCallback_("event", typedKey, typedValue);
+			}
+
+			static void WaitAndPopNextCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
+			{
+				this_type* me = (this_type*)cookie;
+				TKey typedKey;
+				TValue typedValue;
+
+				if(key->data_type != TIO_DATA_TYPE_NONE)
+					FromTioData(key, &typedKey);
+
+				if(value->data_type != TIO_DATA_TYPE_NONE)
+					FromTioData(value, &typedValue);
+
+				//
+				// When calling the callback, our state must be cleared. Reentrant stuff...
+				//
+				EventCallbackT cb = me->waitAndPopNextCallback_;
+				me->waitAndPopNextCallback_ = NULL;
+
+				cb("wnp_next", typedKey, typedValue);
+			}
+
+			void wait_and_pop_next(EventCallbackT callback)
+			{
+				int result;
+
+				waitAndPopNextCallback_ = callback;
+
+				result = container_manager()->container_wait_and_pop_next(
+					container_,
+					&this_type::WaitAndPopNextCallback,
+					this);
 			}
 
 			void subscribe(EventCallbackT callback)
@@ -555,11 +623,11 @@ namespace tio
 		};
 	
 		template<typename TValue, typename TMetadata=std::string>
-		class list : public TioContainerImpl<size_t, TValue, TMetadata, list<TValue, TMetadata> >
+		class list : public TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >
 		{
 		public:
 			typedef list<TValue, TMetadata> this_type;
-			typedef typename TioContainerImpl<size_t, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
+			typedef typename TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
 
 	
 		public:
