@@ -922,12 +922,17 @@ namespace tio
 			if(storage_->GetRecordCount() > 0)
 			{
 				TioData key, value, metadata;
-				
-				storage_->GetRecord(TioData(0), &key, &value, &metadata);
+
+				//
+				// Disclaimer: THERE'S NO GUARANTEE THAT THE RECORD
+				// FETCHED WITH WAIT_AND_POP WILL NOT GET LOST. That's how it works.
+				// If there is a need for such guarantee, the one who is pushing records
+				// to the list must be able to check for a timeout or something and
+				// push the record to the list again in case the record got lost
+				//
+				storage_->PopFront(&key, &value, &metadata);
 				
 				sink("wnp_next", key, value, metadata);
-
-				storage_->PopFront(NULL, NULL, NULL);
 
 				return 0;
 			}

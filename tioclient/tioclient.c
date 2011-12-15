@@ -954,6 +954,7 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 	return result;
 }
 
+
 int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_MESSAGE** response)
 {
 	int result;

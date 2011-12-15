@@ -25,7 +25,7 @@ namespace tio
 	}
 
 	//
-	// TODO: tio doesnt support unsigned int. But STL containers indexes
+	// TODO: tio doesn't support unsigned int. But STL containers indexes
 	// are size_t's
 	// 
 	inline void ToTioData(unsigned int v, TIO_DATA* tiodata)
@@ -278,6 +278,12 @@ namespace tio
 		{
 			tio_disconnect(connection_);
 			connection_ = NULL;
+		}
+
+		void WaitAndDispatchPendingEvents(unsigned int eventCount)
+		{
+			tio_receive_pending_events(connection_, eventCount);
+			tio_dispatch_pending_events(connection_, eventCount);
 		}
 
 		bool connected()

@@ -159,7 +159,7 @@ public:
 			cpp_.Set(c->int_);
 			break;
 		case TIO_DATA_TYPE_STRING:
-			cpp_.Set(c->string_, false);
+			cpp_.Set(c->string_, c->string_size_);
 			break;
 		}
 	}

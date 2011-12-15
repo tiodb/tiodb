@@ -49,10 +49,18 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.Data" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ContainerViewer.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ContainerViewer.Designer.cs">
+      <DependentUpon>ContainerViewer.cs</DependentUpon>
+    </Compile>
     <Compile Include="Explorer.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -61,6 +69,9 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="ContainerViewer.resx">
+      <DependentUpon>ContainerViewer.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Explorer.resx">
       <DependentUpon>Explorer.cs</DependentUpon>
     </EmbeddedResource>

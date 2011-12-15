@@ -13,6 +13,16 @@ namespace TioClient
             NativeImports.tio_initialize();
         }
 
+        public Container Open(string name)
+        {
+            IntPtr handle = new IntPtr();
+
+            int result = NativeImports.tio_open(_nativeHandle, name, "", out handle);
+            NativeImports.ThrowOnNativeApiError(result);
+
+            return new Container(handle, name);
+        }
+
         public Connection(string host, short port)
         {
             int result;

@@ -53,10 +53,12 @@
             this.columnHeader2});
             this.containersListView.Location = new System.Drawing.Point(12, 88);
             this.containersListView.Name = "containersListView";
-            this.containersListView.Size = new System.Drawing.Size(357, 278);
+            this.containersListView.Size = new System.Drawing.Size(415, 278);
             this.containersListView.TabIndex = 0;
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
+            this.containersListView.DoubleClick += new System.EventHandler(this.containersListView_DoubleClick);
+            this.containersListView.KeyUp += new System.Windows.Forms.KeyEventHandler(this.containersListView_KeyUp);
             // 
             // columnHeader1
             // 
@@ -66,6 +68,7 @@
             // columnHeader2
             // 
             this.columnHeader2.Text = "type";
+            this.columnHeader2.Width = 108;
             // 
             // groupBox1
             // 
@@ -78,7 +81,7 @@
             this.groupBox1.Controls.Add(this.label1);
             this.groupBox1.Location = new System.Drawing.Point(12, 12);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(357, 70);
+            this.groupBox1.Size = new System.Drawing.Size(415, 70);
             this.groupBox1.TabIndex = 1;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Connection info";
@@ -86,7 +89,7 @@
             // connectButton
             // 
             this.connectButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.connectButton.Location = new System.Drawing.Point(270, 33);
+            this.connectButton.Location = new System.Drawing.Point(328, 33);
             this.connectButton.Name = "connectButton";
             this.connectButton.Size = new System.Drawing.Size(75, 23);
             this.connectButton.TabIndex = 4;
@@ -97,16 +100,17 @@
             // portTextBox
             // 
             this.portTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.portTextBox.Location = new System.Drawing.Point(222, 36);
+            this.portTextBox.Location = new System.Drawing.Point(280, 36);
             this.portTextBox.Name = "portTextBox";
             this.portTextBox.Size = new System.Drawing.Size(41, 20);
             this.portTextBox.TabIndex = 3;
+            this.portTextBox.Text = "6666";
             // 
             // label2
             // 
             this.label2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(219, 20);
+            this.label2.Location = new System.Drawing.Point(277, 20);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(25, 13);
             this.label2.TabIndex = 2;
@@ -118,8 +122,9 @@
                         | System.Windows.Forms.AnchorStyles.Right)));
             this.serverTextBox.Location = new System.Drawing.Point(10, 37);
             this.serverTextBox.Name = "serverTextBox";
-            this.serverTextBox.Size = new System.Drawing.Size(198, 20);
+            this.serverTextBox.Size = new System.Drawing.Size(256, 20);
             this.serverTextBox.TabIndex = 1;
+            this.serverTextBox.Text = "127.0.0.1";
             // 
             // label1
             // 
@@ -136,7 +141,7 @@
             this.statusLabel});
             this.statusStrip.Location = new System.Drawing.Point(0, 388);
             this.statusStrip.Name = "statusStrip";
-            this.statusStrip.Size = new System.Drawing.Size(381, 22);
+            this.statusStrip.Size = new System.Drawing.Size(439, 22);
             this.statusStrip.TabIndex = 2;
             this.statusStrip.Text = "statusStrip1";
             // 
@@ -151,12 +156,14 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(381, 410);
+            this.ClientSize = new System.Drawing.Size(439, 410);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.groupBox1);
             this.Controls.Add(this.containersListView);
+            this.KeyPreview = true;
             this.Name = "Explorer";
             this.Text = "Tio Explorer";
+            this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Explorer_KeyUp);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
             this.statusStrip.ResumeLayout(false);

@@ -4,14 +4,39 @@ using System.Text;
 
 namespace TioClient
 {
-    class Container
+    public class Container
     {
         IntPtr _nativeContainerHandle;
+        string _name;
 
+        public delegate void QueryCallback(object key, object value, object metadata);
 
-        public Container(IntPtr nativeContainerHandle)
+        public string Name { get { return _name; } }
+
+        public Container(IntPtr nativeContainerHandle, string name)
         {
             _nativeContainerHandle = nativeContainerHandle;
+            _name = name;
+        }
+
+        public void Query(QueryCallback callback)
+        {
+            NativeImports.tio_container_query(
+                _nativeContainerHandle,
+                0,
+                0,
+                delegate(IntPtr cookie,
+                uint queryid,
+                ref NativeImports.TIO_DATA key,
+                ref NativeImports.TIO_DATA value,
+                ref NativeImports.TIO_DATA metadata)
+                {
+                    callback(
+                        NativeImports.TioDataConverter.ToObject(key),
+                        NativeImports.TioDataConverter.ToObject(value),
+                        NativeImports.TioDataConverter.ToObject(metadata));
+                },
+                IntPtr.Zero);
         }
 
         public object Get(object searchKey)
@@ -55,7 +80,25 @@ namespace TioClient
 
                 NativeImports.ThrowOnNativeApiError(result);
             }
-
         }
+
+        public string GetProperty(string key)
+        {
+            int result;
+            using(NativeImports.TioDataConverter 
+                k = NativeImports.TioDataConverter.FromObject(key),
+                v = new NativeImports.TioDataConverter())
+            {
+                result = NativeImports.tio_container_propget(
+                    _nativeContainerHandle,
+                    ref k._tiodata,
+                    out v._tiodata);
+
+                NativeImports.ThrowOnNativeApiError(result);
+
+                return v.ToString();
+            }
+        }
+
     }
 }

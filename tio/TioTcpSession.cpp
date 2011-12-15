@@ -23,6 +23,9 @@ namespace tio
 {
 	
 	using std::cout;
+	using std::cerr;
+	using std::endl;
+
 	using boost::shared_ptr;
 	using boost::scoped_ptr;
 	using boost::system::error_code;
@@ -161,6 +164,19 @@ namespace tio
 		server_.OnBinaryCommand(shared_from_this(), message);
 
 		ReadBinaryProtocolMessage();
+	}
+
+	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		WaitAndPopNextMap::iterator i = poppers_.find(handle);
+		
+		if(i != poppers_.end())
+			poppers_.erase(i);
+
+		if(binaryProtocol_)
+			SendBinaryEvent(handle, key, value, metadata, eventName);
+		else
+			SendEvent(handle, key, value, metadata, eventName);
 	}
 
 	
@@ -423,11 +439,6 @@ namespace tio
 		SendString(answer.str());
 	}
 
-	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		SendBinaryEvent(handle, key, value, metadata, eventName);
-	}
-
 
 	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
@@ -583,7 +594,12 @@ namespace tio
         pendingSendSize_ -= bufferSize;
 
         if(CheckError(err))
+		{
+#ifdef _DEBUG
+			cerr << "TioTcpSession::OnWrite ERROR: " << err << endl;
+#endif
             return;
+		}
 
         if(!pendingSendData_.empty())
         {
@@ -837,7 +853,7 @@ namespace tio
 		//
 		// TODO: hard coded counter
 		//
-		for(unsigned int a = 0 ; a < 1024 ; a++)
+		for(unsigned int a = 0 ; a < 10 ; a++)
 		{
 			if(pendingSnapshots_.empty())
 				return;
@@ -859,6 +875,12 @@ namespace tio
 					
 					b = info->resultSet->GetRecord(&key, &value, &metadata);
 
+					if(b)
+					{
+						OnEvent(info, info->event_name, key, value, metadata);
+						info->nextRecord++;
+					}
+
 					if(!b || !info->resultSet->MoveNext())
 					{
 						// done
@@ -874,6 +896,17 @@ namespace tio
 				{
 					unsigned int recordCount = info->container->GetRecordCount();
 
+					if(recordCount)
+					{
+						searchKey = static_cast<int>(info->nextRecord);
+
+						info->container->GetRecord(searchKey, &key, &value, &metadata);
+
+						OnEvent(info, info->event_name, key, value, metadata);
+
+						info->nextRecord++;
+					}
+
 					if(recordCount == 0 || info->nextRecord >= recordCount)
 					{
 						// done
@@ -881,29 +914,11 @@ namespace tio
 							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
 
 						toRemove.push_back(handle);
+
 						continue;
 					}
-
-					ASSERT(info->cookie == 0);
-
-					searchKey = static_cast<int>(info->nextRecord);
-
-					//
-					// TODO: this is slow when sending a linked list, we're accessing by index.
-					// I don't see how we can make it faster without making it a special case...
-					//
-					info->container->GetRecord(searchKey, &key, &value, &metadata);
 				}
 
-				//
-				// TODO: maybe this heuristic is not good. I'm assuming a map being accessed
-				// item index will return a different key than the searched. We'll pass the
-				// numeric key and it will return the real string key
-				//
-				//
-				OnEvent(info, info->event_name, key, value, metadata);
-
-				info->nextRecord++;
 			}
 
 			BOOST_FOREACH(unsigned int h, toRemove)

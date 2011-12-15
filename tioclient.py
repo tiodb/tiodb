@@ -490,8 +490,8 @@ class TioServerConnection(object):
         param = str(handle)
 
         if wnp_type == 'wnp_next':
-            self.SendCommand('wnp_next', param)
             self.poppers.setdefault(int(handle), {}).setdefault('wnp_next', []).append(sink)
+            self.SendCommand('wnp_next', param)
         elif wnp_type == 'wnp_key':
             if key is None or not type(key) is str:
                 raise Exception('key is required and must be a string')

@@ -20,7 +20,10 @@ EXPORTS
 	tio_open
 	tio_close
 
+	
+	tio_receive_pending_events
 	tio_dispatch_pending_events
+	
 
 	tio_ping
 

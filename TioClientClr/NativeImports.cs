@@ -38,6 +38,11 @@ namespace TioClient
             // must be public because it will be passed as out/ref parameter
             public TIO_DATA _tiodata;
 
+            public TioDataConverter(TIO_DATA tiodata)
+            {
+                _tiodata = tiodata;
+            }
+
             public TioDataConverter()
             {
                 _tiodata.data_type = TIO_DATA_TYPE_NONE;
@@ -77,28 +82,38 @@ namespace TioClient
                     throw new ArgumentException("unsupported type");
             }
 
-            public object AsObject()
+            public static object ToObject(TIO_DATA tiodata)
             {
                 object ret;
-                switch (_tiodata.data_type)
+                switch (tiodata.data_type)
                 {
                     case TIO_DATA_TYPE_NONE:
                         ret = null;
                         break;
                     case TIO_DATA_TYPE_STRING:
-                        ret = Marshal.PtrToStringAuto(_tiodata.string_);
+                        ret = Marshal.PtrToStringAnsi(tiodata.string_);
                         break;
                     case TIO_DATA_TYPE_INT:
-                        ret = _tiodata.int_;
+                        ret = tiodata.int_;
                         break;
                     case TIO_DATA_TYPE_DOUBLE:
-                        ret = _tiodata.double_;
+                        ret = tiodata.double_;
                         break;
                     default:
                         throw new Exception("INTERNAL ERROR, invalid TIO_DATA");
                 }
-                
+
                 return ret;
+            }
+
+            public object AsObject()
+            {
+                return ToObject(_tiodata);
+            }
+
+            public override string ToString()
+            {
+                return AsObject().ToString();
             }
 
             void Free()
@@ -155,6 +170,13 @@ namespace TioClient
         [DllImport("tioclient.dll", CallingConvention=CallingConvention.Cdecl)]
         public static extern int tio_ping(IntPtr connection, [MarshalAs(UnmanagedType.LPStr)] string payload);
 
+        //int tio_container_propget(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* value);
+        [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_propget(
+            IntPtr container,
+            ref TIO_DATA searchKey,
+            out TIO_DATA value);
+
         //int tio_container_get(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata);
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int tio_container_get(
@@ -171,6 +193,22 @@ namespace TioClient
             ref TIO_DATA key,
             ref TIO_DATA value,
             ref TIO_DATA metadata);
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void query_callback_t(
+            IntPtr cookie, 
+            uint queryid, 
+            ref TIO_DATA key,
+            ref TIO_DATA value,
+            ref TIO_DATA metadata);
+
+        [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_query(
+            IntPtr container,
+            int start, 
+            int end, 
+            query_callback_t query_callback, 
+            IntPtr cookie);
 
         public static void ThrowOnNativeApiError(int result)
         {

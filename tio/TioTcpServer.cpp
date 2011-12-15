@@ -987,6 +987,21 @@ namespace tio
 			return;
 		}
 
+		try
+		{
+			session->BinaryWaitAndPopNext(handle);
+		}
+		catch(std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+			return;
+		}
+		
+		MakeAnswer(success, answer);
+
+		return;
+
+		/*
 		bool popped = false;
 
 		{
@@ -1042,6 +1057,7 @@ namespace tio
 
 		if(popped)
 			MakeEventAnswer("wnp_next", handle, key, value, metadata, answer);
+		*/
 	}
 
 

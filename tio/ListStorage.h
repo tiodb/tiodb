@@ -137,9 +137,13 @@ public:
 			throw std::invalid_argument("value??");
 	}
 
-	ListType::iterator GetOffset(const TioData& key, bool canBeTheEnd = false)
+	ListType::iterator GetOffset(const TioData& key, size_t* realIndex = NULL, bool canBeTheEnd = false)
 	{
 		int index = NormalizeIndex(key.AsInt(), data_.size());
+		
+		if(realIndex)
+			*realIndex = index;
+
 		ListType::iterator i;
 
 		//
@@ -199,11 +203,16 @@ public:
 
 	virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		ListType::iterator i = GetOffset(key);
+		TioData realKey;
+		size_t realIndex;
+
+		ListType::iterator i = GetOffset(key, &realIndex);
+		
+		realKey.Set(static_cast<int>(realIndex));
 
 		data_.erase(i);
 
-		dispatcher_.RaiseEvent("delete", key, value, metadata); 
+		dispatcher_.RaiseEvent("delete", realKey, value, metadata); 
 	}
 
 	virtual void Clear()
