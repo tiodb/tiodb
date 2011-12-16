@@ -17,11 +17,12 @@ namespace TioClient
         const uint TIO_DATA_TYPE_INT = 3;
         const uint TIO_DATA_TYPE_DOUBLE = 4;
 
-//        struct TIO_DATA
+//struct TIO_DATA
 //{	
 //    unsigned int data_type;
 //    int int_;
 //    char* string_;
+//    unsigned int string_size_;
 //    double double_;
 //};
         [StructLayout(LayoutKind.Sequential)]
@@ -30,6 +31,7 @@ namespace TioClient
             public uint data_type;
             public int int_;
             public IntPtr string_;
+            uint string_size_;
             public double double_;
         }
 
@@ -57,7 +59,14 @@ namespace TioClient
             public TioDataConverter(string value)
             {
                 _tiodata.data_type = TIO_DATA_TYPE_NONE;
-                tiodata_set_string(ref _tiodata, value);
+
+                byte[] utf8string = Encoding.UTF8.GetBytes(value);
+                GCHandle pinnedArray = GCHandle.Alloc(utf8string, GCHandleType.Pinned);
+                IntPtr pointer = pinnedArray.AddrOfPinnedObject();
+               
+                tiodata_set_string_and_size(ref _tiodata, pointer, utf8string.Length);
+
+                pinnedArray.Free();
             }
 
             public TioDataConverter(double value)
@@ -134,9 +143,9 @@ namespace TioClient
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int tiodata_set_as_none(ref TIO_DATA tiodata);
 
-        //void tiodata_set_string(struct TIO_DATA* tiodata, const char* value);
+        //void tiodata_set_string_and_size(struct TIO_DATA* tiodata, const void* buffer, unsigned int len)
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int tiodata_set_string(ref TIO_DATA tiodata, [MarshalAs(UnmanagedType.LPStr)] string str);
+        public static extern int tiodata_set_string_and_size(ref TIO_DATA tiodata, IntPtr buffer, int len);
 
         //void tio_initialize();
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
