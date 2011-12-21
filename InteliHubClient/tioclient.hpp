@@ -559,7 +559,7 @@ namespace tio
 				ThrowOnTioClientError(result);
 			}
 
-			void set(const key_type& key, const value_type& value)
+			void set(const key_type& key, const value_type& value, const std::string* metadata = NULL)
 			{
 				int result;
 
@@ -567,7 +567,7 @@ namespace tio
 					container_, 
 					TioDataConverter<key_type>(key).inptr(),
 					TioDataConverter<value_type>(value).inptr(),
-					NULL);
+					metadata ? TioDataConverter<std::string>(*metadata).inptr() : NULL);
 
 				ThrowOnTioClientError(result);
 			}
