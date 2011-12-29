@@ -509,6 +509,7 @@ char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 	return tiodata->string_;
 }
 
+/*
 void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
 {
 	unsigned int a;
@@ -525,6 +526,7 @@ void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
 		}
 	}
 }
+*/
 
 
 /*void tiodata_set_string(struct TIO_DATA* tiodata, const char* value)

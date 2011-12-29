@@ -853,7 +853,7 @@ namespace tio
 		//
 		// TODO: hard coded counter
 		//
-		for(unsigned int a = 0 ; a < 10 ; a++)
+		for(unsigned int a = 0 ; a < 1024 ; a++)
 		{
 			if(pendingSnapshots_.empty())
 				return;

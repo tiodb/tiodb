@@ -229,10 +229,10 @@ public:
 	  virtual unsigned int Subscribe(EventSink sink, const string& start)
 	  {
 		  //
-		  // map behavior is the opposite of vector
-		  // send all record on subscription is the default option
+		  // No start, we will just send the updates. Must send start=0
+		  // if client wants current data as well
 		  //
-		  if(start == "__none__")
+		  if(start == "")
 			  return dispatcher_.Subscribe(sink);
 
 		  //
