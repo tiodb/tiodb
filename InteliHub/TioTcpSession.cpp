@@ -776,47 +776,50 @@ namespace tio
 		subscriptionInfo->container = container;
 		subscriptionInfo->binaryProtocol = true;
 
-		try
+		if(!start.empty())
 		{
-			int numericStart = lexical_cast<int>(start);
-			
-			//
-			// lets try a query. Navigating a query is faster than accessing records
-			// using index. Imagine a linked list being accessed by index every time...
-			//
 			try
 			{
-				subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
+				int numericStart = lexical_cast<int>(start);
+
+				//
+				// lets try a query. Navigating a query is faster than accessing records
+				// using index. Imagine a linked list being accessed by index every time...
+				//
+				try
+				{
+					subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
+				}
+				catch(std::exception&)
+				{
+					//
+					// no result set, don't care. We'll carry on with the indexed access
+					//
+				}
+
+				subscriptionInfo->nextRecord = numericStart;
+
+				if(IsListContainer(container))
+					subscriptionInfo->event_name = "push_back";
+				else if(IsMapContainer(container))
+					subscriptionInfo->event_name = "set";
+				else
+					throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
+
+				pendingSnapshots_[handle] = subscriptionInfo;
+
+				subscriptions_[handle] = subscriptionInfo;
+
+				SendBinaryAnswer();
+
+				SendPendingSnapshots();
+
+				return;
 			}
-			catch(std::exception&)
+			catch(boost::bad_lexical_cast&)
 			{
-				//
-				// no result set, don't care. We'll carry on with the indexed access
-				//
+
 			}
-
-			subscriptionInfo->nextRecord = numericStart;
-
-			if(IsListContainer(container))
-				subscriptionInfo->event_name = "push_back";
-			else if(IsMapContainer(container))
-				subscriptionInfo->event_name = "set";
-			else
-				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
-
-			pendingSnapshots_[handle] = subscriptionInfo;
-			
-			subscriptions_[handle] = subscriptionInfo;
-			
-			SendBinaryAnswer();
-			
-			SendPendingSnapshots();
-
-			return;
-		}
-		catch(boost::bad_lexical_cast&)
-		{
-
 		}
 
 		//

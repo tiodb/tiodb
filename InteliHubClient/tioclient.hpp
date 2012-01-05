@@ -482,6 +482,9 @@ namespace tio
 			{
 				int result;
 
+				if(callback.empty())
+					throw std::runtime_error("wait_and_pop_next callback can't bee null");
+
 				waitAndPopNextCallback_ = callback;
 
 				result = container_manager()->container_wait_and_pop_next(
