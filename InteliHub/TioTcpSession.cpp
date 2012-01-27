@@ -188,7 +188,7 @@ namespace tio
 		// already subscribed
 		//
 		if(poppers_.find(handle) != poppers_.end())
-			throw std::runtime_error("already subscribed");
+			throw std::runtime_error(string("wait and pop next command already pending for handle ") + lexical_cast<string>(handle));
 
 		unsigned int popId;
 		

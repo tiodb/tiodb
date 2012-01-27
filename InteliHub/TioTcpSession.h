@@ -388,12 +388,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 	public:
 
-		void SendBinaryErrorAnswer(int errorCode)
+		void SendBinaryErrorAnswer(int errorCode, const string& description)
 		{
 			shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
 
 			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
 			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
+			pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_ERROR_DESC, description.c_str());
 
 			SendBinaryMessage(answer);
 		}

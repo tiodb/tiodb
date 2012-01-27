@@ -845,15 +845,34 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 	return pr1_message;
 }
 
+#define MAX_ERROR_DESCRIPTION_SIZE 255
+
+char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
+
+const char* pr1_get_last_error_description()
+{
+	return g_last_error_description;
+}
 
 int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 {
 	struct PR1_MESSAGE_FIELD_HEADER* error_code;
+	struct PR1_MESSAGE_FIELD_HEADER* error_description;
 
 	error_code = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_CODE);
 
 	if(!error_code)
 		return TIO_SUCCESS;
+
+	error_description = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_CODE);
+
+	if(error_description)
+	{
+		pr1_message_field_get_string(error_description, &g_last_error_description, MAX_ERROR_DESCRIPTION_SIZE);
+		g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
+	}
+	else
+		*g_last_error_description = '\0';
 
 	return pr1_message_field_get_int(error_code);
 }

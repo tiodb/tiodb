@@ -36,6 +36,10 @@ namespace tio
 	using std::setw;
 	using std::hex;
 
+
+	using std::cout;
+	using std::endl;
+
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
@@ -208,6 +212,32 @@ namespace tio
 	}
 
 	
+	string TranslateBinaryCommand(int command)
+	{
+		if(command == TIO_COMMAND_PING) return "TIO_COMMAND_PING";
+		if(command == TIO_COMMAND_OPEN) return "TIO_COMMAND_OPEN";
+		if(command == TIO_COMMAND_CREATE) return "TIO_COMMAND_CREATE";
+		if(command == TIO_COMMAND_CLOSE) return "TIO_COMMAND_CLOSE";
+		if(command == TIO_COMMAND_SET) return "TIO_COMMAND_SET";
+		if(command == TIO_COMMAND_INSERT) return "TIO_COMMAND_INSERT";
+		if(command == TIO_COMMAND_DELETE) return "TIO_COMMAND_DELETE";
+		if(command == TIO_COMMAND_PUSH_BACK) return "TIO_COMMAND_PUSH_BACK";
+		if(command == TIO_COMMAND_PUSH_FRONT) return "TIO_COMMAND_PUSH_FRONT";
+		if(command == TIO_COMMAND_POP_BACK) return "TIO_COMMAND_POP_BACK";
+		if(command == TIO_COMMAND_POP_FRONT) return "TIO_COMMAND_POP_FRONT";
+		if(command == TIO_COMMAND_CLEAR) return "TIO_COMMAND_CLEAR";
+		if(command == TIO_COMMAND_COUNT) return "TIO_COMMAND_COUNT";
+		if(command == TIO_COMMAND_GET) return "TIO_COMMAND_GET";
+		if(command == TIO_COMMAND_SUBSCRIBE) return "TIO_COMMAND_SUBSCRIBE";
+		if(command == TIO_COMMAND_UNSUBSCRIBE) return "TIO_COMMAND_UNSUBSCRIBE";
+		if(command == TIO_COMMAND_QUERY) return "TIO_COMMAND_QUERY";
+		if(command == TIO_COMMAND_WAIT_AND_POP_NEXT) return "TIO_COMMAND_WAIT_AND_POP_NEXT";
+		if(command == TIO_COMMAND_WAIT_AND_POP_KEY) return "TIO_COMMAND_WAIT_AND_POP_KEY";
+		if(command == TIO_COMMAND_PROPGET ) return "TIO_COMMAND_PROPGET ";
+		if(command == TIO_COMMAND_PROPSET) return "TIO_COMMAND_PROPSET";
+
+		return "UNKNOWN";
+	}
 
 	void TioTcpServer::OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message)
 	{
@@ -220,12 +250,35 @@ namespace tio
 
 		if(!b)
 		{
-			session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+			session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing MESSAGE_FIELD_ID_COMMAND");
 			return;
 		}
 
 		try
 		{
+#ifdef _DEBUG
+			stringstream str;
+			string parameter;
+			int handle;
+
+			str << session.get() << " BINARY COMMAND: " << TranslateBinaryCommand(command);
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle))
+				str << ", handle=" << handle;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_NAME, &parameter))
+				str << ", name=" << parameter;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &parameter))
+				str << ", key=" << parameter;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_VALUE, &parameter))
+				str << ", value=" << parameter;
+
+			cout << str.str() << endl;
+
+#endif
+
 			switch(command)
 			{
 			case TIO_COMMAND_PING:
@@ -235,7 +288,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing MESSAGE_FIELD_ID_VALUE");
 						break;
 					}
 
@@ -256,7 +309,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing container name (MESSAGE_FIELD_ID_NAME)");
 						break;
 					}
 
@@ -268,7 +321,7 @@ namespace tio
 					{
 						if(type.empty())
 						{
-							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "must inform type on container creation (MESSAGE_FIELD_ID_TYPE)");
 							break;
 						}
 
@@ -298,7 +351,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -432,7 +485,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -453,7 +506,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -471,7 +524,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 					
@@ -482,14 +535,14 @@ namespace tio
 				break;
 
 			default:
-				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
-				return;
+				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL, "invalid command");
+				break;
 			}
 		} 
 		catch(std::exception& ex)
 		{
 			ex;
-			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
+			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL, ex.what());
 		}
 	}
 
@@ -516,7 +569,7 @@ namespace tio
 			catch(std::exception& ex)
 			{
 				BOOST_ASSERT(false && "handler functions not supposed to throw exceptions");
-				MakeAnswer(error, answer, string("internal error: ") + ex.what());
+				MakeAnswer(error, answer, string("internal error, handler functions not supposed to throw exceptions but I've got this one: ") + ex.what());
 			}
 		}
 		else			

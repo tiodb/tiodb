@@ -67,7 +67,7 @@ namespace tio
 		ManagerByType::iterator i = managerByType_.find(type);
 
 		if(i == managerByType_.end())
-			throw std::invalid_argument("invalid type");
+			throw std::invalid_argument(string("invalid type: ") + type);
 
 		return i->second;
 	}

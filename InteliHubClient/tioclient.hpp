@@ -475,7 +475,8 @@ namespace tio
 				EventCallbackT cb = me->waitAndPopNextCallback_;
 				me->waitAndPopNextCallback_ = NULL;
 
-				cb("wnp_next", typedKey, typedValue);
+				if(!cb.empty())
+					cb("wnp_next", typedKey, typedValue);
 			}
 
 			void wait_and_pop_next(EventCallbackT callback)
