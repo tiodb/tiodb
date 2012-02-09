@@ -304,7 +304,7 @@ namespace tio
 		
 		if(moreDataSize)
 		{
-			BOOST_ASSERT(moreDataSize < 1024 * 1024);
+			BOOST_ASSERT(moreDataSize < 256 * 1024 * 1024);
 
 			if(buf_.size() >= moreDataSize)
 			{

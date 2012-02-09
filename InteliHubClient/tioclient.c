@@ -864,7 +864,7 @@ int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 	if(!error_code)
 		return TIO_SUCCESS;
 
-	error_description = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_CODE);
+	error_description = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_DESC);
 
 	if(error_description)
 	{
