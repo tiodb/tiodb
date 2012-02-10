@@ -474,17 +474,19 @@ namespace tio
 				//
 				EventCallbackT cb = me->waitAndPopNextCallback_;
 				me->waitAndPopNextCallback_ = NULL;
-
-				if(!cb.empty())
-					cb("wnp_next", typedKey, typedValue);
+				
+				cb("wnp_next", typedKey, typedValue);
 			}
 
-			void wait_and_pop_next(EventCallbackT callback)
+			bool wait_and_pop_next(EventCallbackT callback)
 			{
 				int result;
 
 				if(callback.empty())
 					throw std::runtime_error("wait_and_pop_next callback can't bee null");
+
+				if(waitAndPopNextCallback_)
+					return false;
 
 				waitAndPopNextCallback_ = callback;
 
@@ -492,6 +494,8 @@ namespace tio
 					container_,
 					&this_type::WaitAndPopNextCallback,
 					this);
+
+				return true;
 			}
 
 			void subscribe(EventCallbackT callback)

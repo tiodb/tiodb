@@ -396,6 +396,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
 			pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_ERROR_DESC, description.c_str());
 
+#if _DEBUG
+			std::cout << "ERROR: " << errorCode << ": " << description << std::endl;
+#endif
+
 			SendBinaryMessage(answer);
 		}
 
