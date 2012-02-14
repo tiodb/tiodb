@@ -166,6 +166,7 @@ struct KEY_AND_VALUE
 typedef void (*tio_plugin_start_t)(void* container_manager, struct KEY_AND_VALUE* parameters);
 typedef void (*tio_plugin_stop_t)();
 
+void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message);
 
 #ifdef __cplusplus
 } // extern "C" 

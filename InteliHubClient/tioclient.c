@@ -282,7 +282,7 @@ void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, 
 
 	memcpy(buffer, field, buffer_size);
 
-	buffer[buffer_size] = '\0';
+	buffer[buffer_size-1] = '\0';
 }
 
 void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)
@@ -293,6 +293,105 @@ void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsi
 
 	*buffer = pr1_message->stream_buffer->buffer;
 	*size = stream_buffer_space_used(pr1_message->stream_buffer);
+}
+
+const char* message_field_id_to_string(int i)
+{
+	if(i == MESSAGE_FIELD_ID_COMMAND) return "MESSAGE_FIELD_ID_COMMAND";
+	if(i == MESSAGE_FIELD_ID_HANDLE) return "MESSAGE_FIELD_ID_HANDLE";
+	if(i == MESSAGE_FIELD_ID_KEY) return "MESSAGE_FIELD_ID_KEY";
+	if(i == MESSAGE_FIELD_ID_VALUE) return "MESSAGE_FIELD_ID_VALUE";
+	if(i == MESSAGE_FIELD_ID_METADATA) return "MESSAGE_FIELD_ID_METADATA";
+	if(i == MESSAGE_FIELD_ID_NAME) return "MESSAGE_FIELD_ID_NAME";
+	if(i == MESSAGE_FIELD_ID_TYPE) return "MESSAGE_FIELD_ID_TYPE";
+	if(i == MESSAGE_FIELD_ID_ERROR_CODE) return "MESSAGE_FIELD_ID_ERROR_CODE";
+	if(i == MESSAGE_FIELD_ID_ERROR_DESC) return "MESSAGE_FIELD_ID_ERROR_DESC";
+	if(i == MESSAGE_FIELD_ID_EVENT) return "MESSAGE_FIELD_ID_EVENT";
+	if(i == MESSAGE_FIELD_ID_START) return "MESSAGE_FIELD_ID_START";
+	if(i == MESSAGE_FIELD_ID_END) return "MESSAGE_FIELD_ID_END";
+	if(i == MESSAGE_FIELD_ID_QUERY_ID) return "MESSAGE_FIELD_ID_QUERY_ID";
+
+	return "*UNKNOWN*";
+}
+
+const char* tio_command_to_string(int i)
+{
+	if(i == TIO_COMMAND_ANSWER) return "TIO_COMMAND_ANSWER";
+	if(i == TIO_COMMAND_EVENT) return "TIO_COMMAND_EVENT";				
+	if(i == TIO_COMMAND_QUERY_ITEM) return "TIO_COMMAND_QUERY_ITEM";
+	if(i == TIO_COMMAND_PING) return "TIO_COMMAND_PING";
+	if(i == TIO_COMMAND_OPEN) return "TIO_COMMAND_OPEN";
+	if(i == TIO_COMMAND_CREATE) return "TIO_COMMAND_CREATE";
+	if(i == TIO_COMMAND_CLOSE) return "TIO_COMMAND_CLOSE";
+	if(i == TIO_COMMAND_SET) return "TIO_COMMAND_SET";
+	if(i == TIO_COMMAND_INSERT) return "TIO_COMMAND_INSERT";
+	if(i == TIO_COMMAND_DELETE) return "TIO_COMMAND_DELETE";
+	if(i == TIO_COMMAND_PUSH_BACK) return "TIO_COMMAND_PUSH_BACK";
+	if(i == TIO_COMMAND_PUSH_FRONT) return "TIO_COMMAND_PUSH_FRONT";
+	if(i == TIO_COMMAND_POP_BACK) return "TIO_COMMAND_POP_BACK";
+	if(i == TIO_COMMAND_POP_FRONT) return "TIO_COMMAND_POP_FRONT";
+	if(i == TIO_COMMAND_CLEAR) return "TIO_COMMAND_CLEAR";
+	if(i == TIO_COMMAND_COUNT) return "TIO_COMMAND_COUNT";
+	if(i == TIO_COMMAND_GET) return "TIO_COMMAND_GET";
+	if(i == TIO_COMMAND_SUBSCRIBE) return "TIO_COMMAND_SUBSCRIBE";
+	if(i == TIO_COMMAND_UNSUBSCRIBE) return "TIO_COMMAND_UNSUBSCRIBE";
+	if(i == TIO_COMMAND_QUERY) return "TIO_COMMAND_QUERY";
+	if(i == TIO_COMMAND_WAIT_AND_POP_NEXT) return "TIO_COMMAND_WAIT_AND_POP_NEXT";
+	if(i == TIO_COMMAND_WAIT_AND_POP_KEY) return "TIO_COMMAND_WAIT_AND_POP_KEY";
+	if(i == TIO_COMMAND_PROPGET ) return "TIO_COMMAND_PROPGET ";
+	if(i == TIO_COMMAND_PROPSET ) return "TIO_COMMAND_PROPSET ";
+
+	return "*UNKNOWN*";
+}
+
+void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message)
+{
+	unsigned int a;
+	char buffer[255];
+	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
+	struct PR1_MESSAGE_FIELD_HEADER* field_header;
+
+	pr1_message_parse(pr1_message);
+
+
+	printf("%s pr1_message: message_size=%d, field_count=%d, reserved=%d\r\n", 
+		prefix,
+		header->message_size,
+		header->field_count,
+		header->reserved);
+
+	for(a = 0 ; a < pr1_message->field_count ; a++)
+	{
+		field_header = pr1_message->field_array[a];
+
+		printf("  field_id=%d (%s), data_type=%d, data_size=%d, value=",
+			field_header->field_id,
+			message_field_id_to_string(field_header->field_id),
+			field_header->data_type,
+			field_header->data_size);
+		
+		switch(field_header->data_type)
+		{
+		case MESSAGE_FIELD_TYPE_NONE:
+			printf("(NONE)");
+			break;
+		case MESSAGE_FIELD_TYPE_STRING:
+			pr1_message_field_get_string(field_header, buffer, sizeof(buffer));
+			printf("\"%s\"", buffer);
+			break;
+		case MESSAGE_FIELD_TYPE_INT:
+			printf("%d", pr1_message_field_get_int(field_header));
+			break;
+		default:
+			printf("(UNKNOWN TYPE)");
+			break;
+		}
+
+		if(field_header->field_id == MESSAGE_FIELD_ID_COMMAND)
+			printf(", command=%s", tio_command_to_string(pr1_message_field_get_int(field_header)));
+
+		printf("\r\n");
+	}
 }
 
 void pr1_message_parse(struct PR1_MESSAGE* pr1_message)
@@ -333,6 +432,12 @@ int pr1_message_send(SOCKET socket, struct PR1_MESSAGE* pr1_message)
 	unsigned int size;
 
 	pr1_message_get_buffer(pr1_message, &buffer, &size);
+
+#if 0
+	if(!pr1_message->field_array)
+		pr1_message_parse(pr1_message);
+	dump_pr1_message("SEND", pr1_message);
+#endif
 
 	return socket_send(socket, buffer, size);
 }
@@ -389,6 +494,13 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 	}
 
 	pr1_message_parse(*pr1_message);
+
+#if 0
+	if(!(*pr1_message)->field_array)
+		pr1_message_parse(*pr1_message);
+
+	dump_pr1_message("RCEV", *pr1_message);
+#endif
 
 	return result;
 }
@@ -868,7 +980,6 @@ int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 	if(error_description)
 	{
 		pr1_message_field_get_string(error_description, g_last_error_description, MAX_ERROR_DESCRIPTION_SIZE);
-		g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
 	}
 	else
 		*g_last_error_description = '\0';
