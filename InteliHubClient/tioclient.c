@@ -273,7 +273,7 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 	return field;
 }
 
-void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char** buffer, unsigned int buffer_size)
+void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
 	if(buffer_size > field->data_size + 1)
 		buffer_size = field->data_size;
@@ -683,7 +683,6 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->containers_count = 1;
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
-	(*connection)->dispatch_events_on_receive = 1;
 
 	return TIO_SUCCESS;
 }
@@ -868,7 +867,7 @@ int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 
 	if(error_description)
 	{
-		pr1_message_field_get_string(error_description, &g_last_error_description, MAX_ERROR_DESCRIPTION_SIZE);
+		pr1_message_field_get_string(error_description, g_last_error_description, MAX_ERROR_DESCRIPTION_SIZE);
 		g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
 	}
 	else
@@ -935,9 +934,6 @@ void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* eve
 {
 	events_list_push(connection, event_message);
 	connection->pending_event_count++;
-
-	if(connection->dispatch_events_on_receive)
-		tio_dispatch_pending_events(connection, 1);
 }
 
 int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
@@ -1181,6 +1177,10 @@ clean_up_and_return:
 	return result;
 }
 
+/*
+	tio_dispatch_pending_events
+	returns: number of still pending events
+*/
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
 {
 	unsigned int a;
@@ -1242,7 +1242,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	tiodata_set_as_none(&value);
 	tiodata_set_as_none(&metadata);
 
-	return a;
+	return connection->pending_event_count;
 }
 
 

@@ -29,6 +29,8 @@
 extern "C" {
 #endif
 
+#define TIO_DEFAULT_PORT                2605
+
 #define TIO_DATA_TYPE_NONE	 			0x1
 #define TIO_DATA_TYPE_STRING 			0x2
 #define TIO_DATA_TYPE_INT 				0x3

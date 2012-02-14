@@ -421,7 +421,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 				pr1_message_get_buffer((*i).get(), &buffer, &bufferSize);
 
 				beingSendData_.push_back(asio::buffer(buffer, bufferSize));
+
+				//std::cout << "sending: binary message, " << (*i)->field_count << " fields" << std::endl;
 			}
+
 
 			asio::async_write(
 				socket_,
@@ -433,7 +436,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		{
 			if(CheckError(err))
 			{
-				std::cerr << "ERROR sending binary data: " << err << std::endl;
+				//std::cerr << "ERROR sending binary data: " << err << std::endl;
 				return;
 			}
 			

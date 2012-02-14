@@ -45,9 +45,9 @@
             // 
             // containersListView
             // 
-            this.containersListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                        | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.containersListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.containersListView.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1,
             this.columnHeader2});
@@ -72,8 +72,8 @@
             // 
             // groupBox1
             // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.connectButton);
             this.groupBox1.Controls.Add(this.portTextBox);
             this.groupBox1.Controls.Add(this.label2);
@@ -104,7 +104,7 @@
             this.portTextBox.Name = "portTextBox";
             this.portTextBox.Size = new System.Drawing.Size(41, 20);
             this.portTextBox.TabIndex = 3;
-            this.portTextBox.Text = "6666";
+            this.portTextBox.Text = "2605";
             // 
             // label2
             // 
@@ -118,13 +118,13 @@
             // 
             // serverTextBox
             // 
-            this.serverTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.serverTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.serverTextBox.Location = new System.Drawing.Point(10, 37);
             this.serverTextBox.Name = "serverTextBox";
             this.serverTextBox.Size = new System.Drawing.Size(256, 20);
             this.serverTextBox.TabIndex = 1;
-            this.serverTextBox.Text = "127.0.0.1";
+            this.serverTextBox.Text = "localhost";
             // 
             // label1
             // 

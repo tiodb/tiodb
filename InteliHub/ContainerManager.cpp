@@ -72,12 +72,6 @@ namespace tio
 		return i->second;
 	}
 
-	//
-	// we'll always create a Container, even if we're been asked to open the
-	// same one. It's like a file system. If you open a file several times, you open the same
-	// file, but using a different handle. Some properties (like file pointer, locks, etc) 
-	// are associated to the handle, not to the file. Container instance is a handle.
-	//
 	shared_ptr<ITioContainer> ContainerManager::CreateOrOpen(string type, OperationType op, const string& name)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
@@ -86,6 +80,10 @@ namespace tio
 
 		OpenContainersMap::const_iterator i = openContainers_.find(name);
 
+		//
+		// We MUST reuse the objects because the WaitAndPop support is implemented
+		// on the container level, not on the storage level
+		//
 		if(i != openContainers_.end() && !i->second.expired())
 		{
 			shared_ptr<ITioContainer> container = i->second.lock();
@@ -122,6 +120,7 @@ namespace tio
 
 			pair_assign(storage, propertyMap) = storageManager->OpenStorage(type, name);
 		}
+
 		shared_ptr<ITioContainer> container(new Container(storage, propertyMap));
 
 		openContainers_[name] = container;

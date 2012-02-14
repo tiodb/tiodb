@@ -337,6 +337,8 @@ namespace tio
 
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+
+					//cout << "handle: " << handle << endl;
 				
 					session->SendBinaryMessage(answer);
 				}

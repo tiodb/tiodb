@@ -647,7 +647,7 @@ int main(int argc, char* argv[])
 #endif
 			("plugin", po::value< vector<string> >(), "load and run a plugin")
 			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
-			("port", po::value<unsigned short>(), "listening port")
+			("port", po::value<unsigned short>(), "listening port. If not informed, 2605")
 			("threads", po::value<unsigned short>(), "number of running threads")
 			("data-path", po::value<string>(), "sets data path");
 
@@ -655,7 +655,7 @@ int main(int argc, char* argv[])
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
 
-		if(vm.count("data-path") == 0 || vm.count("port") == 0)
+		if(vm.count("data-path") == 0)
 		{
 			cout << desc << endl;
 			return 1;
@@ -741,10 +741,15 @@ int main(int argc, char* argv[])
 				LoadPythonPlugins(vm["python-plugin"].as< vector<string> >(), pluginParameters);
 			}
 #endif
+
+			unsigned short port = 2605;
+
+			if(vm.count("port"))
+				port = vm["port"].as<unsigned short>();
 		
 			RunServer(
 				&containerManager,
-				vm["port"].as<unsigned short>(),
+				port,
 				users);
 		}
 	}
