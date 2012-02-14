@@ -276,7 +276,6 @@ namespace tio
 				str << ", value=" << parameter;
 
 			cout << str.str() << endl;
-
 #endif
 
 			switch(command)

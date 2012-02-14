@@ -474,7 +474,7 @@ namespace tio
 				//
 				EventCallbackT cb = me->waitAndPopNextCallback_;
 				me->waitAndPopNextCallback_ = NULL;
-
+				
 				cb("wnp_next", typedKey, typedValue);
 			}
 
