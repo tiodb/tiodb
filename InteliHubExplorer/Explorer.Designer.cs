@@ -104,7 +104,7 @@
             this.portTextBox.Name = "portTextBox";
             this.portTextBox.Size = new System.Drawing.Size(41, 20);
             this.portTextBox.TabIndex = 3;
-            this.portTextBox.Text = "6666";
+            this.portTextBox.Text = "2605";
             // 
             // label2
             // 
