@@ -8,6 +8,8 @@ from datetime import datetime
 from decimal import Decimal
 import weakref
 
+INTELIHUB_DEFAULT_PORT = 2605
+
 separator = '^'
 
 __connections = {}
@@ -641,7 +643,7 @@ def SpeedTest(func, count, bytes, useKey = False):
     return count / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)
 
 def MasterSpeedTest():
-    man = connect('tio://127.0.0.1:6666')
+    man = connect('tio://127.0.0.1')
 
     tests = (
               {'type': 'volatile_map',      'hasKey': True},
@@ -699,7 +701,14 @@ def parse_url(url):
     
 
     try:
-        host, port = parts[0].split(':')
+        
+        host_and_maybe_port = parts[0].split(':')
+
+        if len(host_and_maybe_port) == 2:
+            host, port = host_and_maybe_port
+        else:
+            host = host_and_maybe_port[0]
+            port = INTELIHUB_DEFAULT_PORT
 
         port = int(port)        
 
@@ -729,7 +738,7 @@ def connect(url):
     return TioServerConnection(address, port)
 
 def TestQuery():
-    tio = connect('tio://127.0.0.1:6666')
+    tio = connect('tio://127.0.0.1')
 
     def do_all_queries(container):
         print container
@@ -764,7 +773,7 @@ def TestQuery():
 
 def DiffTest():
     def DiffTest_Map():
-        tio = connect('tio://127.0.0.1:6666')
+        tio = connect('tio://127.0.0.1')
         vm = tio.create('vm', 'volatile_map')
         diff = vm.diff_start()
 
@@ -779,7 +788,7 @@ def DiffTest():
         print vm.diff_query(diff)
 
     def DiffTest_List():
-        tio = connect('tio://127.0.0.1:6666')
+        tio = connect('tio://127.0.0.1')
         vl = tio.create('vl', 'volatile_list')
         diff = vl.diff_start()
 
@@ -797,7 +806,7 @@ def DiffTest():
     DiffTest_Map()
 
 def DoTest():
-    server = connect('tio://127.0.0.1:6666')
+    server = connect('tio://127.0.0.1')
     container = server.create('test123', 'volatile_list')
 
     container.clear()    
@@ -823,13 +832,13 @@ def DoTest():
 
        
 if __name__ == '__main__':
-    #Connect('tio://127.0.0.1:6666').ping()
+    #Connect('tio://127.0.0.1').ping()
     #DiffTest()
     #TestQuery()
     DoTest()
     #BdbTest()
-    #parse_url('tio://127.0.0.1:6666/xpto/asas')
+    #parse_url('tio://127.0.0.1/xpto/asas')
     #MasterSpeedTest()
     #TestOrderManager()
-    #TioConnectionsManager().parse_url('tio://localhost:6666')
+    #TioConnectionsManager().parse_url('tio://localhost')
     #TestWaitAndPop()

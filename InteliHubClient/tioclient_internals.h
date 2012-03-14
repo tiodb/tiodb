@@ -105,7 +105,7 @@ void pr1_message_add_field_string(struct PR1_MESSAGE* pr1_message, unsigned shor
 
 int    pr1_message_field_get_int(const struct PR1_MESSAGE_FIELD_HEADER* field);
 double pr1_message_field_get_double(const struct PR1_MESSAGE_FIELD_HEADER* field);
-void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size);
+void   pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size);
 
 void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size);
 

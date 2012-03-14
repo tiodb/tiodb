@@ -795,7 +795,6 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->containers_count = 1;
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
-	(*connection)->dispatch_events_on_receive = 0;
 
 	return TIO_SUCCESS;
 }
@@ -1046,9 +1045,6 @@ void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* eve
 {
 	events_list_push(connection, event_message);
 	connection->pending_event_count++;
-
-	if(connection->dispatch_events_on_receive)
-		tio_dispatch_pending_events(connection, 1);
 }
 
 int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
@@ -1292,6 +1288,10 @@ clean_up_and_return:
 	return result;
 }
 
+/*
+	tio_dispatch_pending_events
+	returns: number of still pending events
+*/
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
 {
 	unsigned int a;
@@ -1353,7 +1353,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	tiodata_set_as_none(&value);
 	tiodata_set_as_none(&metadata);
 
-	return a;
+	return connection->pending_event_count;
 }
 
 

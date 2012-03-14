@@ -282,7 +282,20 @@ namespace tio
 
 		void WaitAndDispatchPendingEvents(unsigned int eventCount)
 		{
+			int stillPendingEvents;
+
+			stillPendingEvents = tio_dispatch_pending_events(connection_, eventCount);
+
+			//
+			// If we call tio_receive_pending_events with events in local queue
+			// we can hang waiting for something from network while there are events
+			// on the local queue waiting to be processed
+			//
+			if(stillPendingEvents)
+				return;
+
 			tio_receive_pending_events(connection_, eventCount);
+
 			tio_dispatch_pending_events(connection_, eventCount);
 		}
 
