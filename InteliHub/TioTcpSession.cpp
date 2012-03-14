@@ -63,6 +63,8 @@ namespace tio
 	{
 		BOOST_ASSERT(subscriptions_.empty());
 		BOOST_ASSERT(diffs_.empty());
+		BOOST_ASSERT(handles_.empty());
+		BOOST_ASSERT(poppers_.empty());
 
 		return;
 	}
@@ -643,9 +645,20 @@ namespace tio
 
 		subscriptions_.clear();
 
-		StopDiffs();
-	}
+		for(WaitAndPopNextMap::const_iterator i = poppers_.begin() ;  i != poppers_.end() ; ++i)
+		{
+			int handle, popId;
+			pair_assign(handle, popId) = *i;
 
+			GetRegisteredContainer(handle)->CancelWaitAndPopNext(popId);
+		}
+
+		poppers_.clear();
+
+		StopDiffs();
+
+		handles_.clear();
+	}
 
 	unsigned int TioTcpSession::RegisterContainer(const string& containerName, shared_ptr<ITioContainer> container)
 	{
