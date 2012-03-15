@@ -615,8 +615,8 @@ char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 
 	tiodata_set_as_none(tiodata);
 	tiodata->data_type = TIO_DATA_TYPE_STRING;
-	tiodata->string_size_ = min_size + 1;
-	tiodata->string_ = (char*)malloc(tiodata->string_size_);
+	tiodata->string_size_ = min_size;
+	tiodata->string_ = (char*)malloc(tiodata->string_size_ + 1); // leave room for a \0 just in case
 
 	return tiodata->string_;
 }
