@@ -275,14 +275,17 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 
 void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
-	if(buffer_size > field->data_size + 1)
-		buffer_size = field->data_size;
+	unsigned int copy_size = min(buffer_size, field->data_size);
 
 	field++;
 
-	memcpy(buffer, field, buffer_size);
+	memcpy(buffer, field, copy_size);
 
-	buffer[buffer_size-1] = '\0';
+	//
+	// If there's some space left, we will use the \0 just in case
+	//
+	if(buffer_size > copy_size)
+		buffer[copy_size] = '\0';
 }
 
 void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)

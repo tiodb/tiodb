@@ -2102,8 +2102,9 @@ namespace tio
 				try
 				{
 					TioData value;
+					string propertyValue = container->GetProperty(key.AsSz());
 
-					value.Set(container->GetProperty(key.AsSz()).c_str(), true);
+					value.Set(propertyValue.c_str(), propertyValue.size());
 					
 					MakeDataAnswer(key, value, TIONULL, answer);
 				}

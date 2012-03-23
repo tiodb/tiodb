@@ -553,9 +553,8 @@ namespace tio
 
 				result = container_manager()->container_propget(
 					container_, 
-					TioDataConverter<key_type>(key).inptr(),
-					value.outptr(),
-					NULL);
+					TioDataConverter<string>(key).inptr(),
+					value.outptr());
 
 				ThrowOnTioClientError(result);
 

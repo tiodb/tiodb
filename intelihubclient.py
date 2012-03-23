@@ -398,6 +398,8 @@ class TioServerConnection(object):
 
                 if event.name != 'clear':                
                     event.data = self.ReceiveDataAnswer(params, currentParam)
+                else:
+                    event.data = None, None, None
 
                 self.HandleEvent(event)
 
