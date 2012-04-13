@@ -153,6 +153,8 @@ int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* st
 int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie);
 
+const char* tio_get_last_error_description();
+
 
 //
 // for plugins

@@ -1,6 +1,21 @@
 #include "tioclient_internals.h"
 #include "tioclient.h"
 
+#define MAX_ERROR_DESCRIPTION_SIZE 255
+
+char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
+
+const char* pr1_get_last_error_description()
+{
+	return g_last_error_description;
+}
+
+void pr1_set_last_error_description(const char* description)
+{
+	strncpy(g_last_error_description, description, MAX_ERROR_DESCRIPTION_SIZE);
+	g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
+}
+
 int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 {
 	int ret = send(socket, (const char*)buffer, len, 0);
@@ -30,7 +45,10 @@ int socket_receive(SOCKET socket, void* buffer, int len)
 		ret = recv(socket, char_buffer + received, len - received, 0);
 
 		if(ret <= 0)
+		{
+			pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
 			return TIO_ERROR_NETWORK;
+		}
 
 		received += ret;
 	}
@@ -749,12 +767,16 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	char buffer[sizeof("going binary") -1];
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) 
+	if (sockfd < 0)
+	{
+		pr1_set_last_error_description("Can't create socket");
 		return TIO_ERROR_NETWORK;
+	}
 
 	server = gethostbyname(host);
 
 	if (server == NULL) {
+		pr1_set_last_error_description("Can't resolve server name.");
 		return TIO_ERROR_NETWORK;
 	}
 
@@ -763,11 +785,15 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	serv_addr.sin_port = htons(port);
 
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
+	{
+		pr1_set_last_error_description("Error while trying to connect to server");
 		return TIO_ERROR_NETWORK;
+	}
 
 	result = socket_send(sockfd, "protocol binary\r\n", sizeof("protocol binary\r\n") -1);
 	if(TIO_FAILED(result)) 
 	{
+		pr1_set_last_error_description("Error sending data to server during protocol negotiation");
 		closesocket(sockfd);
 		return result;
 	}
@@ -775,6 +801,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	result = socket_receive(sockfd, buffer, sizeof(buffer));
 	if(TIO_FAILED(result)) 
 	{
+		pr1_set_last_error_description("Error receiving data to server during protocol negotiation");
 		closesocket(sockfd);
 		return result;
 	}
@@ -782,6 +809,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	// invalid answer
 	if(memcmp(buffer, "going binary", sizeof("going binary")-1) !=0)
 	{
+		pr1_set_last_error_description("Invalid answer from server during protocol negotiation");
 		closesocket(sockfd);
 		return TIO_ERROR_PROTOCOL;
 	}
@@ -959,15 +987,6 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 	return pr1_message;
 }
 
-#define MAX_ERROR_DESCRIPTION_SIZE 255
-
-char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
-
-const char* pr1_get_last_error_description()
-{
-	return g_last_error_description;
-}
-
 int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 {
 	struct PR1_MESSAGE_FIELD_HEADER* error_code;
@@ -1006,6 +1025,10 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 	free(connection->containers);
 }
 
+const char* tio_get_last_error_description()
+{
+	return pr1_get_last_error_description();
+}
 
 int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command_id, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
 {
@@ -1105,6 +1128,7 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 			*response = NULL;
 			pr1_message_delete(received_message);
 			*response = NULL;
+			pr1_set_last_error_description("Missing field MESSAGE_FIELD_ID_COMMAND on the received packet");
 			return TIO_ERROR_PROTOCOL;
 		}
 
@@ -1530,7 +1554,10 @@ int tio_container_get_count(struct TIO_CONTAINER* container, int* count)
 	assert(count_value.data_type == TIO_DATA_TYPE_INT);
 
 	if(count_value.data_type != TIO_DATA_TYPE_INT)
+	{
+		pr1_set_last_error_description("Expected count_value.data_type to be INT. It is not.");
 		return TIO_ERROR_GENERIC;
+	}
 
 	*count = count_value.int_;
 

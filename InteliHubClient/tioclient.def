@@ -44,3 +44,5 @@ EXPORTS
 	tio_container_unsubscribe
 
 	tio_container_wait_and_pop_next
+
+	tio_get_last_error_description

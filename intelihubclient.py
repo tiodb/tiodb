@@ -233,6 +233,9 @@ class TioServerConnection(object):
         self.containers = {}
         self.stop = False
 
+        self.host = None
+        self.port = None
+
         self.log_sends = False
 
         self.running_queries = {}
@@ -488,7 +491,7 @@ class TioServerConnection(object):
 
     def Unsubscribe(self, handle):
         self.SendCommand('unsubscribe', str(handle))
-        del self.sinks[handle]        
+        del self.sinks[int(handle)]
 
     def WaitAndPop(self, handle, wnp_type, sink, key = None):
         param = str(handle)
@@ -566,6 +569,8 @@ class TioServerConnection(object):
         return self.SendCommand(buffer)
 
     def Connect(self, host, port):
+        self.host = host
+        self.port = port
         self.s.connect((host, port))
 
     def Disconnect(self):

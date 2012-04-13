@@ -75,7 +75,7 @@ namespace tio
 		if(result < 0)
 		{
 			stringstream str;
-			str << "client error " << result;
+			str << "client error " << result << ": \"" << tio_get_last_error_description() << "\"" ;
 			throw std::runtime_error(str.str());
 		}
 	}
@@ -283,6 +283,7 @@ namespace tio
 		void WaitAndDispatchPendingEvents(unsigned int eventCount)
 		{
 			int stillPendingEvents;
+			int ret;
 
 			stillPendingEvents = tio_dispatch_pending_events(connection_, eventCount);
 
@@ -294,9 +295,11 @@ namespace tio
 			if(stillPendingEvents)
 				return;
 
-			tio_receive_pending_events(connection_, eventCount);
+			ret = tio_receive_pending_events(connection_, eventCount);
+			ThrowOnTioClientError(ret);
 
-			tio_dispatch_pending_events(connection_, eventCount);
+			ret = tio_dispatch_pending_events(connection_, eventCount);
+			ThrowOnTioClientError(ret);
 		}
 
 		bool connected()
