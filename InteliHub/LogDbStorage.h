@@ -401,47 +401,22 @@ namespace tio {
 			{
 				size_t startIndex = 0;
 
-				if(accessType_ == RecordNumber)
+				if(start.empty())
 				{
-					if(start.empty())
-					{
-						return dispatcher_.Subscribe(sink);
-					}
-
-					try
-					{
-						startIndex = lexical_cast<int>(start);
-					}
-					catch(std::exception&)
-					{
-						throw std::invalid_argument("invalid start index");
-					}
-
+					return dispatcher_.Subscribe(sink);
 				}
-				else if(accessType_ == Map)
-				{
-					//
-					// map behavior is the opposite of vector
-					// send all records on subscription by default
-					//
-					if(start == "__none__")
-					{
-						return dispatcher_.Subscribe(sink);
-					}
 
-					//
-					// we will accept 0 as start index to stay compatible
-					// with vector
-					//
-					if(!start.empty() && start != "0")
+				try
+				{
+					startIndex = lexical_cast<int>(start);
+				}
+				catch(std::exception&)
+				{
+					throw std::invalid_argument("invalid start index");
+				}
+
+				if(accessType_ == Map && startIndex != 0)
 						throw std::invalid_argument("invalid start");
-
-					startIndex = 0;
-				}
-				else
-				{
-					BOOST_ASSERT(false && "invalid type");
-				}
 
 				size_t size = ldb_.GetRecordCount(tableInfo_);
 
