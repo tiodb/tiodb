@@ -307,10 +307,11 @@ public:
 
 	virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 	{
-		ListType::iterator i = GetOffset(searchKey);
+		size_t realIndex = 0;
+		ListType::iterator i = GetOffset(searchKey, &realIndex);
 
 		if(key)
-			*key = searchKey;
+			*key = static_cast<int>(realIndex);
 
 		if(value)
 			*value = i->value;
