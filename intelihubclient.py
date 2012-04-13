@@ -221,6 +221,9 @@ class RemoteContainer(ContainerPythonizer):
     def diff_query(self, diff_handle):
         return self.manager.Diff(diff_handle)
 
+    def dispatch_pending_events(self, max=0xFFFFFFFF):
+        return self.manager.DispatchPendingHandleEvents(self.handle, max)
+
 class TioServerConnection(object):
     def __init__(self, host = None, port = None):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -269,36 +272,63 @@ class TioServerConnection(object):
 
         return ret
 
-    def DispatchEvents(self, handle):
+    def DispatchPendingHandleEvents(self, handle, max=0xFFFFFFFF):
+        handle = int(handle)
         events = self.pendingEvents.get(handle)
 
         if not events:
-            return
+            return 0
         
-        for e in events:
+        for index, e in enumerate(events):
+            if index >= max:
+                break
+            
             if e.name == 'wnp_key':
                 key = e.data[0]
-                f = self.poppers[int(handle)]['wnp_key'][key].pop()
+                f = self.poppers[handle]['wnp_key'][key].pop()
                 if f:
                     f(self.containers[e.handle], e.name, *e.data)
             elif e.name == 'wnp_next':
-                f = self.poppers[int(handle)]['wnp_next'].pop()
+                f = self.poppers[handle]['wnp_next'].pop()
                 if f:
                     f(self.containers[e.handle], e.name, *e.data)
             else:
-                handle = int(handle)
                 sinks = self.sinks[handle].get(e.name)
+                # if there are no sink to this specific event, lets get the global (event='*')
                 if sinks is None:
                     sinks = self.sinks[handle].get('*', [])
                 for sink in sinks:
                     sink(self.containers[e.handle], e.name, *e.data)
-           
 
-        self.pendingEvents[handle] = []            
+        if max > len(events):
+            index = len(events)
+            self.pendingEvents[handle] = []
+        else:
+            del self.pendingEvents[handle][:index]
 
-    def DispatchAllEvents(self):
+        return index
+
+    def DispatchPendingEvents(self, max=0xFFFFFFFF):
+        count = 0
+        
         for handle in self.pendingEvents.keys():
-            self.DispatchEvents(handle)
+            count += self.DispatchPendingHandleEvents(handle, max=max-count)
+            if count >= max:
+                break
+
+        return count
+
+    def DispatchPendingEventAndReceiveNext(self):
+        self.DispatchPendingEvents()
+        self.ReceiveAnswer(False)
+    
+
+    def RunLoop(self, timeout=None):
+        while 1:
+            self.DispatchPendingEvents()
+            if self.stop:
+                break
+            self.ReceiveAnswer(False)
 
     def __ReceiveData(self, size):
         while len(self.receiveBuffer) < size:
@@ -399,29 +429,18 @@ class TioServerConnection(object):
                 currentParam += 1
                 event.name = params[currentParam]
 
+                self.HandleEvent(event)
+
                 if event.name != 'clear':                
                     event.data = self.ReceiveDataAnswer(params, currentParam)
                 else:
                     event.data = None, None, None
 
-                self.HandleEvent(event)
-
                 if not wait_until_answer:
                     return
-
-    def RunLoop(self):
-        while 1:
-            self.Dispatch()
-            if self.stop:
-                self.DispatchAllEvents()
-                return
-
+   
     def Stop(self):
         self.stop = True
-
-    def Dispatch(self):
-        self.DispatchAllEvents()
-        self.ReceiveAnswer(False)
                     
     def HandleEvent(self, event):
         self.pendingEvents.setdefault(event.handle, []).append(event)
@@ -630,71 +649,6 @@ class FieldParser:
 
         self.values[key] = value
 
-def SpeedTest(func, count, bytes, useKey = False):
-
-    v = '*' * bytes
-    
-    mark = datetime.now()
-
-    log_step = 2000
-
-    for x in xrange(count):
-        func(key=str(x) if useKey else None, value=v)
-        if x % log_step == 0 and x != 0:
-            d = datetime.now() - mark
-            print "%d, %0.2f/s" % (x, log_step / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0))
-            mark = datetime.now()
-
-       
-    d = datetime.now() - mark
-    return count / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)
-
-def MasterSpeedTest():
-    man = connect('tio://127.0.0.1')
-
-    tests = (
-              {'type': 'volatile_map',      'hasKey': True},
-              {'type': 'persistent_map',    'hasKey': True},
-
-              {'type': 'volatile_list',      'hasKey': False},
-              {'type': 'persistent_list',    'hasKey': False},
-            )
-
-    count = 20 * 1000
-    bytes = 30
-    namePerfix = datetime.now().strftime('%Y%m%d%H%M%S') + '_'
-
-    for test in tests:
-        type = test['type']
-        hasKey = test['hasKey']
-        ds = man.create(namePerfix + type, type)
-        print type
-        result = SpeedTest(ds.set if hasKey else ds.push_back, count, bytes, hasKey)
-
-        print '%s: %f msg/s' % (type, result)
-
-def TestWaitAndPop():
-    def f(key, value, metadata):
-        print (key, value, metadata)
-        
-    man = TioServerConnection('localhost', 6666)
-    container = man.create('abc', 'volatile_vector')
-    container.WaitAndPopNext(f)
-    container.PushBack(key=None, value='abababu')
-    container.WaitAndPopNext(f)
-    container.WaitAndPopNext(f)
-    container.PushBack(key=None, value='xpto')
-
-    container = man.create('xpto', 'volatile_vector')
-    container.Set('key1', 'value1')
-    container.Set('key2', 'value2')
-    container.WaitAndPopKey('key1', f)
-    container.WaitAndPopKey('key3', f)
-    container.Set('key3', 'value3')
-    container.Set('key4', 'value4')
-        
-    man.DispatchAllEvents()
-
 def parse_url(url):
     if url[:6] != 'tio://':
         raise Exception ('protocol not supported')
@@ -744,108 +698,10 @@ def connect(url):
     
     return TioServerConnection(address, port)
 
-def TestQuery():
-    tio = connect('tio://127.0.0.1')
 
-    def do_all_queries(container):
-        print container
-        try:
-            for x in container.query((len(container)/2)):
-                print x
-            for x in container.query(-(len(container)/2)):
-                print x
-        except:
-            pass
-            
-        for x in container.keys():
-            print x
-        for x in container.values():
-            print x
-        for x in container.query():
-            print x
-        for x in container.query_with_key_and_metadata():
-            print x
-        
-
-    do_all_queries(tio.create('pl', 'persistent_list'))
-    do_all_queries(tio.create('pm', 'persistent_map'))
-
-    container = tio.create('vl', 'volatile_list')
-    container.extend([x for x in xrange(10)])
-    do_all_queries(container)
-
-    container = tio.create('vm', 'volatile_map')
-    for x in range(10): container[str(x)] = x
-    do_all_queries(container)
-
-def DiffTest():
-    def DiffTest_Map():
-        tio = connect('tio://127.0.0.1')
-        vm = tio.create('vm', 'volatile_map')
-        diff = vm.diff_start()
-
-        for x in range(20) : vm[str(x)] = x*x
-
-        print vm.diff_query(diff)
-
-        for x in range(10) : vm[str(x)] = x*x
-
-        vm.clear()
-
-        print vm.diff_query(diff)
-
-    def DiffTest_List():
-        tio = connect('tio://127.0.0.1')
-        vl = tio.create('vl', 'volatile_list')
-        diff = vl.diff_start()
-
-        vl.extend(range(100))
-
-        print vl.diff_query(diff)
-
-        vl.extend(range(10))
-
-        vl.clear()
-
-        print vl.diff_query(diff)
-
-    DiffTest_List()
-    DiffTest_Map()
-
-def DoTest():
-    server = connect('tio://127.0.0.1')
-    container = server.create('test123', 'volatile_list')
-
-    container.clear()    
-
-    def show(*args):
-        print args
-    
-    container.subscribe(show)
-
-    for x in range(1):
-        print x
-        container.push_back(10, 'metadata')
-        container[0] = 'Rodrigo Strauss'
-        container.insert(0, 'test')
-        container.push_front(value=12334567)
-        assert len(container) == 3
-
-        key, value, metadata = container.get(0, withKeyAndMetadata=True)        
-
-    server.DispatchAllEvents();
-
+def main():
+    hub = connect('tio://127.0.0.1')
     return
-
        
 if __name__ == '__main__':
-    #Connect('tio://127.0.0.1').ping()
-    #DiffTest()
-    #TestQuery()
-    DoTest()
-    #BdbTest()
-    #parse_url('tio://127.0.0.1/xpto/asas')
-    #MasterSpeedTest()
-    #TestOrderManager()
-    #TioConnectionsManager().parse_url('tio://localhost')
-    #TestWaitAndPop()
+    main()
