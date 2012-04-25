@@ -376,6 +376,7 @@ namespace tio
 					else if(command == TIO_COMMAND_PROPGET)
 					{
 						value = container->GetProperty(searchKey.AsSz());
+						key = searchKey;
 					}
 					else
 						throw std::runtime_error("INTERNAL ERROR");

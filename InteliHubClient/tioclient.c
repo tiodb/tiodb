@@ -306,11 +306,16 @@ void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, 
 		buffer[copy_size] = '\0';
 }
 
-void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)
+void pr1_message_fill_header_info(struct PR1_MESSAGE* pr1_message)
 {
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
 	header->message_size = stream_buffer_space_used(pr1_message->stream_buffer) - sizeof(struct PR1_MESSAGE_HEADER);
 	header->field_count = pr1_message->field_count;
+}
+
+void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)
+{
+	pr1_message_fill_header_info(pr1_message);
 
 	*buffer = pr1_message->stream_buffer->buffer;
 	*size = stream_buffer_space_used(pr1_message->stream_buffer);
@@ -420,6 +425,8 @@ void pr1_message_parse(struct PR1_MESSAGE* pr1_message)
 	unsigned int a;
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
 	char* current = (char*)&header[1];
+
+	assert(header->message_size != 0xFFFFFFFF);
 
 	pr1_message->field_count = header->field_count;
 
@@ -912,17 +919,12 @@ void pr1_message_field_get_as_tio_data(const struct PR1_MESSAGE* pr1_message, un
 	return;
 }
 
-
-
-int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+struct PR1_MESSAGE* tio_generate_data_message(unsigned int command_id, void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
-	SOCKET socket = container->connection->socket;
-	int result;
-
 	struct PR1_MESSAGE* pr1_message = pr1_message_new();
 
 	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_COMMAND, command_id);
-	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_HANDLE, container->handle);
+	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_HANDLE, (int)handle);
 
 	if(key)
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_KEY, key);
@@ -930,6 +932,17 @@ int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int com
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_VALUE, value);
 	if(metadata)
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_METADATA, metadata);
+
+	return pr1_message;
+}
+
+int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+{
+	SOCKET socket = container->connection->socket;
+	int result;
+
+	struct PR1_MESSAGE* pr1_message = 
+		tio_generate_data_message(command_id, container->handle, key, value, metadata);
 
 	result = pr1_message_send_and_delete(socket, pr1_message);
 
@@ -1202,7 +1215,18 @@ clean_up_and_return:
 	return result;
 }
 
+struct PR1_MESSAGE* tio_generate_create_or_open_msg(unsigned int command_id, const char* name, const char* type)
+{
+	struct PR1_MESSAGE* pr1_message = pr1_message_new();
 
+	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_COMMAND, command_id);
+	pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_NAME, name);
+
+	if(type)
+		pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_TYPE, type);
+
+	return pr1_message;
+}
 
 
 int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, const char* type, struct TIO_CONTAINER** container)
@@ -1216,13 +1240,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 
 	*container = NULL;
 
-	pr1_message = pr1_message_new();
-
-	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_COMMAND, command_id);
-	pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_NAME, name);
-
-	if(type)
-		pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_TYPE, type);
+	pr1_message = tio_generate_create_or_open_msg(command_id, name, type);
 
 	pr1_message_send_and_delete(socket, pr1_message);
 

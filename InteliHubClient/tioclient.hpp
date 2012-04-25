@@ -49,7 +49,7 @@ namespace tio
 	}
 
 	//
-	// TODO: maybe not correct...
+	// TODO: cast maybe not correct...
 	//
 	inline void FromTioData(const TIO_DATA* tiodata, unsigned int* value)
 	{
