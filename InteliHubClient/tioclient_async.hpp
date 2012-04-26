@@ -11,10 +11,12 @@ namespace tio
 	using boost::asio::ip::tcp;
 	using boost::asio::const_buffer;
 	using std::vector;
+	using std::queue;
 	using boost::system::error_code;
 	using std::string;
 	using std::stringstream;
 	using std::endl;
+	using std::make_shared;
 	
 	inline string Pr1MessageDump(const char* prefix, struct PR1_MESSAGE* pr1_message)
 	{
@@ -845,6 +847,10 @@ namespace tio
 			IAsyncContainerManager* containerManager_;
 			EventCallbackT waitAndPopNextCallback_;
 
+			bool connecting_;
+
+			vector<function<void(void)>> queuedCommands_;
+
 			IAsyncContainerManager* container_manager()
 			{
 				if(!containerManager_)
@@ -853,11 +859,31 @@ namespace tio
 				return containerManager_;
 			}
 
+			void ExplodeIfNotConnectedOrConnecting()
+			{
+				if(!connected() && !connecting_)
+					throw std::runtime_error("not connected");
+			}
+
+			void SendPendingCommands()
+			{
+				assert(!connecting_ && connected());
+
+				for(auto i = queuedCommands_.begin() ; i != queuedCommands_.end() ; ++i)
+				{
+					function<void(void)>& f = *i;
+					f();
+				}
+
+				queuedCommands_.clear();
+			}
+
 		public:
 			TioAsyncContainerImpl() 
 				: containerHandle_(NULL)
 				, containerManager_(NULL)
 				, waitAndPopNextCallback_(NULL)
+				, connecting_(false)
 			{
 			}
 
@@ -890,11 +916,15 @@ namespace tio
 
 				name_ = name;
 
+				connecting_ = true;
+
 				container_manager()->open(
 					name.c_str(), 
 					NULL, 
 					[this, callback, error_callback](const async_error_info& error_info, void* handle)
 					{
+						connecting_ = false;
+
 						if(error_info)
 						{
 							if(error_callback) error_callback(error_info);
@@ -902,6 +932,8 @@ namespace tio
 						}
 						
 						containerHandle_ = handle;
+
+						SendPendingCommands();
 						
 						if(callback)
 							callback();
@@ -915,11 +947,15 @@ namespace tio
 
 				name_ = name;
 
+				connecting_ = true;
+
 				container_manager()->create(
 					name.c_str(), 
 					type.c_str(), 
 					[this, callback, error_callback](const async_error_info& error_info, void* handle)
 					{
+						connecting_ = false;
+
 						if(error_info)
 						{
 							if(error_callback) error_callback(error_info);
@@ -928,8 +964,24 @@ namespace tio
 
 						containerHandle_ = handle;
 
+						//
+						// I've spent sometime thinking if we should dispatch the pending command
+						// before or after calling the create/open callback.
+						//
+						// If we call the open/create callback *before* sending pending commands,
+						// any command send on the callback will be send *before* the pending commands,
+						// making it less intuitive
+						//
+						// But it will allow the callback to setup the container like clearing it before use
+						// or setting some initial values or properties that are necessary. I've choose to
+						// do this, otherwise there would be no way to guarantee that someone would be able
+						// laksdflkaskljdf asdlfkasjdfl adsflkasjdfl asdkf
+						//
+
 						if(callback)
 							callback();
+
+						SendPendingCommands();
 					});
 			}
 
@@ -958,42 +1010,72 @@ namespace tio
 
 			void clear(JustDoneCallbackT callback, ErrorCallbackT errorCallback)
 			{
-				container_manager()->container_clear(
-					containerHandle_,
-					GenerateJustErrorReportCallback(callback, errorCallback));
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto doit = [=]()
+				{
+					container_manager()->container_clear(
+						containerHandle_,
+						GenerateJustErrorReportCallback(callback, errorCallback));
+				};
+
+				if(connecting_)
+					queuedCommands_.push_back(doit);
+				else
+					doit();
 			}
 
 			void close(JustDoneCallbackT callback, ErrorCallbackT errorCallback)
 			{
-				container_manager()->close(
-					containerHandle_, 
-					[this, callback, errorCallback](const async_error_info& error_info)
-					{
-						if(error_info)
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto doit = [=]()
+				{
+					container_manager()->close(
+						containerHandle_, 
+						[=](const async_error_info& error_info)
 						{
-							if(errorCallback)
-								errorCallback(error_info);
+							if(error_info)
+							{
+								if(errorCallback)
+									errorCallback(error_info);
 
-							return;
-						}
+								return;
+							}
 
-						if(!callback)
-							return;
+							if(!callback)
+								return;
 						
-						// closed
-						containerHandle_ = nullptr;
+							// closed
+							containerHandle_ = nullptr;
 
-						callback();
-					});
+							callback();
+						});
+				};
+
+				if(connecting_)
+					queuedCommands_.push_back(doit);
+				else
+					doit();
 			}
 
 			void propset(const string& key, const string& value, JustDoneCallbackT callback, ErrorCallbackT errorCallback)
 			{
-				container_manager()->container_propset(
-					containerHandle_, 
-					TioDataConverter<string>(key).inptr(),
-					TioDataConverter<string>(value).inptr(),
-					GenerateJustErrorReportCallback(callback, errorCallback));
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto doit = [=]()
+				{
+					container_manager()->container_propset(
+						containerHandle_, 
+						TioDataConverter<string>(key).inptr(),
+						TioDataConverter<string>(value).inptr(),
+						GenerateJustErrorReportCallback(callback, errorCallback));
+				};
+
+				if(connecting_)
+					queuedCommands_.push_back(doit);
+				else
+					doit();
 			}
 
 			void propget(const string& key, PropgetCallbackT callback, ErrorCallbackT errorCallback)
@@ -1087,32 +1169,43 @@ namespace tio
 					});
 			}
 
-			
-
 			void subscribe(const string& start, JustDoneCallbackT callback, ErrorCallbackT errorCallback, EventCallbackT eventCallback)
 			{
-				container_manager()->container_subscribe(
-					containerHandle_,
-					TioDataConverter<string>(start).inptr(),
-					GenerateJustErrorReportCallback(callback, errorCallback),
-					[eventCallback](const async_error_info& error_info, int event_code, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto outerEventCallback = [=](const async_error_info& error_info, int event_code, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				{
+					TKey converted_k;
+					TValue converted_v;
+					TMetadata converted_m;
+
+					if(!error_info)
 					{
-						TKey converted_k;
-						TValue converted_v;
-						TMetadata converted_m;
+						ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, &converted_m);
+					}
 
-						if(!error_info)
-						{
-							ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, &converted_m);
-						}
+					eventCallback(
+						event_code,
+						k.data_type != TIO_DATA_TYPE_NONE ? &converted_k : nullptr,
+						v.data_type != TIO_DATA_TYPE_NONE ? &converted_v : nullptr,
+						m.data_type != TIO_DATA_TYPE_NONE ? &converted_m : nullptr);
 
-						eventCallback(
-							event_code,
-							k.data_type != TIO_DATA_TYPE_NONE ? &converted_k : nullptr,
-							v.data_type != TIO_DATA_TYPE_NONE ? &converted_v : nullptr,
-							m.data_type != TIO_DATA_TYPE_NONE ? &converted_m : nullptr);
+				};
 
-					});
+				auto doit = [=]()
+				{
+					container_manager()->container_subscribe(
+						containerHandle_,
+						TioDataConverter<string>(start).inptr(),
+						GenerateJustErrorReportCallback(callback, errorCallback),
+						outerEventCallback
+						);
+				};
+
+				if(connecting_)
+					queuedCommands_.push_back(doit);
+				else
+					doit();
 			}
 
 			void unsubscribe(JustDoneCallbackT callback, ErrorCallbackT errorCallback)
@@ -1123,28 +1216,50 @@ namespace tio
 
 			void set(const key_type& key, const value_type& value, const std::string* metadata, JustDoneCallbackT callback, ErrorCallbackT error_callback)
 			{
-				if(!connected())
+				if(!connected() && !connecting_)
 					throw std::runtime_error("not connected");
 
-				container_manager()->container_set(
-					containerHandle_, 
-					TioDataConverter<key_type>(key).inptr(),
-					TioDataConverter<value_type>(value).inptr(),
-					metadata ? TioDataConverter<std::string>(*metadata).inptr() : nullptr,
-					[this, callback, error_callback](const async_error_info& error_info)
-					{
-						if(error_info)
-						{
-							if(error_callback)
-								error_callback(error_info);
-							return;
-						}
+				TioDataConverter<key_type> keyConverter(key);
+				TioDataConverter<value_type> valueConverter(value);
+				TioDataConverter<metadata_type> metadataConverter(metadata);
 
-						if(!callback)
-							return;
-						
-						callback();
-					});
+				auto doit = [this, callback, error_callback, keyConverter, valueConverter, metadataConverter]()
+				{
+					container_manager()->container_set(
+						containerHandle_, 
+						keyConverter.inptr(),
+						valueConverter.inptr(),
+						metadataConverter.inptr(),
+						[=](const async_error_info& error_info)
+						{
+							if(error_info)
+							{
+								if(error_callback)
+									error_callback(error_info);
+								return;
+							}
+
+							if(!callback)
+								return;
+
+							callback();
+						});
+				};
+
+				
+				//
+				// If we are waiting for the container to open, we will queue the set, so the
+				// lib user doesn't need to wait the connection callback just to set a value
+				//
+				if(connecting_)
+				{
+					queuedCommands_.push_back(doit);
+					return;
+				}
+				else
+				{
+					doit();
+				}
 			}
 
 			void set_string(const key_type& key, const string& value, const std::string* metadata, JustDoneCallbackT callback, ErrorCallbackT error_callback)
@@ -1266,28 +1381,41 @@ namespace tio
 
 			void wait_and_pop_next(JustDoneCallbackT callback, ErrorCallbackT errorCallback, EventCallbackT eventCallback)
 			{
-				container_manager()->container_wait_and_pop_next(
-					containerHandle_,
-					GenerateJustErrorReportCallback(callback, errorCallback),
-					[eventCallback](const async_error_info& error_info, int event_code, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto outerEventCallback = [eventCallback](const async_error_info& error_info, int event_code, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				{
+					int converted_k;
+					TValue converted_v;
+					TMetadata converted_m;
+
+					if(!error_info)
 					{
-						int converted_k;
-						TValue converted_v;
-						TMetadata converted_m;
-
-						if(!error_info)
-						{
-							ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, &converted_m);
-						}
-
-						eventCallback(
-							event_code,
-							k.data_type != TIO_DATA_TYPE_NONE ? &converted_k : nullptr,
-							v.data_type != TIO_DATA_TYPE_NONE ? &converted_v : nullptr,
-							m.data_type != TIO_DATA_TYPE_NONE ? &converted_m : nullptr);
+						ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, &converted_m);
 					}
-				);
+
+					eventCallback(
+						event_code,
+						k.data_type != TIO_DATA_TYPE_NONE ? &converted_k : nullptr,
+						v.data_type != TIO_DATA_TYPE_NONE ? &converted_v : nullptr,
+						m.data_type != TIO_DATA_TYPE_NONE ? &converted_m : nullptr);
+				};
+
+				auto doit = [=]()
+				{
+					container_manager()->container_wait_and_pop_next(
+						containerHandle_,
+						GenerateJustErrorReportCallback(callback, errorCallback),
+						outerEventCallback);
+				};
+
+				if(connecting_)
+					queuedCommands_.push_back(doit);
+				else
+					doit();
 			}
 		};
 	}
 }
+
+

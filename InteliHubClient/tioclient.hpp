@@ -86,9 +86,35 @@ namespace tio
 		TIO_DATA tiodata_;
 	public:
 
+		TioDataConverter(const TioDataConverter& rhv)
+		{
+			tiodata_init(&tiodata_);
+			
+			*this = rhv;
+		}
+
+		TioDataConverter& operator=(const TioDataConverter& rhv)
+		{
+			tiodata_set_as_none(&tiodata_);
+			tiodata_copy(&rhv.tiodata_, &tiodata_);
+			return *this;
+		}
+
+		// move
+		TioDataConverter(const TioDataConverter&& rhv)
+		{
+			tiodata_ = rhv.tiodata_;
+			rhv.tiodata_.data_type = TIO_DATA_TYPE_NONE;
+		}
+
 		TioDataConverter()
 		{
 			tiodata_init(&tiodata_);
+		}
+		
+		~TioDataConverter()
+		{
+			tiodata_set_as_none(&tiodata_);
 		}
 
 		explicit TioDataConverter(const TValue& v)
@@ -97,7 +123,18 @@ namespace tio
 			ToTioData(v, &tiodata_);
 		}
 
-		const TIO_DATA* inptr()
+		explicit TioDataConverter(const TValue* v)
+		{
+			tiodata_init(&tiodata_);
+			
+			//
+			// Type will be TIO_DATA_TYPE_NONE if the pointer is null
+			//
+			if(v)
+				ToTioData(*v, &tiodata_);
+		}
+
+		const TIO_DATA* inptr() const
 		{
 			return &tiodata_;
 		}
@@ -108,7 +145,7 @@ namespace tio
 			return &tiodata_;
 		}
 
-		TValue value()
+		TValue value() const
 		{
 			TValue v;
 			
