@@ -645,7 +645,7 @@ namespace tio
 			CheckHandle(handle);
 
 			shared_ptr<PR1_MESSAGE> msg(
-				tio_generate_data_message(TIO_COMMAND_INSERT, handle, nullptr, nullptr, nullptr),
+				tio_generate_data_message(TIO_COMMAND_CLEAR, handle, nullptr, nullptr, nullptr),
 				&pr1_message_delete);
 
 			SendBinaryMessage(Pr1RequestInfo(msg, callback));
@@ -1216,8 +1216,7 @@ namespace tio
 
 			void set(const key_type& key, const value_type& value, const std::string* metadata, JustDoneCallbackT callback, ErrorCallbackT error_callback)
 			{
-				if(!connected() && !connecting_)
-					throw std::runtime_error("not connected");
+				ExplodeIfNotConnectedOrConnecting();
 
 				TioDataConverter<key_type> keyConverter(key);
 				TioDataConverter<value_type> valueConverter(value);
