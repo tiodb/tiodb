@@ -10,10 +10,15 @@ namespace InteliHubExplorer
     public partial class Explorer : Form
     {
         InteliHubClient.Connection _connection;
+        string m_server = "10.255.232.50";
+        Int16 m_port = 2605;
 
         public Explorer()
         {
             InitializeComponent();
+
+            serverTextBox.Text = m_server;
+            portTextBox.Text = m_port.ToString();
         }
 
         private void connectButton_Click(object sender, EventArgs e)
@@ -21,7 +26,7 @@ namespace InteliHubExplorer
             if (_connection != null)
                 _connection.Disconnect();
 
-            _connection = new InteliHubClient.Connection(serverTextBox.Text, Convert.ToInt16(portTextBox.Text));
+            _connection = new InteliHubClient.Connection(m_server, m_port);
 
             statusLabel.Text = "connected!";
 
@@ -62,13 +67,32 @@ namespace InteliHubExplorer
 
         private void containersListView_DoubleClick(object sender, EventArgs e)
         {
-            new ContainerViewer(_connection.Open(containersListView.SelectedItems[0].Text)).Show();
+            new ContainerViewer(m_server, m_port, containersListView.SelectedItems[0].Text).Show();
         }
 
         private void containersListView_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
-                new ContainerViewer(_connection.Open(containersListView.SelectedItems[0].Text)).Show();
+            {
+                new ContainerViewer(m_server, m_port, containersListView.SelectedItems[0].Text).Show();
+            }
+        }
+
+        private void serverTextBox_TextChanged(object sender, EventArgs e)
+        {
+            m_server = serverTextBox.Text;
+        }
+
+        private void portTextBox_TextChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                m_port = Convert.ToInt16(portTextBox.Text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString());
+            }
         }
     }
 }

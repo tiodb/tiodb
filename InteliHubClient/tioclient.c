@@ -833,6 +833,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->containers_count = 1;
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
+	(*connection)->dispatch_events_on_receive = 0;
 
 	return TIO_SUCCESS;
 }

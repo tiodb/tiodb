@@ -136,3 +136,5 @@ InteliHubExplorer/InteliHubExplorer.sdf
 InteliHubExplorer/InteliHubExplorer.opensdf
 InteliHubClientDll/InteliHubClientDll.vcxproj.user
 InteliHubClientClr/InteliHubClientClr.suo
+InteliHubClient/intelihubclient.dir/*
+InteliHubExplorer/InteliHubExplorer.suo

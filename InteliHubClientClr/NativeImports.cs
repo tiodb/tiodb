@@ -221,9 +221,10 @@ namespace InteliHubClient
 
         public static void ThrowOnNativeApiError(int result)
         {
-            if(result < 0)
+            if (result < 0)
+            {
                 throw new Exception("tio protocol error");
+            }
         }
-
     }
 }

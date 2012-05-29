@@ -10,27 +10,31 @@ namespace InteliHubExplorer
 {
     public partial class ContainerViewer : Form
     {
-        InteliHubClient.Container _container;
+        InteliHubClient.Connection m_connection = null;
+        InteliHubClient.Container m_container = null;
 
-        public ContainerViewer(InteliHubClient.Container container)
+        public ContainerViewer(string server, Int16 port, string containerName)
         {
-            _container = container;
+            m_connection = new InteliHubClient.Connection(server, port);
+            m_container = m_connection.Open(containerName);
             
             InitializeComponent();
 
-            Text = container.Name;            
+            Text = m_container.Name;
         }
 
-        private bool _updating = false;
+        private bool m_updating = false;
 
         void UpdateData()
         {
-            if (_updating)
+            if (m_updating)
+            {
                 return;
+            }
 
             try
             {
-                _updating = true;
+                m_updating = true;
 
                 //
                 // let's check if there is a schema for the value
@@ -38,7 +42,7 @@ namespace InteliHubExplorer
                 string schema = null;
                 try
                 {
-                    schema =_container.GetProperty("schema");
+                    schema = m_container.GetProperty("schema");
                 }
                 catch(Exception){}
 
@@ -51,7 +55,7 @@ namespace InteliHubExplorer
 
                 int count = 0;
 
-                _container.Query(
+                m_container.Query(
                     delegate(object key, object value, object metadata)
                     {
                         itemsListView.Items.Add(
@@ -71,14 +75,16 @@ namespace InteliHubExplorer
             }
             finally
             {
-                _updating = false;
+                m_updating = false;
             }
         }
 
         private void ContainerViewer_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.F5)
+            {
                 UpdateData();
+            }
         }
 
         private void ContainerViewer_Load(object sender, EventArgs e)

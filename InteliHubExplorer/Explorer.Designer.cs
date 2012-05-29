@@ -105,6 +105,7 @@
             this.portTextBox.Size = new System.Drawing.Size(41, 20);
             this.portTextBox.TabIndex = 3;
             this.portTextBox.Text = "2605";
+            this.portTextBox.TextChanged += new System.EventHandler(this.portTextBox_TextChanged);
             // 
             // label2
             // 
@@ -125,6 +126,7 @@
             this.serverTextBox.Size = new System.Drawing.Size(256, 20);
             this.serverTextBox.TabIndex = 1;
             this.serverTextBox.Text = "localhost";
+            this.serverTextBox.TextChanged += new System.EventHandler(this.serverTextBox_TextChanged);
             // 
             // label1
             // 
