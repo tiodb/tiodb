@@ -25,9 +25,7 @@ namespace InteliHubClient
 
         public Connection(string host, short port)
         {
-            int result;
-
-            result = NativeImports.tio_connect(host, port, out _nativeHandle);
+            int result = NativeImports.tio_connect(host, port, out _nativeHandle);
             NativeImports.ThrowOnNativeApiError(result);
         }
 
@@ -40,9 +38,7 @@ namespace InteliHubClient
 
         public void Ping(string host, short port)
         {
-            int result;
-
-            result = NativeImports.tio_ping(_nativeHandle, "InteliHubClient");
+            int result = NativeImports.tio_ping(_nativeHandle, "InteliHubClient");
             NativeImports.ThrowOnNativeApiError(result);
         }
     }
