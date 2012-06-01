@@ -10,8 +10,8 @@ namespace InteliHubExplorer
     public partial class Explorer : Form
     {
         InteliHubClient.Connection _connection;
-        string m_server = "10.255.232.50";
-        Int16 m_port = 2605;
+        string m_server = (string)Application.UserAppDataRegistry.GetValue("server", "localhost");
+        Int16 m_port = Convert.ToInt16(Application.UserAppDataRegistry.GetValue("port", 2605));
 
         public Explorer()
         {
@@ -28,9 +28,11 @@ namespace InteliHubExplorer
 
             _connection = new InteliHubClient.Connection(m_server, m_port);
 
-            statusLabel.Text = "connected!";
 
-            LoadContainerList();
+            Application.UserAppDataRegistry.SetValue("server", m_server);
+            Application.UserAppDataRegistry.SetValue("port", m_port);
+
+            statusLabel.Text = "Connected! Click \"update list\" to download container list";
         }
 
         private void LoadContainerList()
@@ -54,7 +56,7 @@ namespace InteliHubExplorer
                     }
                 });
 
-            statusLabel.Text = String.Format("{0} containers", count);
+            
         }
 
         
@@ -99,5 +101,16 @@ namespace InteliHubExplorer
         {
             new ContainerViewer(m_server, m_port, tbContainer.Text).Show();
         }
+
+        private void Explorer_Load(object sender, EventArgs e)
+        {
+
+        }
+
+        private void updateContainerListButton_Click(object sender, EventArgs e)
+        {
+            LoadContainerList();
+        }
+
     }
 }

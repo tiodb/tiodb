@@ -32,6 +32,9 @@
             this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.btnOpenContainer = new System.Windows.Forms.Button();
+            this.tbContainer = new System.Windows.Forms.TextBox();
+            this.label3 = new System.Windows.Forms.Label();
             this.connectButton = new System.Windows.Forms.Button();
             this.portTextBox = new System.Windows.Forms.TextBox();
             this.label2 = new System.Windows.Forms.Label();
@@ -39,9 +42,7 @@
             this.label1 = new System.Windows.Forms.Label();
             this.statusStrip = new System.Windows.Forms.StatusStrip();
             this.statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
-            this.btnOpenContainer = new System.Windows.Forms.Button();
-            this.tbContainer = new System.Windows.Forms.TextBox();
-            this.label3 = new System.Windows.Forms.Label();
+            this.updateContainerListButton = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.SuspendLayout();
@@ -56,7 +57,7 @@
             this.columnHeader2});
             this.containersListView.Location = new System.Drawing.Point(12, 132);
             this.containersListView.Name = "containersListView";
-            this.containersListView.Size = new System.Drawing.Size(415, 234);
+            this.containersListView.Size = new System.Drawing.Size(415, 215);
             this.containersListView.TabIndex = 0;
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
@@ -91,6 +92,36 @@
             this.groupBox1.TabIndex = 1;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Connection info";
+            // 
+            // btnOpenContainer
+            // 
+            this.btnOpenContainer.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnOpenContainer.Location = new System.Drawing.Point(328, 77);
+            this.btnOpenContainer.Name = "btnOpenContainer";
+            this.btnOpenContainer.Size = new System.Drawing.Size(75, 23);
+            this.btnOpenContainer.TabIndex = 7;
+            this.btnOpenContainer.Text = "open";
+            this.btnOpenContainer.UseVisualStyleBackColor = true;
+            this.btnOpenContainer.Click += new System.EventHandler(this.btnOpenContainer_Click);
+            // 
+            // tbContainer
+            // 
+            this.tbContainer.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.tbContainer.Location = new System.Drawing.Point(10, 81);
+            this.tbContainer.Name = "tbContainer";
+            this.tbContainer.Size = new System.Drawing.Size(256, 20);
+            this.tbContainer.TabIndex = 6;
+            this.tbContainer.Text = "intelimarket/bvmf/petr4/properties";
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(7, 64);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(51, 13);
+            this.label3.TabIndex = 5;
+            this.label3.Text = "container";
             // 
             // connectButton
             // 
@@ -160,47 +191,30 @@
             this.statusLabel.Size = new System.Drawing.Size(21, 17);
             this.statusLabel.Text = "tio";
             // 
-            // btnOpenContainer
+            // updateContainerListButton
             // 
-            this.btnOpenContainer.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOpenContainer.Location = new System.Drawing.Point(328, 77);
-            this.btnOpenContainer.Name = "btnOpenContainer";
-            this.btnOpenContainer.Size = new System.Drawing.Size(75, 23);
-            this.btnOpenContainer.TabIndex = 7;
-            this.btnOpenContainer.Text = "open";
-            this.btnOpenContainer.UseVisualStyleBackColor = true;
-            this.btnOpenContainer.Click += new System.EventHandler(this.btnOpenContainer_Click);
-            // 
-            // tbContainer
-            // 
-            this.tbContainer.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.tbContainer.Location = new System.Drawing.Point(10, 81);
-            this.tbContainer.Name = "tbContainer";
-            this.tbContainer.Size = new System.Drawing.Size(256, 20);
-            this.tbContainer.TabIndex = 6;
-            this.tbContainer.Text = "intelimarket/bvmf/petr4/properties";
-            // 
-            // label3
-            // 
-            this.label3.AutoSize = true;
-            this.label3.Location = new System.Drawing.Point(7, 64);
-            this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(51, 13);
-            this.label3.TabIndex = 5;
-            this.label3.Text = "container";
+            this.updateContainerListButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.updateContainerListButton.Location = new System.Drawing.Point(352, 353);
+            this.updateContainerListButton.Name = "updateContainerListButton";
+            this.updateContainerListButton.Size = new System.Drawing.Size(75, 23);
+            this.updateContainerListButton.TabIndex = 8;
+            this.updateContainerListButton.Text = "update list";
+            this.updateContainerListButton.UseVisualStyleBackColor = true;
+            this.updateContainerListButton.Click += new System.EventHandler(this.updateContainerListButton_Click);
             // 
             // Explorer
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(439, 410);
+            this.Controls.Add(this.updateContainerListButton);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.groupBox1);
             this.Controls.Add(this.containersListView);
             this.KeyPreview = true;
             this.Name = "Explorer";
-            this.Text = "Tio Explorer";
+            this.Text = "InteliHub Explorer";
+            this.Load += new System.EventHandler(this.Explorer_Load);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Explorer_KeyUp);
             this.groupBox1.ResumeLayout(false);
             this.groupBox1.PerformLayout();
@@ -227,6 +241,7 @@
         private System.Windows.Forms.Button btnOpenContainer;
         private System.Windows.Forms.TextBox tbContainer;
         private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Button updateContainerListButton;
     }
 }
 
