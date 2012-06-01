@@ -94,5 +94,10 @@ namespace InteliHubExplorer
                 MessageBox.Show(ex.ToString());
             }
         }
+
+        private void btnOpenContainer_Click(object sender, EventArgs e)
+        {
+            new ContainerViewer(m_server, m_port, tbContainer.Text).Show();
+        }
     }
 }
