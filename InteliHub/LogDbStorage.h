@@ -403,6 +403,7 @@ namespace tio {
 
 				if(start.empty())
 				{
+					sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 					return dispatcher_.Subscribe(sink);
 				}
 
@@ -440,6 +441,7 @@ namespace tio {
 					}			
 				}
 
+				sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 				return dispatcher_.Subscribe(sink);
 			}
 			virtual void Unsubscribe(unsigned int cookie)

@@ -431,10 +431,10 @@ class TioServerConnection(object):
 
                 self.HandleEvent(event)
 
-                if event.name != 'clear':                
-                    event.data = self.ReceiveDataAnswer(params, currentParam)
-                else:
+                if event.name == 'clear' or event.name == 'snapshot_end':
                     event.data = None, None, None
+                else:
+                    event.data = self.ReceiveDataAnswer(params, currentParam)
 
                 if not wait_until_answer:
                     return
@@ -701,6 +701,10 @@ def connect(url):
 
 def main():
     hub = connect('tio://127.0.0.1')
+    def sink(c, e, k, v, m): print c, e, k, v, m
+    l = hub.create('xpto', 'volatile_list')
+    l.subscribe(sink)
+    
     return
        
 if __name__ == '__main__':

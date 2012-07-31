@@ -233,7 +233,10 @@ public:
 		  // if client wants current data as well
 		  //
 		  if(start == "")
+		  {
+			  sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 			  return dispatcher_.Subscribe(sink);
+		  }
 
 		  //
 		  // we will accept 0 as start index to stay compatible
@@ -277,6 +280,8 @@ public:
 		  {
 			  sink("set", i->first.c_str(), i->second.value, i->second.metadata);
 		  }
+
+		  sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 
 		  return dispatcher_.Subscribe(sink);
 	  }

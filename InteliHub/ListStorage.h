@@ -282,7 +282,10 @@ public:
 		}
 
 		if(start.empty() || startIndex == 0 && data_.size() == 0)
+		{
+			sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 			return dispatcher_.Subscribe(sink);
+		}
 
 		i =  GetOffset(startIndex);
 
@@ -296,6 +299,8 @@ public:
 			const ValueAndMetadata& data = *i;
 			sink("push_back", TIONULL, data.value, data.metadata);
 		}
+
+		sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 
 		return cookie;
 

@@ -986,6 +986,8 @@ namespace tio
 			return TIO_COMMAND_INSERT;
 		else if(eventName == "wnp_next")
 			return TIO_COMMAND_WAIT_AND_POP_NEXT;
+		else if(eventName == "snapshot_end")
+			return TIO_EVENT_SNAPSHOT_END;
 
 		return 0;
 	}
