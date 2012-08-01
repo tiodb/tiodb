@@ -2,6 +2,13 @@
 #include "../InteliHubClient/tioclient_internals.h"
 #include "../InteliHubClient/tioclient.hpp"
 
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <boost/thread/recursive_mutex.hpp>
+#include <boost/thread/thread.hpp>
+#include <boost/scoped_ptr.hpp>
+
+
 #include <queue>
 
 
@@ -199,8 +206,13 @@ namespace tio
 			string debugCallInfo;
 		};
 
-		asio::io_service& io_service_;
+		//
+		// DON'T CHANGE DECLARATION ORDER
+		// because they depend on each other and are initialized on the constructor
+		//
+		asio::io_service* io_service_;
 		tcp::socket socket_;
+
 		std::vector< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 		std::vector< asio::const_buffer > beingSendData_;
 
@@ -211,15 +223,47 @@ namespace tio
 		t_event_callback queryCallback_;
 		t_event_callback waitAndPopCallback_;
 
+		boost::recursive_mutex mutex_;
+
 		unsigned int magic_;
+
+		bool useSeparatedThread_;
+
+		boost::scoped_ptr<boost::thread> ownThread_;
+
+		#ifdef _DEBUG
+		boost::thread::id lastDataThread_;
+		#endif
+		
 
 	public:
 
-		AsyncConnection(asio::io_service& io_service)
-			: io_service_(io_service)
-			, socket_(io_service)
-			, magic_(0xABCDABCD)
+		enum UseOwnThreadMode
 		{
+			UseOwnThread
+		};
+
+		AsyncConnection(asio::io_service& io_service)
+			: io_service_(&io_service)
+			, socket_(*io_service_)
+			, magic_(0xABCDABCD)
+			, useSeparatedThread_(false)
+		{
+		}
+
+		//
+		// On this mode, we will create a separated thread to do i/o instead
+		// of requiring the caller to administer io_service. It's useful to programs
+		// that can't lock in io_service::run, like Win32 ones.
+		// *** BEWARE THAT CALLBACKS WILL COME ON ANOTHER THREAD ***
+		//
+		AsyncConnection(UseOwnThreadMode)
+			: io_service_(new asio::io_service())
+			, socket_(*io_service_)
+			, magic_(0xABCDABCD)
+			, useSeparatedThread_(true)
+		{
+
 		}
 
 		~AsyncConnection()
@@ -227,9 +271,14 @@ namespace tio
 			magic_ = 0x00000000;
 		}
 
+		bool usingSeparatedThread()
+		{
+			return ownThread_;
+		}
+
 		void Connect(const string& host, short port)
 		{ 
-			tcp::resolver resolver(io_service_);
+			tcp::resolver resolver(*io_service_);
 			tcp::resolver::query query(host, "2605");
 			tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
 			tcp::resolver::iterator end;
@@ -253,11 +302,37 @@ namespace tio
 			if(memcmp(buffer, "going binary", sizeof("going binary")-1) !=0)
 				throw std::runtime_error("Invalid answer from server during protocol negotiation");
 
-			ReadBinaryProtocolMessage();
+			if(useSeparatedThread_)
+			{
+				ownThread_.reset(new boost::thread(boost::bind(&asio::io_service::run, io_service_)));
+				io_service_->post(boost::bind(&AsyncConnection::ReadBinaryProtocolMessage, this));
+			}
+			else
+			{
+				ReadBinaryProtocolMessage();
+			}
+			
+		}
+
+		void Disconnect()
+		{
+			//
+			// We will close after sendind and receiving pending commands. Note it will
+			// do work the same way whatever we're running our own thread or not
+			//
+			io_service_->post(boost::bind(&tcp::socket::close, &socket_));
+
+			if(ownThread_)
+			{
+				ownThread_->join();
+				ownThread_.reset(nullptr);
+			}
 		}
 
 		void OnReceivedBinaryMessage(PR1_MESSAGE* message)
 		{
+			CHECK_DATA_THREAD();
+
 			bool b;
 			int command;
 
@@ -460,9 +535,14 @@ namespace tio
 
 		void SendPendingBinaryData()
 		{
+
+			CHECK_DATA_THREAD();
+		
+			boost::recursive_mutex::scoped_lock lock(mutex_);
+
 			if(!beingSendData_.empty())
 				return;
-
+			
 			if(pendingBinarySendData_.empty())
 				return;
 
@@ -476,8 +556,6 @@ namespace tio
 				pr1_message_get_buffer((*i).get(), &buffer, &bufferSize);
 
 				beingSendData_.push_back(asio::buffer(buffer, bufferSize));
-
-				//std::cout << "sending: binary message, " << (*i)->field_count << " fields" << std::endl;
 			}
 
 			asio::async_write(
@@ -486,8 +564,43 @@ namespace tio
 				boost::bind(&AsyncConnection::OnBinaryMessageSent, this, asio::placeholders::error, asio::placeholders::bytes_transferred));
 		}
 
+		void SendBinaryMessage(Pr1RequestInfo requestInfo)
+		{
+			requestInfo.debugCallInfo = Pr1MessageDump("", requestInfo.pending_message.get());
+
+			if(useSeparatedThread_)
+			{
+				io_service_->post([this, requestInfo]()
+				{
+					pendingBinarySendData_.push_back(requestInfo.pending_message);
+					waitingForAnswer_.push(requestInfo);
+
+					this->SendPendingBinaryData();
+				});
+			}
+			else
+			{
+				pendingBinarySendData_.push_back(requestInfo.pending_message);
+				waitingForAnswer_.push(requestInfo);
+				
+				SendPendingBinaryData();
+			}
+
+			
+		}
+
+		void CHECK_DATA_THREAD()
+		{
+#ifdef _DEBUG
+			BOOST_ASSERT(lastDataThread_ == boost::thread::id() || lastDataThread_ == boost::this_thread::get_id());
+			lastDataThread_ = boost::this_thread::get_id();
+#endif
+		}
+
 		void OnBinaryMessageSent(const boost::system::error_code& err, size_t sent)
 		{
+			CHECK_DATA_THREAD();
+
 			if(CheckError(err))
 			{
 				//std::cerr << "ERROR sending binary data: " << err << std::endl;
@@ -504,15 +617,7 @@ namespace tio
 			SendPendingBinaryData();
 		}
 
-		void SendBinaryMessage(Pr1RequestInfo requestInfo)
-		{
-			pendingBinarySendData_.push_back(requestInfo.pending_message);
-			requestInfo.debugCallInfo = Pr1MessageDump("", requestInfo.pending_message.get());
-
-			waitingForAnswer_.push(requestInfo);
-
-			SendPendingBinaryData();
-		}
+		
 
 		bool CheckError(const  boost::system::error_code& err)
 		{
@@ -849,6 +954,7 @@ namespace tio
 
 			bool connecting_;
 
+			boost::mutex queuedCommandsMutex_;
 			vector<function<void(void)>> queuedCommands_;
 
 			IAsyncContainerManager* container_manager()
@@ -869,13 +975,26 @@ namespace tio
 			{
 				assert(!connecting_ && connected());
 
-				for(auto i = queuedCommands_.begin() ; i != queuedCommands_.end() ; ++i)
+				vector<function<void(void)>> localQueuedCommands;
+
+				{
+					boost::mutex::scoped_lock lock(queuedCommandsMutex_);
+					localQueuedCommands.swap(queuedCommands_);
+				}
+
+				for(auto i = localQueuedCommands.begin() ; i != localQueuedCommands.end() ; ++i)
 				{
 					function<void(void)>& f = *i;
 					f();
 				}
 
-				queuedCommands_.clear();
+				localQueuedCommands.clear();
+			}
+
+			void QueueCommand(function<void(void)> what)
+			{
+				boost::mutex::scoped_lock lock(queuedCommandsMutex_);
+				queuedCommands_.push_back(what);
 			}
 
 		public:
@@ -965,17 +1084,16 @@ namespace tio
 						containerHandle_ = handle;
 
 						//
-						// I've spent sometime thinking if we should dispatch the pending command
+						// I've spent sometime thinking if we should dispatch the pending commands
 						// before or after calling the create/open callback.
 						//
 						// If we call the open/create callback *before* sending pending commands,
 						// any command send on the callback will be send *before* the pending commands,
 						// making it less intuitive
 						//
-						// But it will allow the callback to setup the container like clearing it before use
+						// BUT it will allow the callback to setup the container, like clearing it before use
 						// or setting some initial values or properties that are necessary. I've choose to
-						// do this, otherwise there would be no way to guarantee that someone would be able
-						// laksdflkaskljdf asdlfkasjdfl adsflkasjdfl asdkf
+						// do this
 						//
 
 						if(callback)
@@ -1020,7 +1138,7 @@ namespace tio
 				};
 
 				if(connecting_)
-					queuedCommands_.push_back(doit);
+					QueueCommand(doit);
 				else
 					doit();
 			}
@@ -1054,7 +1172,7 @@ namespace tio
 				};
 
 				if(connecting_)
-					queuedCommands_.push_back(doit);
+					QueueCommand(doit);
 				else
 					doit();
 			}
@@ -1073,7 +1191,7 @@ namespace tio
 				};
 
 				if(connecting_)
-					queuedCommands_.push_back(doit);
+					QueueCommand(doit);
 				else
 					doit();
 			}
@@ -1251,14 +1369,9 @@ namespace tio
 				// lib user doesn't need to wait the connection callback just to set a value
 				//
 				if(connecting_)
-				{
-					queuedCommands_.push_back(doit);
-					return;
-				}
+					QueueCommand(doit);
 				else
-				{
 					doit();
-				}
 			}
 
 			void set_string(const key_type& key, const string& value, const std::string* metadata, JustDoneCallbackT callback, ErrorCallbackT error_callback)
