@@ -1198,32 +1198,44 @@ namespace tio
 
 			void propget(const string& key, PropgetCallbackT callback, ErrorCallbackT errorCallback)
 			{
-				container_manager()->container_propget(
-					containerHandle_, 
-					TioDataConverter<string>(key).inptr(),
-					[this, callback, errorCallback](const async_error_info& error_info, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				ExplodeIfNotConnectedOrConnecting();
+
+				auto l = [callback, errorCallback](const async_error_info& error_info, const TIO_DATA& k, const TIO_DATA& v, const TIO_DATA& m)
+				{
+					if(error_info)
 					{
-						if(error_info)
-						{
-							if(errorCallback)
-								errorCallback(error_info);
-							return;
-						}
-
-						if(!callback)
-							return;
-
-						string converted_k;
-						string converted_v;
-
-						if(!error_info)
-						{
-							ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, (string*)nullptr);
-						}
-
-						callback(converted_k, converted_v);
+						if(errorCallback)
+							errorCallback(error_info);
+						return;
 					}
-				);
+
+					if(!callback)
+						return;
+
+					string converted_k;
+					string converted_v;
+
+					if(!error_info)
+					{
+						ConvertKeyValueAndMetadata(k, v, m, &converted_k, &converted_v, (string*)nullptr);
+					}
+
+					callback(converted_k, converted_v);
+				};
+
+				auto doit = [this, l, key]()
+				{
+					container_manager()->container_propget(
+						containerHandle_, 
+						TioDataConverter<string>(key).inptr(), 
+						l);
+				};
+
+
+				if(connecting_)
+					QueueCommand(doit);
+				else
+					doit();
 			}
 
 			void pop_front(DataCallbackT callback, ErrorCallbackT error_callback)

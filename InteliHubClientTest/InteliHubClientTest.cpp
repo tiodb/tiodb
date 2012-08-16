@@ -208,10 +208,212 @@ void AsyncClientTest()
 }
 
 
+
+
+
+namespace InteliTrader
+{
+	using namespace tio;
+	using namespace tio::containers;
+	using std::cout;
+	using std::endl;
+	using std::shared_ptr;
+	using std::function;
+
+	class InteliMarketClient
+	{
+		AsyncConnection cn_;
+		async_map<string, string> securityList_;
+		ErrorCallbackT errorCallback_;
+
+		unsigned lastId_;
+		typedef async_list<string> TradeOrBookContainerT;
+
+		std::map<unsigned, shared_ptr<TradeOrBookContainerT>> tradeOrBookContainers_;
+
+	public:
+
+		InteliMarketClient()
+			: cn_(AsyncConnection::UseOwnThread)
+			, lastId_(0)
+			, errorCallback_([](const async_error_info& ei){cout << "ERROR: " << ei.error_code << " - " << ei.error_message;})
+		{
+
+		}
+
+		void Connect(const string& host, short port)
+		{
+			cn_.Connect(host, port);
+		}
+
+		void SubscribeSecurityList(function<void (const string&)> callback)
+		{
+			securityList_.open(&cn_, "intelimarket/bvmf/security_list", [](){
+				cout << "connected" << endl;
+				},
+				errorCallback_);
+			securityList_.propget("schema", 
+				[&](const string& key, const string& value)
+				{
+
+				},
+				errorCallback_);
+
+			securityList_.subscribe("0", [](){}, errorCallback_, 
+				[callback](int code, const string* key, const string* value, const string* metadata)
+				{
+					if(key)
+						callback(*key);
+				});
+		}
+
+		unsigned SubscribeTrades(const string& exchange, const string& symbol)
+		{
+			string containerName = "intelimarket/";
+			containerName += exchange;
+			containerName += "/";
+			containerName += symbol;
+			containerName += "/trades";
+
+			shared_ptr<TradeOrBookContainerT> container(new TradeOrBookContainerT());
+			
+			container->open(&cn_, containerName, [](){}, errorCallback_);
+			container->subscribe("",
+				[symbol](){cout << symbol << " trades subscribed" << endl;}, 
+				errorCallback_,
+				[symbol](int code, const int* key, const string* value, const string* metadata)
+				{
+					if(value)
+						cout << "TRADE " << symbol << ":" << *value << endl;
+				});
+
+			unsigned id = ++lastId_;
+
+			tradeOrBookContainers_[id] = container;
+
+			return id;
+		}
+
+		unsigned SubscribeBookBuy(const string& exchange, const string& symbol)
+		{
+			string containerName = "intelimarket/";
+			containerName += exchange;
+			containerName += "/";
+			containerName += symbol;
+			containerName += "/book_buy";
+
+			shared_ptr<TradeOrBookContainerT> container(new TradeOrBookContainerT());
+
+			container->open(&cn_, containerName, [](){cout << "opened" << endl;}, errorCallback_);
+			container->subscribe("0",
+				[symbol](){cout << symbol << " book buy subscribed" << endl;}, 
+				errorCallback_,
+				[symbol](int code, const int* key, const string* value, const string* metadata)
+				{
+					if(value)
+						cout << "BOOK  " << symbol << ":" << *value << endl;
+				});
+
+			unsigned id = ++lastId_;
+
+			tradeOrBookContainers_[id] = container;
+
+			return id;
+		}
+
+		unsigned SubscribeBookSell(const string& exchange, const string& symbol)
+		{
+			string containerName = "intelimarket/";
+			containerName += exchange;
+			containerName += "/";
+			containerName += symbol;
+			containerName += "/book_sell";
+
+			shared_ptr<TradeOrBookContainerT> container(new TradeOrBookContainerT());
+
+			container->open(&cn_, containerName, [](){}, errorCallback_);
+			container->subscribe("0",
+				[symbol](){cout << symbol << " book sell subscribed" << endl;}, 
+				errorCallback_,
+				[symbol](int code, const int* key, const string* value, const string* metadata)
+			{
+				if(value)
+					cout << "BOOK  " << symbol << ":" << *value << endl;
+			});
+
+			unsigned id = ++lastId_;
+
+			tradeOrBookContainers_[id] = container;
+
+			return id;
+		}
+	};
+}
+
+
+void TestInteliMarketClient()
+{
+	using std::vector;
+	using std::string;
+
+
+	InteliTrader::InteliMarketClient client;
+
+	client.Connect("10.255.232.50", 2605);
+
+	//client.SubscribeSecurityList();
+
+	vector<string> symbols;
+
+	int max = 1000;
+
+	client.SubscribeSecurityList(
+		[&](const string& symbol)
+		{
+			if(max == 0)
+				return;
+
+			max--;
+
+			string s = boost::algorithm::to_lower_copy(symbol);
+			cout << "subscribing " << s << endl;
+			client.SubscribeBookBuy("bvmf", s);
+		});
+
+	if(0)
+	{
+		symbols.push_back("petr4");
+		symbols.push_back("vale5");
+		symbols.push_back("ccro3");
+		symbols.push_back("vale3");
+		symbols.push_back("bbdc3");
+		symbols.push_back("ggbr4");
+		symbols.push_back("ogxp3");
+		symbols.push_back("sanb11");
+		symbols.push_back("netc3");
+		symbols.push_back("netc4");
+	}
+
+	for each(const string& s in symbols)
+	{
+		client.SubscribeTrades("bvmf", s);
+		client.SubscribeBookBuy("bvmf", s);
+	}
+
+	for(bool b = true ; b ; )
+		Sleep(50);
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
+	TestInteliMarketClient();
+
+	return 0;
+
+	/*
 	AsyncClientTest();
 	QueueModificationsWhileConnecting();
 	AsyncClientTest();
 	return 0;
+	*/
 }

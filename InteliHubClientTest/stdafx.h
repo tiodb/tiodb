@@ -20,6 +20,7 @@
 #include <boost/function.hpp>
 #include <boost/variant.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/algorithm/string.hpp>
 #include <queue>
 
 
