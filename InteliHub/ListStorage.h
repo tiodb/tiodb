@@ -80,7 +80,7 @@ public:
 		  CheckValue(value);
 		  data_.push_front(ValueAndMetadata(value, metadata));
 
-		  dispatcher_.RaiseEvent("push_front", key, value, metadata);
+		  dispatcher_.RaiseEvent("push_front", 0, value, metadata);
 	  }
 
 	virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
@@ -90,8 +90,10 @@ public:
 
 		ValueAndMetadata& data = data_.back();
 
+		int index = static_cast<int>(data_.size() - 1);
+
 		if(key)
-			*key = static_cast<int>(data_.size() - 1);
+			*key = index;
 
 		if(value)
 			*value = data.value;
@@ -102,7 +104,7 @@ public:
 		data_.pop_back();
 
 		dispatcher_.RaiseEvent("pop_back",
-			key ? *key : TIONULL, 
+			index, 
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
 	}
@@ -126,7 +128,7 @@ public:
 		data_.pop_front();
 
 		dispatcher_.RaiseEvent("pop_front", 
-			key ? *key : TIONULL, 
+			0,
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
 	}

@@ -365,7 +365,7 @@ void TestInteliMarketClient()
 
 	vector<string> symbols;
 
-	int max = 1000;
+	int max = 0;
 
 	client.SubscribeSecurityList(
 		[&](const string& symbol)
@@ -380,7 +380,7 @@ void TestInteliMarketClient()
 			client.SubscribeBookBuy("bvmf", s);
 		});
 
-	if(0)
+	if(1)
 	{
 		symbols.push_back("petr4");
 		symbols.push_back("vale5");

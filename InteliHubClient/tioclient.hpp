@@ -2,14 +2,7 @@
 #include "tioclient.h"
 #include <string>
 #include <sstream>
-
-#ifndef TIO_CLIENT_BOOST_SUPPORT
-#define TIO_CLIENT_BOOST_SUPPORT 1
-#endif
-
-#ifdef TIO_CLIENT_BOOST_SUPPORT
-	#include <boost/function.hpp>
-#endif
+#include <functional>
 
 
 namespace tio

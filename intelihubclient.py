@@ -183,8 +183,8 @@ class RemoteContainer(ContainerPythonizer):
     def clear(self):
         return self.manager.SendCommand('clear', self.handle)
     
-    def subscribe(self, sink, event_filter='*', start = None):
-        self.manager.Subscribe(self.handle, sink, event_filter, start)
+    def subscribe(self, sink, event_filter='*', start = None, end = None):
+        self.manager.Subscribe(self.handle, sink, event_filter, start, end)
 
     def unsubscribe(self):
         self.manager.Unsubscribe(self.handle)
@@ -499,10 +499,13 @@ class TioServerConnection(object):
         halfCommand = ' '.join( ('set_permission', objectType, objectName, command, allowOrDeny) )
         self.SendCommand(halfCommand + (' ' + user if user != '' else ''))
 
-    def Subscribe(self, handle, sink, filter = '*', start = None):
+    def Subscribe(self, handle, sink, filter = '*', start = None, end = None):
         param = str(handle)
+
         if not start is None:
             param += ' ' + str(start)
+            if not end is None:
+                param += ' ' + str(end)
         
         #self.sinks[handle][filter](event_name, key, value, metadata)
         self.sinks.setdefault(int(handle), {}).setdefault(filter, []).append(sink)

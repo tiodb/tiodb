@@ -161,7 +161,7 @@ namespace tio {
 				ConverterHelper converter(key, value, metadata);
 
 				ldb_.InsertByIndex(tableInfo_,0, NULL, converter.GetLdbValue(), converter.GetLdbMetadata());
-				dispatcher_.RaiseEvent("push_front", key, value, metadata);
+				dispatcher_.RaiseEvent("push_front", 0, value, metadata);
 			}
 
 		private:
@@ -218,7 +218,7 @@ namespace tio {
 				_Pop(0, key, value, metadata);
 
 				dispatcher_.RaiseEvent("pop_front", 
-					key ? *key : TIONULL, 
+					0, 
 					value ? *value : TIONULL,
 					metadata ? *metadata : TIONULL);
 			}

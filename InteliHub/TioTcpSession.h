@@ -281,6 +281,34 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	};
 #endif
 
+	struct EXTRA_EVENT
+	{
+		EXTRA_EVENT(int index, const shared_ptr<ITioContainer>& container, const string& eventName, bool readRecord)
+		{
+			Fill(index, container, eventName, readRecord);
+		}
+
+		EXTRA_EVENT(){}
+
+		TioData key, value, metadata;
+		string eventName;
+
+		void Fill(int index, 
+			const shared_ptr<ITioContainer>& container, 
+			const string& eventName,
+			bool readRecord)
+		{
+			ASSERT(index <= container->GetRecordCount());
+
+			this->eventName = eventName;
+			this->key.Set(index);
+			
+			if(readRecord)
+				container->GetRecord(index, &key, &value, &metadata);
+		}
+
+	};
+
 	/*
 	class Pr1Message : public boost::noncopyable
 	{
@@ -349,7 +377,12 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 				cookie = 0;
 				nextRecord = 0;
 				binaryProtocol = false;
+				eventFilterStart = 0;
+				eventFilterEnd = -1;
 			}
+
+			int eventFilterStart;
+			int eventFilterEnd;
 
 			unsigned int handle;
 			unsigned int cookie;
@@ -526,9 +559,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 		void OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void SendEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
+		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
+		void SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void Subscribe(unsigned int handle, const string& start);
+		void Subscribe(unsigned int handle, const string& start, int filterEnd);
 		void BinarySubscribe(unsigned int handle, const string& start);
 		void Unsubscribe(unsigned int handle);
 
@@ -550,6 +584,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
 		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 		void BinaryWaitAndPopNext(unsigned int handle);
+		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
 		bool commandRunning_;
 	};		
 }

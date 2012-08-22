@@ -178,7 +178,7 @@ namespace tio
 		if(binaryProtocol_)
 			SendBinaryEvent(handle, key, value, metadata, eventName);
 		else
-			SendEvent(handle, key, value, metadata, eventName);
+			SendTextEvent(handle, key, value, metadata, eventName);
 	}
 
 	
@@ -401,7 +401,7 @@ namespace tio
 		return stream.str();
 	}
 
-	void TioTcpSession::SendEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName )
+	void TioTcpSession::SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName )
 	{
 		stringstream answer;
 
@@ -441,15 +441,214 @@ namespace tio
 		SendString(answer.str());
 	}
 
+	
 
-	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
+	bool TioTcpSession::ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, 
+		const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents)
+	{
+		if(subscriptionInfo->eventFilterStart == 0 && subscriptionInfo->eventFilterEnd == -1)
+			return true;
+
+		int currentIndex = 0;
+		int recordCount = subscriptionInfo->container->GetRecordCount();
+
+		if(eventName == "pop_front")
+		{
+			currentIndex = 0;
+			eventName = "delete";
+		}
+		else if(eventName == "pop_back")
+		{
+			currentIndex = recordCount - 1;
+			eventName = "delete";
+		}
+		else
+		{
+			if(key.GetDataType() != TioData::Int)
+				return true;
+
+			currentIndex = key.AsInt();
+		}
+
+		
+
+		int realFilterStart = NormalizeIndex(subscriptionInfo->eventFilterStart,
+			recordCount,
+			false);
+
+		int realFilterEnd = NormalizeIndex(subscriptionInfo->eventFilterEnd,
+			recordCount,
+			false);
+		//
+		//
+		// When generating events, we must always grow the slice beyond it's size instead
+		// of shrinking it when necessary. 
+		// Example: if the slice is [0:9] and client deletes a record inside
+		// the range, we must send the push_back event (to add a last record to the slice)
+		// before sending the delete. So, after the push_back event the slice will have
+		// 11 items. But it's better than having a shorter slice. It would happen if we sent
+		// the delete event before the push_back
+		//
+		// So, events that add records to the list will be sent by this function. Events
+		// that will shrink the list will be added to extraEvents, to be send after the
+		// real event
+		//
+
+		//
+		// IMPORTANT: the container was already changed. So, if we are handling a push_back,
+		// the item is already inside the container. And the recordCount reflect this, of course
+		//
+		if(eventName == "push_back")
+		{
+			if(currentIndex >= realFilterStart && currentIndex <= realFilterEnd)
+				return true;
+			else
+				return false;
+		}
+		else if(eventName == "push_front")
+		{
+			if(realFilterStart > 0)
+				return false;
+
+			//
+			// If push_front will grow the container beyond limits, we must
+			// send a delete events regarding the last record first
+			//
+			if(recordCount && recordCount >= realFilterEnd + 1)
+			{	
+				//
+				// realFilterEnd + 1 because we will send the push_front first
+				// so the slice will be already 1 item bigger
+				extraEvents->push_back(
+					EXTRA_EVENT(
+						realFilterEnd + 1,
+						subscriptionInfo->container, 
+						"delete",
+						false));
+			}
+
+			return true;
+		}
+		else if(eventName == "delete")
+		{
+			bool shouldSendEvent = true;
+			
+			//
+			// If some record is deleted before the filter start (for example, filter starts
+			// at 10 and record 5 was deleted) the records will be shifted. So we will delete
+			// the first item to cause this effect
+			//
+			if(currentIndex < realFilterStart)
+			{
+				extraEvents->push_back(
+					EXTRA_EVENT(
+						realFilterStart, 
+						subscriptionInfo->container, 
+						"delete",
+						false)
+					);
+
+				shouldSendEvent = false;
+			}
+
+			if(recordCount && recordCount >= realFilterEnd)
+			{
+				EXTRA_EVENT pushBackEvent(
+					realFilterEnd, 
+					subscriptionInfo->container, 
+					"push_back",
+					true);
+
+				//
+				// We will send a push_back, but client still has the current deleted
+				// record (we didn't send the delete event yet at this point). So we need
+				// to adjust the push_back key accordingly
+				//
+				pushBackEvent.key.Set(realFilterEnd + 1);
+
+				SendEvent(subscriptionInfo, "push_back", 
+					pushBackEvent.key, pushBackEvent.value, pushBackEvent.metadata);
+			}
+
+			return shouldSendEvent;
+		}
+		else if(eventName == "insert")
+		{
+			bool shouldSendEvent = true;
+
+			//
+			// If some record is inserted before the filter start the records will 
+			// be shifted right. So the first record changed. We should add it
+			//
+			if(currentIndex < realFilterStart)
+			{
+				EXTRA_EVENT pushFrontEvent(
+						realFilterStart, 
+						subscriptionInfo->container, 
+						"push_front",
+						true);
+				
+				SendEvent(subscriptionInfo, "push_front", 
+					pushFrontEvent.key, pushFrontEvent.value, pushFrontEvent.metadata);
+
+				shouldSendEvent = false;
+			}
+
+			//
+			// The records were shifted. We should delete the last one
+			//
+			if(recordCount > realFilterEnd)
+			{
+				extraEvents->push_back(
+					EXTRA_EVENT(
+						realFilterEnd, 
+						subscriptionInfo->container, 
+						"delete",
+						false)
+					);
+			}
+
+			return shouldSendEvent;
+		}
+		else if(eventName == "set")
+		{
+			return currentIndex >= realFilterStart && currentIndex <= realFilterEnd;
+		}
+		
+
+		return true;
+	}
+
+	void TioTcpSession::SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		if(subscriptionInfo->binaryProtocol)
 			SendBinaryEvent(subscriptionInfo->handle, key, value, metadata, eventName);
 		else
-			SendEvent(subscriptionInfo->handle, key, value, metadata, eventName);
+			SendTextEvent(subscriptionInfo->handle, key, value, metadata, eventName);
+	}
 
+
+	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
+		const TioData& key, const TioData& value, const TioData& metadata)
+	{
+		vector<EXTRA_EVENT> extraEvents;
+		
+		bool shouldSend = ShouldSendEvent(subscriptionInfo, eventName, key, value, metadata, &extraEvents);
+
+		if(shouldSend)
+			SendEvent(subscriptionInfo, eventName, key, value, metadata);
+
+		for(auto i = extraEvents.cbegin() ; i != extraEvents.cend() ; ++i)
+		{
+			const EXTRA_EVENT& extraEvent = *i;
+
+			SendEvent(subscriptionInfo, 
+				extraEvent.eventName,
+				extraEvent.key,
+				extraEvent.value,
+				extraEvent.metadata);
+		}
 	}
 
 	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
@@ -695,7 +894,7 @@ namespace tio
 		handles_.erase(i);
 	}
 
-	void TioTcpSession::Subscribe(unsigned int handle, const string& start)
+	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd)
 	{
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
@@ -738,6 +937,9 @@ namespace tio
 				subscriptionInfo->event_name = "set";
 			else
 				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
+
+			subscriptionInfo->eventFilterStart = numericStart;
+			subscriptionInfo->eventFilterEnd = filterEnd;
 
 			pendingSnapshots_[handle] = subscriptionInfo;
 			

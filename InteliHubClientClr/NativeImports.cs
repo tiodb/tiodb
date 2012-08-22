@@ -219,6 +219,30 @@ namespace InteliHubClient
             query_callback_t query_callback, 
             IntPtr cookie);
 
+        // subscription
+
+        // typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void event_callback_t(
+            IntPtr cookie,
+            IntPtr container,
+            uint event_code,
+            ref TIO_DATA key,
+            ref TIO_DATA value,
+            ref TIO_DATA metadata);
+
+        // int tio_container_subscribe(
+        //   struct TIO_CONTAINER* container, 
+        //   struct TIO_DATA* start, 
+        //   event_callback_t event_callback, 
+        //   void* cookie);
+        [DllImport("intelihubclientdll.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_subscribe(
+            IntPtr container,
+            ref TIO_DATA start,
+            event_callback_t event_callback,
+            IntPtr cookie);
+
         public static void ThrowOnNativeApiError(int result)
         {
             if (result < 0)

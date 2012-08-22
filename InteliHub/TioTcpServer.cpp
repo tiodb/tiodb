@@ -1311,13 +1311,16 @@ namespace tio
 
 	void TioTcpServer::OnCommand_SubscribeUnsubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		if(!CheckParameterCount(cmd, 1, exact) && !CheckParameterCount(cmd, 2, exact))
+		if(!CheckParameterCount(cmd, 1, exact) && 
+		   !CheckParameterCount(cmd, 2, exact) &&
+		   !CheckParameterCount(cmd, 3, exact))
 		{
 			MakeAnswer(error, answer, "invalid parameter count");
 			return;
 		}
 
 		unsigned int handle;
+		int filterEnd = -1;
 
 		try
 		{
@@ -1340,12 +1343,22 @@ namespace tio
 
 			string start;
 
-			if(cmd.GetParameters().size() == 2)
+			if(cmd.GetParameters().size() >= 2)
+			{
 				start = cmd.GetParameters()[1];
+				
+				if(start == "__none__")
+					start.clear();
+			}
+
+			if(cmd.GetParameters().size() == 3)
+			{
+				filterEnd = lexical_cast<int>(cmd.GetParameters()[2]);
+			}
 
 			if(cmd.GetCommand() == "subscribe")
 			{
-				session->Subscribe(handle, start);
+				session->Subscribe(handle, start, filterEnd);
 
 				//
 				// we'll NOT send the answer, because session::subscribe already did

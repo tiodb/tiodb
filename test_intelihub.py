@@ -11,9 +11,37 @@ class ListReceiveCounter(object):
         self.receive_count = 0
         self.last_received_tuple = None
     def on_event(self, container, event_name, k, v, m):
-        self.test_case.assertEqual(v, self.receive_count)
+        if event_name != 'snapshot_end':            
+            self.test_case.assertEqual(v, self.receive_count - 1)
+
         self.last_received_tuple = (k, v, m)
         self.receive_count += 1
+
+class ListMirror(object):
+    def __init__(self, test_case):
+        self.l = []
+        self.test_case = test_case
+
+    def clear(self):
+        self.l = []
+        
+    def on_event(self, container, event_name, k, v, m):
+        if event_name == 'push_back':
+            self.test_case.assertEqual(k, len(self.l))
+            self.l.append(v)
+        elif event_name == 'push_front':
+            self.test_case.assertEqual(k, 0)
+            self.l.insert(0, v)
+        elif event_name == 'insert':
+            self.l.insert(k, v)
+        elif event_name == 'pop_front':
+            del self.l[0]
+        elif event_name == 'pop_back':
+            del self.l[-1]
+        elif event_name == 'delete':
+            del self.l[k]
+        elif event_name == 'clear':
+            self.l = []
 
 class InteliHubTestCase(unittest.TestCase):
     def setUp(self):
@@ -46,8 +74,8 @@ class PerfomanceTests(InteliHubTestCase):
         d = datetime.datetime.now() - mark
         return count / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)
 
-    @unittest.skipIf(sys.modules.has_key('pywin'), 'not running perftest inside the IDE')
-    def _____________test_perf(self):
+    #@unittest.skipIf(sys.modules.has_key('pywin'), 'not running perftest inside the IDE')
+    def _test_perf(self):
         tests = (
                   {'type': 'volatile_map',      'hasKey': True},
                   {'type': 'persistent_map',    'hasKey': True},
@@ -107,8 +135,8 @@ class ContainerTests(InteliHubTestCase):
         self.assertEqual(how_many.receive_count, 5)
 
         dispatched = l.dispatch_pending_events()
-        self.assertEqual(dispatched, 5)
-        self.assertEqual(how_many.receive_count, 10)
+        self.assertEqual(dispatched, 6)
+        self.assertEqual(how_many.receive_count, 11)
 
     def test_volatile_list_get(self):
         container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
@@ -224,6 +252,121 @@ class ContainerTests(InteliHubTestCase):
         container.wait_and_pop_next(f)
         container.append('xpto')
 
+    def test_events(self):
+        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        mirror = ListMirror(self)
+        container.subscribe(mirror.on_event)
 
+        def check_mirror(expected_list_state):
+            container.dispatch_pending_events()
+            self.assertEqual(mirror.l, expected_list_state)
+
+        container.append(0)
+        check_mirror([0])
+
+        container.append(1)
+        check_mirror([0, 1])
+
+        container.append(2)
+        check_mirror([0, 1, 2])
+
+        container.clear()
+        check_mirror([])
+
+        for x in range(100):
+            container.append(x)
+            check_mirror(range(x+1))
+
+        container.clear()
+        check_mirror([])
+
+    def test_slice_subscribe(self):
+        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        mirror = ListMirror(self)
+
+        def check_mirror(expected_list_state):
+            container.dispatch_pending_events()
+            self.assertEqual(mirror.l, expected_list_state)
+
+        #
+        # test 1: slice [0:0]
+        #
+        container.subscribe(mirror.on_event, start = 0, end = 0)
+
+        container.append(0)
+        check_mirror([0])
+
+        del container[0]
+        check_mirror([])
+
+        #clear
+
+        container.append(0)
+        check_mirror([0])        
+
+        container.append(1)
+        check_mirror([0])
+
+        container.append(2)
+        check_mirror([0])
+
+        del container[0]
+        check_mirror([1])
+
+        del container[0]
+        check_mirror([2])        
+
+        del container[0]
+        check_mirror([])
+
+        #clear
+        container.append(1)
+        check_mirror([1])
+
+        container.push_front(0)
+        check_mirror([0])
+
+        container.clear()
+        container.unsubscribe()
+        mirror.clear()
+        
+        #
+        # test 1: slice [0:9]
+        #
+        container.subscribe(mirror.on_event, start = 0, end = 9)
+
+        for x in range(10):
+            container.append(x)
+            check_mirror(range(x+1))
+
+        # outside slice, should not reflect here
+        for x in range(10,15):
+            container.append(x)
+            check_mirror([0,1,2,3,4,5,6,7,8,9])
+
+        container.pop_front()
+        check_mirror([1,2,3,4,5,6,7,8,9, 10])
+
+        del container[0]
+        check_mirror([2,3,4,5,6,7,8,9, 10, 11])
+
+        del container[2]
+        check_mirror([2,3,5,6,7,8,9, 10, 11, 12])
+
+        container.pop_back()
+        check_mirror([2,3,5,6,7,8,9, 10, 11, 12])
+
+        del container[9]
+        check_mirror([2,3,5,6,7,8,9, 10, 11, 13])        
+
+        del container[1]
+        check_mirror([2,5,6,7,8,9, 10, 11, 13, 14])
+
+        del container[-2]
+        check_mirror([2,5,6,7,8,9, 10, 11, 14])
+
+        del container[0]
+        check_mirror([5,6,7,8,9, 10, 11, 14])                
+        
 if __name__ == '__main__':
     unittest.main()
