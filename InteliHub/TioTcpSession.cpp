@@ -462,6 +462,11 @@ namespace tio
 			currentIndex = recordCount - 1;
 			eventName = "delete";
 		}
+		else if(eventName == "push_front")
+		{
+			currentIndex = 0;
+			eventName = "insert";
+		}
 		else
 		{
 			if(key.GetDataType() != TioData::Int)
@@ -471,7 +476,6 @@ namespace tio
 		}
 
 		
-
 		int realFilterStart = NormalizeIndex(subscriptionInfo->eventFilterStart,
 			recordCount,
 			false);
@@ -501,57 +505,50 @@ namespace tio
 		if(eventName == "push_back")
 		{
 			if(currentIndex >= realFilterStart && currentIndex <= realFilterEnd)
-				return true;
+			{
+				if(realFilterStart == 0)
+					return true;
+				else
+				{
+					//
+					// On push_back, we must send key as the index of item, which
+					// is the last one. On slice, we must fix the index (key)
+					//
+					SendEvent(subscriptionInfo, "push_back",
+						currentIndex - realFilterStart, value, metadata);
+
+					return false;
+				}
+			}	
 			else
 				return false;
-		}
-		else if(eventName == "push_front")
-		{
-			if(realFilterStart > 0)
-				return false;
-
-			//
-			// If push_front will grow the container beyond limits, we must
-			// send a delete events regarding the last record first
-			//
-			if(recordCount && recordCount >= realFilterEnd + 1)
-			{	
-				//
-				// realFilterEnd + 1 because we will send the push_front first
-				// so the slice will be already 1 item bigger
-				extraEvents->push_back(
-					EXTRA_EVENT(
-						realFilterEnd + 1,
-						subscriptionInfo->container, 
-						"delete",
-						false));
-			}
-
-			return true;
 		}
 		else if(eventName == "delete")
 		{
 			bool shouldSendEvent = true;
+
+			if(currentIndex > realFilterEnd)
+				return false;
 			
 			//
 			// If some record is deleted before the filter start (for example, filter starts
 			// at 10 and record 5 was deleted) the records will be shifted. So we will delete
 			// the first item to cause this effect
 			//
-			if(currentIndex < realFilterStart)
+			if(currentIndex <= realFilterStart)
 			{
 				extraEvents->push_back(
 					EXTRA_EVENT(
-						realFilterStart, 
+						0, 
 						subscriptionInfo->container, 
-						"delete",
+						"pop_front",
 						false)
 					);
 
 				shouldSendEvent = false;
 			}
 
-			if(recordCount && recordCount >= realFilterEnd)
+			if(recordCount && recordCount > realFilterEnd)
 			{
 				EXTRA_EVENT pushBackEvent(
 					realFilterEnd, 
@@ -564,10 +561,21 @@ namespace tio
 				// record (we didn't send the delete event yet at this point). So we need
 				// to adjust the push_back key accordingly
 				//
-				pushBackEvent.key.Set(realFilterEnd + 1);
+				pushBackEvent.key.Set(realFilterEnd + 1 - realFilterStart);
 
 				SendEvent(subscriptionInfo, "push_back", 
 					pushBackEvent.key, pushBackEvent.value, pushBackEvent.metadata);
+			}
+
+			if(realFilterStart > 0 && shouldSendEvent)
+			{
+				//
+				// adjust index to be slice related
+				//
+				SendEvent(subscriptionInfo, "delete",
+					currentIndex - realFilterStart, TIONULL, TIONULL);
+
+				return false;
 			}
 
 			return shouldSendEvent;
@@ -589,7 +597,7 @@ namespace tio
 						true);
 				
 				SendEvent(subscriptionInfo, "push_front", 
-					pushFrontEvent.key, pushFrontEvent.value, pushFrontEvent.metadata);
+					0, pushFrontEvent.value, pushFrontEvent.metadata);
 
 				shouldSendEvent = false;
 			}
@@ -597,25 +605,39 @@ namespace tio
 			//
 			// The records were shifted. We should delete the last one
 			//
-			if(recordCount > realFilterEnd)
+			if(recordCount - 1 > realFilterEnd)
 			{
 				extraEvents->push_back(
 					EXTRA_EVENT(
 						realFilterEnd, 
 						subscriptionInfo->container, 
-						"delete",
+						"pop_back",
 						false)
 					);
+			}
+
+			if(realFilterStart > 0 && shouldSendEvent)
+			{
+				//
+				// adjust index to be slice related
+				//
+				SendEvent(subscriptionInfo, "insert",
+					currentIndex - realFilterStart, value, metadata);
+
+				return false;
 			}
 
 			return shouldSendEvent;
 		}
 		else if(eventName == "set")
 		{
-			return currentIndex >= realFilterStart && currentIndex <= realFilterEnd;
+			if(currentIndex < realFilterStart || currentIndex > realFilterEnd)
+				return false;
+			
+			SendEvent(subscriptionInfo, "set", currentIndex - realFilterStart, value, metadata);
+			return false;
 		}
 		
-
 		return true;
 	}
 

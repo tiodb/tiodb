@@ -42,6 +42,8 @@ class ListMirror(object):
             del self.l[k]
         elif event_name == 'clear':
             self.l = []
+        elif event_name == 'set':
+            self.l[k] = v
 
 class InteliHubTestCase(unittest.TestCase):
     def setUp(self):
@@ -356,17 +358,104 @@ class ContainerTests(InteliHubTestCase):
         container.pop_back()
         check_mirror([2,3,5,6,7,8,9, 10, 11, 12])
 
+        container.insert(1, 'abc')
+        check_mirror([2,'abc',3,5,6,7,8,9, 10, 11])
+
+        del container[1]
+        check_mirror([2,3,5,6,7,8,9, 10, 11, 12])        
+
         del container[9]
         check_mirror([2,3,5,6,7,8,9, 10, 11, 13])        
 
         del container[1]
-        check_mirror([2,5,6,7,8,9, 10, 11, 13, 14])
+        check_mirror([2,5,6,7,8,9, 10, 11, 13])
 
         del container[-2]
-        check_mirror([2,5,6,7,8,9, 10, 11, 14])
+        check_mirror([2,5,6,7,8,9, 10, 13])
 
         del container[0]
-        check_mirror([5,6,7,8,9, 10, 11, 14])                
+        check_mirror([5,6,7,8,9, 10, 13])
+
+        container.clear()
+        container.unsubscribe()
+        mirror.clear()
+        
+        #
+        # test 1: slice [2:3]
+        #
+        container.subscribe(mirror.on_event, start = 2, end = 3)
+
+        for x in range(6):
+            container.append(x)
+            if x < 2:
+                check_mirror([])
+            elif x == 2:
+                check_mirror([2])
+            else:
+                check_mirror([2, 3])
+                            
+                
+        container.push_front('asdasd')
+        check_mirror([1,2])
+        
+        container.pop_front()
+        check_mirror([2,3])
+
+        container.append(6)
+        check_mirror([2,3])
+
+        container[2] = '2'
+        check_mirror(['2',3])
+
+        container.insert(3, '3')
+        check_mirror(['2','3'])
+
+        del container[3]
+        check_mirror(['2',3])
+
+        container.insert(2, 2)
+        check_mirror([2,'2'])
+
+        del container[3]
+        check_mirror([2,3])        
+        
+
+        del container[-1]
+        check_mirror([2,3])        
+        
+        del container[1]
+        check_mirror([3, 4])
+
+        del container[2]
+        check_mirror([4, 5])
+
+        del container[-1]
+        check_mirror([4])
+
+        container.push_front(0)
+        check_mirror([2, 4])
+
+        container.clear()
+        container.unsubscribe()
+        mirror.clear()        
+
+        #
+        # test 1: slice [-2:-1]
+        #
+        container.subscribe(mirror.on_event, start = -2, end = -1)
+
+        container.append(0)
+        check_mirror([0])
+
+        container.append(1)
+        check_mirror([0, 1])
+
+        container.append(2)
+        check_mirror([1,2])
+
+        container.append(3)
+        check_mirror([2, 3])        
+
         
 if __name__ == '__main__':
     unittest.main()
