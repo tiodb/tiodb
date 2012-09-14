@@ -256,7 +256,7 @@ namespace tio
 
 		try
 		{
-#ifdef _DEBUG
+#if 0
 			stringstream str;
 			string parameter;
 			int handle;

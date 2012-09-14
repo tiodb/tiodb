@@ -642,6 +642,25 @@ namespace tio
 				return value.value();
 			}
 
+
+			value_type get(const key_type& index, const key_type& defaultValue)
+			{
+				int result;
+				TioDataConverter<value_type> value;
+
+				result = container_manager()->container_get(
+					container_, 
+					TioDataConverter<key_type>(index).inptr(),
+					NULL,
+					value.outptr(),
+					NULL);
+
+				if(result != 0)
+					return defaultValue;
+
+				return value.value();
+			}
+
 			void erase(const key_type& index)
 			{
 				int result;

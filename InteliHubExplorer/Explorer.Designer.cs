@@ -57,7 +57,7 @@
             this.columnHeader2});
             this.containersListView.Location = new System.Drawing.Point(12, 132);
             this.containersListView.Name = "containersListView";
-            this.containersListView.Size = new System.Drawing.Size(415, 215);
+            this.containersListView.Size = new System.Drawing.Size(428, 396);
             this.containersListView.TabIndex = 0;
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
@@ -88,7 +88,7 @@
             this.groupBox1.Controls.Add(this.label1);
             this.groupBox1.Location = new System.Drawing.Point(12, 12);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(415, 114);
+            this.groupBox1.Size = new System.Drawing.Size(428, 114);
             this.groupBox1.TabIndex = 1;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Connection info";
@@ -96,7 +96,7 @@
             // btnOpenContainer
             // 
             this.btnOpenContainer.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnOpenContainer.Location = new System.Drawing.Point(328, 77);
+            this.btnOpenContainer.Location = new System.Drawing.Point(341, 77);
             this.btnOpenContainer.Name = "btnOpenContainer";
             this.btnOpenContainer.Size = new System.Drawing.Size(75, 23);
             this.btnOpenContainer.TabIndex = 7;
@@ -110,7 +110,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.tbContainer.Location = new System.Drawing.Point(10, 81);
             this.tbContainer.Name = "tbContainer";
-            this.tbContainer.Size = new System.Drawing.Size(256, 20);
+            this.tbContainer.Size = new System.Drawing.Size(269, 20);
             this.tbContainer.TabIndex = 6;
             this.tbContainer.Text = "intelimarket/bvmf/petr4/properties";
             // 
@@ -126,7 +126,7 @@
             // connectButton
             // 
             this.connectButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.connectButton.Location = new System.Drawing.Point(328, 33);
+            this.connectButton.Location = new System.Drawing.Point(341, 33);
             this.connectButton.Name = "connectButton";
             this.connectButton.Size = new System.Drawing.Size(75, 23);
             this.connectButton.TabIndex = 4;
@@ -137,7 +137,7 @@
             // portTextBox
             // 
             this.portTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.portTextBox.Location = new System.Drawing.Point(280, 36);
+            this.portTextBox.Location = new System.Drawing.Point(293, 36);
             this.portTextBox.Name = "portTextBox";
             this.portTextBox.Size = new System.Drawing.Size(41, 20);
             this.portTextBox.TabIndex = 3;
@@ -148,7 +148,7 @@
             // 
             this.label2.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(277, 20);
+            this.label2.Location = new System.Drawing.Point(290, 20);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(25, 13);
             this.label2.TabIndex = 2;
@@ -160,7 +160,7 @@
             | System.Windows.Forms.AnchorStyles.Right)));
             this.serverTextBox.Location = new System.Drawing.Point(10, 37);
             this.serverTextBox.Name = "serverTextBox";
-            this.serverTextBox.Size = new System.Drawing.Size(256, 20);
+            this.serverTextBox.Size = new System.Drawing.Size(269, 20);
             this.serverTextBox.TabIndex = 1;
             this.serverTextBox.Text = "localhost";
             this.serverTextBox.TextChanged += new System.EventHandler(this.serverTextBox_TextChanged);
@@ -178,9 +178,9 @@
             // 
             this.statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.statusLabel});
-            this.statusStrip.Location = new System.Drawing.Point(0, 388);
+            this.statusStrip.Location = new System.Drawing.Point(0, 569);
             this.statusStrip.Name = "statusStrip";
-            this.statusStrip.Size = new System.Drawing.Size(439, 22);
+            this.statusStrip.Size = new System.Drawing.Size(452, 22);
             this.statusStrip.TabIndex = 2;
             this.statusStrip.Text = "statusStrip1";
             // 
@@ -193,8 +193,8 @@
             // 
             // updateContainerListButton
             // 
-            this.updateContainerListButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.updateContainerListButton.Location = new System.Drawing.Point(352, 353);
+            this.updateContainerListButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.updateContainerListButton.Location = new System.Drawing.Point(365, 534);
             this.updateContainerListButton.Name = "updateContainerListButton";
             this.updateContainerListButton.Size = new System.Drawing.Size(75, 23);
             this.updateContainerListButton.TabIndex = 8;
@@ -206,7 +206,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(439, 410);
+            this.ClientSize = new System.Drawing.Size(452, 591);
             this.Controls.Add(this.updateContainerListButton);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.groupBox1);

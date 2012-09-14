@@ -39,16 +39,16 @@
             // 
             // itemsListView
             // 
-            this.itemsListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
-                        | System.Windows.Forms.AnchorStyles.Left)
-                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.itemsListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
             this.itemsListView.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1,
             this.columnHeader2,
             this.columnHeader3});
             this.itemsListView.Location = new System.Drawing.Point(12, 12);
             this.itemsListView.Name = "itemsListView";
-            this.itemsListView.Size = new System.Drawing.Size(640, 202);
+            this.itemsListView.Size = new System.Drawing.Size(645, 489);
             this.itemsListView.TabIndex = 0;
             this.itemsListView.UseCompatibleStateImageBehavior = false;
             this.itemsListView.View = System.Windows.Forms.View.Details;
@@ -56,22 +56,25 @@
             // columnHeader1
             // 
             this.columnHeader1.Text = "key";
+            this.columnHeader1.Width = 131;
             // 
             // columnHeader2
             // 
             this.columnHeader2.Text = "value";
+            this.columnHeader2.Width = 364;
             // 
             // columnHeader3
             // 
             this.columnHeader3.Text = "metadata";
+            this.columnHeader3.Width = 137;
             // 
             // statusStrip1
             // 
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.statusLabel});
-            this.statusStrip1.Location = new System.Drawing.Point(0, 240);
+            this.statusStrip1.Location = new System.Drawing.Point(0, 527);
             this.statusStrip1.Name = "statusStrip1";
-            this.statusStrip1.Size = new System.Drawing.Size(664, 22);
+            this.statusStrip1.Size = new System.Drawing.Size(669, 22);
             this.statusStrip1.TabIndex = 2;
             this.statusStrip1.Text = "statusStrip1";
             // 
@@ -85,7 +88,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(664, 262);
+            this.ClientSize = new System.Drawing.Size(669, 549);
             this.Controls.Add(this.statusStrip1);
             this.Controls.Add(this.itemsListView);
             this.KeyPreview = true;
