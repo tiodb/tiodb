@@ -114,6 +114,22 @@ namespace InteliHubClient
             return ret;
         }
 
+
+        public int Count
+        {
+            get
+            {
+                int result;
+                int count;
+
+                result = NativeImports.tio_container_get_count(
+                    _nativeContainerHandle,
+                    out count);
+
+                return count;
+            }
+        }
+
         public void Set(object key, object value, object metadata = null)
         {
             using(NativeImports.TioDataConverter 

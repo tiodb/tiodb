@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+using System.Threading;
 
 namespace InteliHubExplorer
 {
@@ -12,6 +13,10 @@ namespace InteliHubExplorer
         InteliHubClient.Connection _connection;
         string m_server = (string)Application.UserAppDataRegistry.GetValue("server", "localhost");
         Int16 m_port = Convert.ToInt16(Application.UserAppDataRegistry.GetValue("port", 2605));
+        bool m_listing = false;
+        int m_containerCount = 0;
+
+        Dictionary<string, string> m_toAddToListView = new Dictionary<string, string>();
 
         public Explorer()
         {
@@ -37,25 +42,29 @@ namespace InteliHubExplorer
 
         private void LoadContainerList()
         {
+            if (m_listing)
+                return;
+
+            m_listing = true;
+
+
+            m_containerCount = _connection.Open("meta/containers").Count;
+
             containersListView.Items.Clear();
 
-            int count = 0;
-
-            _connection.Open("meta/containers").Query(
-                delegate(object key, object value, object metadata)
-                {
-                    containersListView.Items.Add(
-                        new ListViewItem(new string[] { Convert.ToString(key), Convert.ToString(value) }));
-
-                    count++;
-
-                    if (count % 100 == 0)
+            new Thread(delegate()
+            {
+                _connection.Open("meta/containers").Query(
+                    delegate(object key, object value, object metadata)
                     {
-                        Application.DoEvents();
-                        statusLabel.Text = String.Format("{0} containers", count);
-                    }
-                });
+                        lock (m_toAddToListView)
+                        {
+                            m_toAddToListView.Add(key.ToString(), value.ToString());
+                        }
+                    });
 
+                m_listing = false;
+            }).Start();
             
         }
 
@@ -110,6 +119,25 @@ namespace InteliHubExplorer
         private void updateContainerListButton_Click(object sender, EventArgs e)
         {
             LoadContainerList();
+        }
+
+        private void updateListViewTimer_Tick(object sender, EventArgs e)
+        {
+            lock (m_toAddToListView)
+            {
+                if (m_toAddToListView.Keys.Count == 0)
+                    return;
+
+                foreach (string key in m_toAddToListView.Keys)
+                {
+                    containersListView.Items.Add(
+                        new ListViewItem(new string[] { key, m_toAddToListView[key] }));
+                }
+
+                m_toAddToListView.Clear();
+            }
+
+            statusLabel.Text = String.Format("{0}/{1} containers", containersListView.Items.Count, m_containerCount);
         }
 
     }

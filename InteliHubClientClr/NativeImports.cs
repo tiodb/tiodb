@@ -203,6 +203,12 @@ namespace InteliHubClient
             ref TIO_DATA value,
             ref TIO_DATA metadata);
 
+        //int tio_container_get_count(struct TIO_CONTAINER* container, int* count);
+        [DllImport("intelihubclientdll.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_get_count(
+            IntPtr container,
+            out int count);
+
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void query_callback_t(
             IntPtr cookie, 

@@ -34,6 +34,7 @@
             this.columnHeader3 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
+            this.containerNameTextBox = new System.Windows.Forms.TextBox();
             this.statusStrip1.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -46,9 +47,9 @@
             this.columnHeader1,
             this.columnHeader2,
             this.columnHeader3});
-            this.itemsListView.Location = new System.Drawing.Point(12, 12);
+            this.itemsListView.Location = new System.Drawing.Point(12, 43);
             this.itemsListView.Name = "itemsListView";
-            this.itemsListView.Size = new System.Drawing.Size(645, 489);
+            this.itemsListView.Size = new System.Drawing.Size(622, 445);
             this.itemsListView.TabIndex = 0;
             this.itemsListView.UseCompatibleStateImageBehavior = false;
             this.itemsListView.View = System.Windows.Forms.View.Details;
@@ -72,9 +73,9 @@
             // 
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.statusLabel});
-            this.statusStrip1.Location = new System.Drawing.Point(0, 527);
+            this.statusStrip1.Location = new System.Drawing.Point(0, 501);
             this.statusStrip1.Name = "statusStrip1";
-            this.statusStrip1.Size = new System.Drawing.Size(669, 22);
+            this.statusStrip1.Size = new System.Drawing.Size(646, 22);
             this.statusStrip1.TabIndex = 2;
             this.statusStrip1.Text = "statusStrip1";
             // 
@@ -84,11 +85,22 @@
             this.statusLabel.Size = new System.Drawing.Size(10, 17);
             this.statusLabel.Text = "!";
             // 
+            // containerNameTextBox
+            // 
+            this.containerNameTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.containerNameTextBox.Location = new System.Drawing.Point(13, 13);
+            this.containerNameTextBox.Name = "containerNameTextBox";
+            this.containerNameTextBox.ReadOnly = true;
+            this.containerNameTextBox.Size = new System.Drawing.Size(621, 20);
+            this.containerNameTextBox.TabIndex = 3;
+            // 
             // ContainerViewer
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(669, 549);
+            this.ClientSize = new System.Drawing.Size(646, 523);
+            this.Controls.Add(this.containerNameTextBox);
             this.Controls.Add(this.statusStrip1);
             this.Controls.Add(this.itemsListView);
             this.KeyPreview = true;
@@ -111,5 +123,6 @@
         private System.Windows.Forms.ColumnHeader columnHeader3;
         private System.Windows.Forms.StatusStrip statusStrip1;
         private System.Windows.Forms.ToolStripStatusLabel statusLabel;
+        private System.Windows.Forms.TextBox containerNameTextBox;
     }
 }

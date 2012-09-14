@@ -12,15 +12,17 @@ namespace InteliHubExplorer
     {
         InteliHubClient.Connection m_connection = null;
         InteliHubClient.Container m_container = null;
+        string m_server;
+        Int16 m_port;
+        string m_containerName;
 
         public ContainerViewer(string server, Int16 port, string containerName)
         {
-            m_connection = new InteliHubClient.Connection(server, port);
-            m_container = m_connection.Open(containerName);
+            m_server = server;
+            m_port = port;
+            m_containerName = containerName;
             
             InitializeComponent();
-
-            Text = m_container.Name;
         }
 
         private bool m_updating = false;
@@ -35,6 +37,8 @@ namespace InteliHubExplorer
             try
             {
                 m_updating = true;
+
+                itemsListView.Items.Clear();
 
                 //
                 // let's check if there is a schema for the value
@@ -51,7 +55,6 @@ namespace InteliHubExplorer
 
                 }
 
-                itemsListView.Items.Clear();
 
                 int count = 0;
 
@@ -89,6 +92,14 @@ namespace InteliHubExplorer
 
         private void ContainerViewer_Load(object sender, EventArgs e)
         {
+            Text = m_containerName;
+            containerNameTextBox.Text = m_containerName;
+
+            Application.DoEvents();
+
+            m_connection = new InteliHubClient.Connection(m_server, m_port);
+            m_container = m_connection.Open(m_containerName);
+
             UpdateData();
         }
     }

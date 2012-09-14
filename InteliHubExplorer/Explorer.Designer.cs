@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             this.containersListView = new System.Windows.Forms.ListView();
             this.columnHeader1 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
@@ -43,6 +44,7 @@
             this.statusStrip = new System.Windows.Forms.StatusStrip();
             this.statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.updateContainerListButton = new System.Windows.Forms.Button();
+            this.updateListViewTimer = new System.Windows.Forms.Timer(this.components);
             this.groupBox1.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.SuspendLayout();
@@ -202,6 +204,12 @@
             this.updateContainerListButton.UseVisualStyleBackColor = true;
             this.updateContainerListButton.Click += new System.EventHandler(this.updateContainerListButton_Click);
             // 
+            // updateListViewTimer
+            // 
+            this.updateListViewTimer.Enabled = true;
+            this.updateListViewTimer.Interval = 1000;
+            this.updateListViewTimer.Tick += new System.EventHandler(this.updateListViewTimer_Tick);
+            // 
             // Explorer
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -242,6 +250,7 @@
         private System.Windows.Forms.TextBox tbContainer;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Button updateContainerListButton;
+        private System.Windows.Forms.Timer updateListViewTimer;
     }
 }
 
