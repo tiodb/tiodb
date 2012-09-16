@@ -170,10 +170,14 @@ namespace InteliHubClient
             [MarshalAs(UnmanagedType.LPStr)] string name,
             [MarshalAs(UnmanagedType.LPStr)] string type,
             out IntPtr nativeContainerHandle);
-        
-        //int tio_close(struct TIO_CONTAINER* container);
+
+        //void tio_disconnect(struct TIO_CONNECTION* connection)
         [DllImport("intelihubclientdll.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int tio_close(IntPtr connection);
+        public static extern int tio_disconnect(IntPtr connection);
+
+        //void tio_close(struct TIO_CONTAINER* connection)
+        [DllImport("intelihubclientdll.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_close(IntPtr container);
 
         // int tio_ping(struct TIO_CONNECTION* connection, char* payload);
         [DllImport("intelihubclientdll.dll", CallingConvention=CallingConvention.Cdecl)]

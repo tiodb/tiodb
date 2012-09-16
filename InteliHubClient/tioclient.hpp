@@ -642,8 +642,7 @@ namespace tio
 				return value.value();
 			}
 
-
-			value_type get(const key_type& index, const key_type& defaultValue)
+			value_type get(const key_type& index, const value_type& defaultValue)
 			{
 				int result;
 				TioDataConverter<value_type> value;

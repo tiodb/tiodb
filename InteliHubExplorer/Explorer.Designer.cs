@@ -34,7 +34,7 @@
             this.columnHeader2 = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.btnOpenContainer = new System.Windows.Forms.Button();
-            this.tbContainer = new System.Windows.Forms.TextBox();
+            this.containerNameTextBox = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
             this.connectButton = new System.Windows.Forms.Button();
             this.portTextBox = new System.Windows.Forms.TextBox();
@@ -45,21 +45,24 @@
             this.statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this.updateContainerListButton = new System.Windows.Forms.Button();
             this.updateListViewTimer = new System.Windows.Forms.Timer(this.components);
+            this.filterTextBox = new System.Windows.Forms.TextBox();
+            this.filterButton = new System.Windows.Forms.Button();
+            this.containerCountLabel = new System.Windows.Forms.Label();
             this.groupBox1.SuspendLayout();
             this.statusStrip.SuspendLayout();
             this.SuspendLayout();
             // 
             // containersListView
             // 
-            this.containersListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
-            | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.containersListView.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom)
+                        | System.Windows.Forms.AnchorStyles.Left)
+                        | System.Windows.Forms.AnchorStyles.Right)));
             this.containersListView.Columns.AddRange(new System.Windows.Forms.ColumnHeader[] {
             this.columnHeader1,
             this.columnHeader2});
-            this.containersListView.Location = new System.Drawing.Point(12, 132);
+            this.containersListView.Location = new System.Drawing.Point(12, 160);
             this.containersListView.Name = "containersListView";
-            this.containersListView.Size = new System.Drawing.Size(428, 396);
+            this.containersListView.Size = new System.Drawing.Size(428, 368);
             this.containersListView.TabIndex = 0;
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
@@ -78,10 +81,10 @@
             // 
             // groupBox1
             // 
-            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.groupBox1.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                        | System.Windows.Forms.AnchorStyles.Right)));
             this.groupBox1.Controls.Add(this.btnOpenContainer);
-            this.groupBox1.Controls.Add(this.tbContainer);
+            this.groupBox1.Controls.Add(this.containerNameTextBox);
             this.groupBox1.Controls.Add(this.label3);
             this.groupBox1.Controls.Add(this.connectButton);
             this.groupBox1.Controls.Add(this.portTextBox);
@@ -106,15 +109,14 @@
             this.btnOpenContainer.UseVisualStyleBackColor = true;
             this.btnOpenContainer.Click += new System.EventHandler(this.btnOpenContainer_Click);
             // 
-            // tbContainer
+            // containerNameTextBox
             // 
-            this.tbContainer.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
-            this.tbContainer.Location = new System.Drawing.Point(10, 81);
-            this.tbContainer.Name = "tbContainer";
-            this.tbContainer.Size = new System.Drawing.Size(269, 20);
-            this.tbContainer.TabIndex = 6;
-            this.tbContainer.Text = "intelimarket/bvmf/petr4/properties";
+            this.containerNameTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.containerNameTextBox.Location = new System.Drawing.Point(10, 81);
+            this.containerNameTextBox.Name = "containerNameTextBox";
+            this.containerNameTextBox.Size = new System.Drawing.Size(269, 20);
+            this.containerNameTextBox.TabIndex = 6;
             // 
             // label3
             // 
@@ -158,8 +160,8 @@
             // 
             // serverTextBox
             // 
-            this.serverTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
-            | System.Windows.Forms.AnchorStyles.Right)));
+            this.serverTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                        | System.Windows.Forms.AnchorStyles.Right)));
             this.serverTextBox.Location = new System.Drawing.Point(10, 37);
             this.serverTextBox.Name = "serverTextBox";
             this.serverTextBox.Size = new System.Drawing.Size(269, 20);
@@ -210,11 +212,45 @@
             this.updateListViewTimer.Interval = 1000;
             this.updateListViewTimer.Tick += new System.EventHandler(this.updateListViewTimer_Tick);
             // 
+            // filterTextBox
+            // 
+            this.filterTextBox.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                        | System.Windows.Forms.AnchorStyles.Right)));
+            this.filterTextBox.Location = new System.Drawing.Point(12, 132);
+            this.filterTextBox.Name = "filterTextBox";
+            this.filterTextBox.Size = new System.Drawing.Size(334, 20);
+            this.filterTextBox.TabIndex = 9;
+            this.filterTextBox.TextChanged += new System.EventHandler(this.filterTextBox_TextChanged);
+            this.filterTextBox.KeyUp += new System.Windows.Forms.KeyEventHandler(this.filterTextBox_KeyUp);
+            // 
+            // filterButton
+            // 
+            this.filterButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.filterButton.Location = new System.Drawing.Point(353, 131);
+            this.filterButton.Name = "filterButton";
+            this.filterButton.Size = new System.Drawing.Size(75, 23);
+            this.filterButton.TabIndex = 8;
+            this.filterButton.Text = "filter";
+            this.filterButton.UseVisualStyleBackColor = true;
+            this.filterButton.Click += new System.EventHandler(this.filterButton_Click);
+            // 
+            // containerCountLabel
+            // 
+            this.containerCountLabel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.containerCountLabel.AutoSize = true;
+            this.containerCountLabel.Location = new System.Drawing.Point(12, 534);
+            this.containerCountLabel.Name = "containerCountLabel";
+            this.containerCountLabel.Size = new System.Drawing.Size(0, 13);
+            this.containerCountLabel.TabIndex = 10;
+            // 
             // Explorer
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(452, 591);
+            this.Controls.Add(this.containerCountLabel);
+            this.Controls.Add(this.filterButton);
+            this.Controls.Add(this.filterTextBox);
             this.Controls.Add(this.updateContainerListButton);
             this.Controls.Add(this.statusStrip);
             this.Controls.Add(this.groupBox1);
@@ -222,6 +258,7 @@
             this.KeyPreview = true;
             this.Name = "Explorer";
             this.Text = "InteliHub Explorer";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Explorer_FormClosing);
             this.Load += new System.EventHandler(this.Explorer_Load);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Explorer_KeyUp);
             this.groupBox1.ResumeLayout(false);
@@ -247,10 +284,13 @@
         private System.Windows.Forms.StatusStrip statusStrip;
         private System.Windows.Forms.ToolStripStatusLabel statusLabel;
         private System.Windows.Forms.Button btnOpenContainer;
-        private System.Windows.Forms.TextBox tbContainer;
+        private System.Windows.Forms.TextBox containerNameTextBox;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.Button updateContainerListButton;
         private System.Windows.Forms.Timer updateListViewTimer;
+        private System.Windows.Forms.TextBox filterTextBox;
+        private System.Windows.Forms.Button filterButton;
+        private System.Windows.Forms.Label containerCountLabel;
     }
 }
 

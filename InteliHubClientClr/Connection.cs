@@ -23,6 +23,11 @@ namespace InteliHubClient
             return new Container(handle, name);
         }
 
+        public void Close()
+        {
+            int result = NativeImports.tio_disconnect(_nativeHandle);
+        }
+
         public Connection(string host, short port)
         {
             int result = NativeImports.tio_connect(host, port, out _nativeHandle);

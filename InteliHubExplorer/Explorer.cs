@@ -5,18 +5,31 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 using System.Threading;
+using System.Linq;
 
 namespace InteliHubExplorer
 {
     public partial class Explorer : Form
     {
-        InteliHubClient.Connection _connection;
+        struct ContainerItem
+        {
+            public string key;
+            public string value;
+        }
+
+        InteliHubClient.Connection m_connection;
         string m_server = (string)Application.UserAppDataRegistry.GetValue("server", "localhost");
         Int16 m_port = Convert.ToInt16(Application.UserAppDataRegistry.GetValue("port", 2605));
-        bool m_listing = false;
+        string m_containerName = (string)Application.UserAppDataRegistry.GetValue("containerName", "");
+        Thread m_listingThread = null;
         int m_containerCount = 0;
+        bool m_stopping = false;
 
-        Dictionary<string, string> m_toAddToListView = new Dictionary<string, string>();
+        string m_currentFilterExpression = "";
+        string m_newFilterExpression = "";
+
+        List<ContainerItem> m_containerList = new List<ContainerItem>();
+        List<ContainerItem> m_filteredItems = null;
 
         public Explorer()
         {
@@ -24,48 +37,57 @@ namespace InteliHubExplorer
 
             serverTextBox.Text = m_server;
             portTextBox.Text = m_port.ToString();
+            containerNameTextBox.Text = m_containerName;
         }
 
         private void connectButton_Click(object sender, EventArgs e)
         {
-            if (_connection != null)
-                _connection.Disconnect();
+            if (m_connection != null)
+                m_connection.Disconnect();
 
-            _connection = new InteliHubClient.Connection(m_server, m_port);
-
+            m_connection = new InteliHubClient.Connection(m_server, m_port);
 
             Application.UserAppDataRegistry.SetValue("server", m_server);
             Application.UserAppDataRegistry.SetValue("port", m_port);
 
             statusLabel.Text = "Connected! Click \"update list\" to download container list";
+
+            if (m_server == "localhost" || m_server == "localhost")
+            {
+                LoadContainerList();
+                filterTextBox.Focus();
+            }
         }
 
         private void LoadContainerList()
         {
-            if (m_listing)
+            if (m_listingThread != null && m_listingThread.ThreadState == ThreadState.Running)
                 return;
 
-            m_listing = true;
-
-
-            m_containerCount = _connection.Open("meta/containers").Count;
+            m_containerCount = m_connection.Open("meta/containers").Count;
 
             containersListView.Items.Clear();
+            m_containerList.Clear();
 
-            new Thread(delegate()
+            m_listingThread = new Thread(delegate()
             {
-                _connection.Open("meta/containers").Query(
+                m_connection.Open("meta/containers").Query(
                     delegate(object key, object value, object metadata)
                     {
-                        lock (m_toAddToListView)
+                        if (m_stopping)
                         {
-                            m_toAddToListView.Add(key.ToString(), value.ToString());
+                            m_connection.Close();
+                            return;
+                        }
+
+                        lock (m_containerList)
+                        {
+                            m_containerList.Add(new ContainerItem { key=key.ToString(), value=value.ToString() });
                         }
                     });
+            });
 
-                m_listing = false;
-            }).Start();
-            
+            m_listingThread.Start();
         }
 
         
@@ -73,7 +95,10 @@ namespace InteliHubExplorer
         private void Explorer_KeyUp(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.F5)
+            {
                 LoadContainerList();
+                filterTextBox.Focus();
+            }
         }
 
         private void containersListView_DoubleClick(object sender, EventArgs e)
@@ -85,7 +110,7 @@ namespace InteliHubExplorer
         {
             if (e.KeyCode == Keys.Enter)
             {
-                new ContainerViewer(m_server, m_port, containersListView.SelectedItems[0].Text).Show();
+                OpenSelectedContainer();
             }
         }
 
@@ -108,7 +133,14 @@ namespace InteliHubExplorer
 
         private void btnOpenContainer_Click(object sender, EventArgs e)
         {
-            new ContainerViewer(m_server, m_port, tbContainer.Text).Show();
+            OpenSelectedContainer();
+        }
+
+        void OpenSelectedContainer()
+        {
+            m_containerName = containerNameTextBox.Text = containersListView.SelectedItems[0].Text;
+            Application.UserAppDataRegistry.SetValue("containerName", m_containerName);
+            new ContainerViewer(m_server, m_port, m_containerName).Show();
         }
 
         private void Explorer_Load(object sender, EventArgs e)
@@ -119,26 +151,123 @@ namespace InteliHubExplorer
         private void updateContainerListButton_Click(object sender, EventArgs e)
         {
             LoadContainerList();
+            filterTextBox.Focus();
+            updateContainerListButton.Enabled = false;
+        }
+
+        void UpdateContainerListView()
+        {
+            try
+            {
+                ApplyFilter();
+
+                List<ContainerItem> listToUse = null;
+
+                if (m_filteredItems != null)
+                    listToUse = m_filteredItems;
+                else
+                    listToUse = m_containerList;
+
+                ListViewItem[] toBeAdded = null;
+
+                lock (m_containerList)
+                {
+                    if (listToUse.Count > containersListView.Items.Count)
+                    {
+                        int toBeAddedCount = listToUse.Count - containersListView.Items.Count;
+                        toBeAdded = new ListViewItem[toBeAddedCount];
+
+                        int b = 0;
+                        for (int a = containersListView.Items.Count; a < listToUse.Count; a++)
+                        {
+                            ContainerItem item = listToUse[a];
+                            toBeAdded[b] = new ListViewItem(new string[] { item.key, item.value });
+                            b++;
+                        }
+                    }
+                }
+
+                if (toBeAdded != null)
+                {
+                    containersListView.Items.AddRange(toBeAdded);
+                }
+            }
+            finally
+            {
+                //Cursor = Cursors.Default;
+            }
+
+            containerCountLabel.Text = String.Format("{0}/{1} containers {2}",
+                containersListView.Items.Count,
+                m_containerCount,
+                m_filteredItems != null ? "(filtered)" : "");
         }
 
         private void updateListViewTimer_Tick(object sender, EventArgs e)
         {
-            lock (m_toAddToListView)
-            {
-                if (m_toAddToListView.Keys.Count == 0)
-                    return;
-
-                foreach (string key in m_toAddToListView.Keys)
-                {
-                    containersListView.Items.Add(
-                        new ListViewItem(new string[] { key, m_toAddToListView[key] }));
-                }
-
-                m_toAddToListView.Clear();
-            }
-
-            statusLabel.Text = String.Format("{0}/{1} containers", containersListView.Items.Count, m_containerCount);
+            UpdateContainerListView();
         }
 
+        void ApplyFilter()
+        {
+            //if (m_currentFilterExpression == m_newFilterExpression)
+            //    return;
+
+            if (String.IsNullOrWhiteSpace(m_newFilterExpression))
+            {
+                if (m_currentFilterExpression != m_newFilterExpression)
+                {
+                    Cursor = Cursors.WaitCursor;
+                    containersListView.Items.Clear();
+                    Cursor = Cursors.Default;
+                }
+
+                m_filteredItems = null;
+                m_currentFilterExpression = m_newFilterExpression;
+                return;
+            }
+
+            lock (m_containerList)
+            {
+                m_filteredItems = (from item in m_containerList
+                                   where item.key.Contains(m_newFilterExpression)
+                                   select item).ToList();
+            }
+
+            if (m_currentFilterExpression != m_newFilterExpression)
+            {
+                Cursor = Cursors.WaitCursor;
+                containersListView.Items.Clear();
+                Cursor = Cursors.Default;
+            }
+
+            m_currentFilterExpression = m_newFilterExpression;
+        }
+
+        private void filterButton_Click(object sender, EventArgs e)
+        {
+            m_newFilterExpression = filterTextBox.Text;
+            UpdateContainerListView();
+        }
+
+        private void filterTextBox_TextChanged(object sender, EventArgs e)
+        {
+            //m_newFilterExpression = filterTextBox.Text;
+            //UpdateContainerListView();
+        }
+
+        private void Explorer_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            m_stopping = true;
+        }
+
+        private void filterTextBox_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                m_newFilterExpression = filterTextBox.Text;
+                UpdateContainerListView();
+            }
+        }
     }
 }
