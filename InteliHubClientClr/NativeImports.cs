@@ -257,7 +257,7 @@ namespace InteliHubClient
         {
             if (result < 0)
             {
-                throw new Exception("tio protocol error");
+                throw new Exception("InteliHub error, number " + result.ToString());
             }
         }
     }

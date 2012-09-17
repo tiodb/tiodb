@@ -110,7 +110,7 @@ namespace InteliHubExplorer
         {
             if (e.KeyCode == Keys.Enter)
             {
-                OpenSelectedContainer();
+                OpenListViewSelectedContainer();
             }
         }
 
@@ -133,12 +133,17 @@ namespace InteliHubExplorer
 
         private void btnOpenContainer_Click(object sender, EventArgs e)
         {
-            OpenSelectedContainer();
+            OpenContainer(containerNameTextBox.Text);
         }
 
-        void OpenSelectedContainer()
+        void OpenListViewSelectedContainer()
         {
-            m_containerName = containerNameTextBox.Text = containersListView.SelectedItems[0].Text;
+            OpenContainer(containersListView.SelectedItems[0].Text);
+        }
+
+        void OpenContainer(string containerName)
+        {
+            m_containerName = containerNameTextBox.Text = containerName;
             Application.UserAppDataRegistry.SetValue("containerName", m_containerName);
             new ContainerViewer(m_server, m_port, m_containerName).Show();
         }

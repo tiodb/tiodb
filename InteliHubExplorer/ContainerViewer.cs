@@ -97,8 +97,17 @@ namespace InteliHubExplorer
 
             Application.DoEvents();
 
-            m_connection = new InteliHubClient.Connection(m_server, m_port);
-            m_container = m_connection.Open(m_containerName);
+            try
+            {
+                m_connection = new InteliHubClient.Connection(m_server, m_port);
+                m_container = m_connection.Open(m_containerName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("ERROR: " + ex.Message);
+                Close();
+                return;
+            }
 
             UpdateData();
         }
