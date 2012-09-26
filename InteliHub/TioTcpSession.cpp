@@ -1216,6 +1216,28 @@ namespace tio
 		return 0;
 	}
 
+	int EventCodeToEventName(const string& eventName)
+	{
+		if(eventName == "push_back")
+			return TIO_COMMAND_PUSH_BACK;
+		else if(eventName == "push_front")
+			return TIO_COMMAND_PUSH_FRONT;
+		else if(eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
+			return TIO_COMMAND_DELETE;
+		else if(eventName == "clear")
+			return TIO_COMMAND_CLEAR;
+		else if(eventName == "set")
+			return TIO_COMMAND_SET;
+		else if(eventName == "insert")
+			return TIO_COMMAND_INSERT;
+		else if(eventName == "wnp_next")
+			return TIO_COMMAND_WAIT_AND_POP_NEXT;
+		else if(eventName == "snapshot_end")
+			return TIO_EVENT_SNAPSHOT_END;
+
+		return 0;
+	}
+
 	void TioTcpSession::SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName)
 	{
 		shared_ptr<PR1_MESSAGE> message = Pr1CreateMessage();

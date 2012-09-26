@@ -653,15 +653,15 @@ class FieldParser:
         self.values[key] = value
 
 def parse_url(url):
-    if url[:6] != 'tio://':
-        raise Exception ('protocol not supported')
+    if url[:6] == 'tio://':
+        url = url[6:]
 
     slash_pos = url.find('/', 7)
 
     if slash_pos != -1:
-        parts = (url[6:slash_pos], url[slash_pos+1:])
+        parts = (url[:slash_pos], url[slash_pos+1:])
     else:
-        parts = (url[6:],None)
+        parts = (url,None)
     
 
     try:

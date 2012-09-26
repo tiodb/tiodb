@@ -68,7 +68,8 @@ void SetupContainerManager(
 
 void RunServer(tio::ContainerManager* manager,
 			   unsigned short port, 
-			   const vector< pair<string, string> >& users)
+			   const vector< pair<string, string> >& users,
+			   const string& logFilePath)
 {
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
@@ -94,7 +95,7 @@ void RunServer(tio::ContainerManager* manager,
 		}
 	}
 
-	tio::TioTcpServer tioServer(*manager, io_service, e);
+	tio::TioTcpServer tioServer(*manager, io_service, e, logFilePath);
 
 	cout << "running on port " << port << "." << endl;
 
@@ -649,6 +650,7 @@ int main(int argc, char* argv[])
 			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
 			("port", po::value<unsigned short>(), "listening port. If not informed, 2605")
 			("threads", po::value<unsigned short>(), "number of running threads")
+			("log-path", po::value<string>(), "log file path")
 			("data-path", po::value<string>(), "sets data path");
 
 		po::variables_map vm;
@@ -746,11 +748,17 @@ int main(int argc, char* argv[])
 
 			if(vm.count("port"))
 				port = vm["port"].as<unsigned short>();
+
+			string logFilePath;
+
+			if(vm.count("log-path"))
+				logFilePath = vm["log-path"].as<string>();
 		
 			RunServer(
 				&containerManager,
 				port,
-				users);
+				users,
+				logFilePath);
 		}
 	}
 	catch(std::exception& ex)

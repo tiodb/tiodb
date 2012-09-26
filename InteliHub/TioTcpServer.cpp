@@ -117,7 +117,10 @@ namespace tio
 	}
 
 
-	TioTcpServer::TioTcpServer(ContainerManager& containerManager, asio::io_service& io_service, const tcp::endpoint& endpoint) :
+	TioTcpServer::TioTcpServer(ContainerManager& containerManager, 
+			asio::io_service& io_service, 
+			const tcp::endpoint& endpoint,
+			const std::string& logFilePath) :
 		containerManager_(containerManager),
 		acceptor_(io_service, endpoint),
 		io_service_(io_service),
@@ -126,6 +129,38 @@ namespace tio
 	{
 		LoadDispatchMap();
 		InitializeMetaContainers();
+
+		if(!logFilePath.empty())
+		{
+			string finalFilePath = logFilePath;
+
+#ifdef _WIN32
+			SYSTEMTIME now;
+
+			GetSystemTime(&now);
+
+			//
+			// Given c:\intelihub.log this will change it
+			// to something like c:\intelihub_20120526.log
+			//
+
+			std::string::reverse_iterator ri;
+			std::stringstream dateString;
+
+			dateString << "_" << std::setfill('0') << 
+				std::setw(4) << now.wYear  <<
+				std::setw(2) << now.wMonth <<
+				std::setw(2) << now.wDay;
+
+			ri = std::find(finalFilePath.rbegin(), finalFilePath.rend(), '.');
+
+			if(ri != finalFilePath.rend())
+				finalFilePath.insert(finalFilePath.rend() - ri - 1, dateString.str());
+			else
+				finalFilePath += dateString.str();
+#endif
+			logger_.Start(finalFilePath);
+		}
 	}
 
 	void TioTcpServer::InitializeMetaContainers()
@@ -239,6 +274,9 @@ namespace tio
 		return "UNKNOWN";
 	}
 
+
+	
+
 	void TioTcpServer::OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message)
 	{
 		bool b;
@@ -338,7 +376,7 @@ namespace tio
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
 
-					//cout << "handle: " << handle << endl;
+					logger_.LogMessage(container.get(), message);
 				
 					session->SendBinaryMessage(answer);
 				}
@@ -400,6 +438,8 @@ namespace tio
 					else
 						throw std::runtime_error("INTERNAL ERROR");
 
+					logger_.LogMessage(container.get(), message);
+
 					session->SendBinaryAnswer(&key, &value, &metadata);
 				}
 				break;
@@ -437,6 +477,8 @@ namespace tio
 					}
 					else
 						throw std::runtime_error("INTERNAL ERROR");
+
+					logger_.LogMessage(container.get(), message);
 
 					session->SendBinaryAnswer();
 				}
