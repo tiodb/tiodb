@@ -137,7 +137,7 @@ namespace tio
 #ifdef _WIN32
 			SYSTEMTIME now;
 
-			GetSystemTime(&now);
+			GetLocalTime(&now);
 
 			//
 			// Given c:\intelihub.log this will change it
