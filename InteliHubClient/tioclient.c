@@ -1,5 +1,7 @@
-#include "tioclient_internals.h"
+
 #include "tioclient.h"
+#include "tioclient_internals.h"
+
 
 #define MAX_ERROR_DESCRIPTION_SIZE 255
 
@@ -16,7 +18,7 @@ void pr1_set_last_error_description(const char* description)
 	g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
 }
 
-int socket_send(SOCKET socket, const void* buffer, unsigned int len)
+int socket_send(SOCKET socket, const void* buffer, int len)
 {
 	int ret = send(socket, (const char*)buffer, len, 0);
 
@@ -58,7 +60,7 @@ int socket_receive(SOCKET socket, void* buffer, int len)
 	return ret;
 }
 
-int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
+int socket_receive_if_available(SOCKET socket, void* buffer, int len)
 {
 	int ret;
 #ifdef _WIN32
@@ -68,7 +70,7 @@ int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 	if(ret == SOCKET_ERROR)
 		return ret;
 
-	if(pending_bytes < len)
+	if((int)pending_bytes < len)
 		return 0;
 
 	return socket_receive(socket, buffer, len); 
@@ -99,19 +101,19 @@ struct STREAM_BUFFER* stream_buffer_new()
 
 unsigned int stream_buffer_space_used(struct STREAM_BUFFER* stream_buffer)
 {
-	return stream_buffer->current - stream_buffer->buffer;
+	return (unsigned int)(stream_buffer->current - stream_buffer->buffer);
 }
 
 unsigned int stream_buffer_space_left(struct STREAM_BUFFER* stream_buffer)
 {
-	return stream_buffer->buffer_size - stream_buffer_space_used(stream_buffer);
+	return (unsigned int)(stream_buffer->buffer_size - stream_buffer_space_used(stream_buffer));
 }
 
-void stream_buffer_ensure_space_left(struct STREAM_BUFFER* stream_buffer, unsigned int size)
+void stream_buffer_ensure_space_left(struct STREAM_BUFFER* stream_buffer, size_t size)
 {
-	unsigned int new_size;
+	size_t new_size;
 	char* new_buffer;
-	unsigned int used = stream_buffer_space_used(stream_buffer);
+	size_t used = stream_buffer_space_used(stream_buffer);
 
 	if(stream_buffer->buffer_size - used >= size)
 		return;
@@ -129,7 +131,7 @@ void stream_buffer_ensure_space_left(struct STREAM_BUFFER* stream_buffer, unsign
 	stream_buffer->current = stream_buffer->buffer + used;
 }
 
-unsigned int stream_buffer_seek(struct STREAM_BUFFER* stream_buffer, unsigned int position)
+size_t stream_buffer_seek(struct STREAM_BUFFER* stream_buffer, size_t position)
 {
 	if(position >= stream_buffer->buffer_size)
 		position = stream_buffer->buffer_size - 1;
@@ -148,7 +150,7 @@ unsigned int stream_buffer_seek(struct STREAM_BUFFER* stream_buffer, unsigned in
 // struct MY_STRUCT* struct = (struct MY_STRCT*)stream_buffer_get_write_pointer(sb, sizeof(struct MY_STRUCT);
 // struct->my_int = 10;
 //
-void* stream_buffer_get_write_pointer(struct STREAM_BUFFER* stream_buffer, unsigned int size)
+void* stream_buffer_get_write_pointer(struct STREAM_BUFFER* stream_buffer, size_t size)
 {
 	void* write_pointer;
 
@@ -162,7 +164,7 @@ void* stream_buffer_get_write_pointer(struct STREAM_BUFFER* stream_buffer, unsig
 	return write_pointer;
 }
 
-void stream_buffer_write(struct STREAM_BUFFER* stream_buffer, const void* buffer, unsigned int size)
+void stream_buffer_write(struct STREAM_BUFFER* stream_buffer, const void* buffer, size_t size)
 {
 	stream_buffer_ensure_space_left(stream_buffer, size);
 
@@ -171,9 +173,9 @@ void stream_buffer_write(struct STREAM_BUFFER* stream_buffer, const void* buffer
 	stream_buffer->current += size;
 }
 
-unsigned int stream_buffer_read(struct STREAM_BUFFER* stream_buffer, void* buffer, unsigned int size)
+size_t stream_buffer_read(struct STREAM_BUFFER* stream_buffer, void* buffer, size_t size)
 {
-	unsigned int left = stream_buffer_space_left(stream_buffer);
+	size_t left = stream_buffer_space_left(stream_buffer);
 	
 	if(size > left)
 		size = left;
@@ -268,7 +270,7 @@ void pr1_message_add_field_double(struct PR1_MESSAGE* pr1_message, unsigned shor
 
 void pr1_message_add_field_string(struct PR1_MESSAGE* pr1_message, unsigned short field_id, const char* value)
 {
-	pr1_message_add_field(pr1_message, field_id, MESSAGE_FIELD_TYPE_STRING, value, strlen(value));
+	pr1_message_add_field(pr1_message, field_id, MESSAGE_FIELD_TYPE_STRING, value, (unsigned int)strlen(value));
 }
 
 int pr1_message_field_get_int(const struct PR1_MESSAGE_FIELD_HEADER* field)
@@ -293,7 +295,7 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 
 void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
-	unsigned int copy_size = min(buffer_size, field->data_size);
+	size_t copy_size = min(buffer_size, field->data_size);
 
 	field++;
 
@@ -751,7 +753,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 
 	buffer[sizeof(buffer)-1] = '\0';
 
-	tiodata_set_string_and_size(tiodata, buffer, strlen(buffer));
+	tiodata_set_string_and_size(tiodata, buffer, (unsigned int)strlen(buffer));
 }
 
 
@@ -1033,8 +1035,14 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 	closesocket(connection->socket);
 	connection->socket = 0;
 
-	while( (pending_event = events_list_pop(connection)) )
+	for(;;)
+	{
+		pending_event = events_list_pop(connection);
+		if(!pending_event) 
+			break;
+
 		pr1_message_delete(pending_event);
+	}		
 
 	free(connection->containers);
 }
@@ -1265,7 +1273,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 	handle = pr1_message_field_get_int(handle_field);
 
 	(*container)->connection = connection;
-	(*container)->handle = handle;
+	(*container)->handle = (void*)handle;
 	(*container)->event_callback = NULL;
 	(*container)->wait_and_pop_next_callback = NULL;
 	(*container)->subscription_cookie = NULL;
@@ -1308,7 +1316,7 @@ int tio_close(struct TIO_CONTAINER* container)
 	if(!container)
 		goto clean_up_and_return;
 
-	handle = container->handle;
+	handle = (int)container->handle;
 
 	request = pr1_message_new();
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_CLOSE);
@@ -1409,7 +1417,7 @@ int tio_ping(struct TIO_CONNECTION* connection, char* payload)
 	struct PR1_MESSAGE* response = NULL;
 	struct PR1_MESSAGE_FIELD_HEADER* value_field = NULL;
 	int result;
-	unsigned int payload_len;
+	size_t payload_len;
 	SOCKET socket = connection->socket;
 
 	payload_len = strlen(payload);
@@ -1600,7 +1608,7 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 	int query_id;
 
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY);
-	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, container->handle);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, (int)container->handle);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START, start);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
 
