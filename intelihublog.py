@@ -1,9 +1,13 @@
 import intelihubclient
 import sys
+import time
+from optparse import OptionParser
+import bz2
 
 
 class InteliHubLogParser(object):
   def __init__(self):
+    self.speed = 10
     pass
 
   def deserialize(self, info, data):
@@ -31,8 +35,12 @@ class InteliHubLogParser(object):
     
   
   def replay(self, hub, file_path):
-    containers = {}    
-    f = file(file_path, 'r')
+    containers = {}
+
+    if file_path.endswith('bz2'):
+        f = bz2.BZ2File(file_path)
+    else:
+        f = file(file_path, 'r')
 
     count = 0
 
@@ -43,7 +51,7 @@ class InteliHubLogParser(object):
         break
 
       count += 1
-      if count % 1000 == 0:
+      if count % self.speed == 0:
         print count, len(containers), 'containers'
 
       # remove \r
@@ -83,12 +91,18 @@ class InteliHubLogParser(object):
           c.propset(key, value)
         else:
           raise Exception('unknown command ' + command)
+          
+        if self.speed > 0:
+            time.sleep(1.0 / self.speed)
         
 def main():
   parser = InteliHubLogParser()
-  hub_host, file_path = sys.argv[1:]
+  hub_host, file_path, speed = sys.argv[1:]
+  speed = int(speed)
 
-  print 'Loading file "', file_path, '" to InteliHub @', hub_host
+  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec' % (file_path, hub_host, speed)
+  
+  parser.speed = speed
   
   hub = intelihubclient.connect(hub_host)
   
