@@ -114,7 +114,7 @@ namespace logdb
 		int _file;	
 
 	public:
-		File() 
+		File(int flags = 0) 
 			: _file(-1)
 		{}
 
@@ -249,7 +249,7 @@ namespace logdb
 			return offset / _pageSize;
 		}
 	public:
-		PagedFile()
+		PagedFile()  
 		{
 			_cacheInMegabytes = 4;
 			SetPageSize(4096);

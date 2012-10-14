@@ -18,7 +18,7 @@ IF(${WIN32})
 	#
 	SET(BOOST_VERSION 1_47)
 	SET(BOOST_ROOT ../../../lib/boost/boost_${BOOST_VERSION})
-    SET(BOOST_INCLUDEDIR ${BOOST_ROOT})
+        SET(BOOST_INCLUDEDIR ${BOOST_ROOT})
 	SET(BOOST_LIBDIR ${BOOST_ROOT}/lib)
 
 	IF(${TIO_PYTHON_PLUGIN_SUPPORT})
@@ -55,6 +55,9 @@ ELSE(${WIN32})
         LINK_LIBRARIES (intelihub debug boost_python optimized boost_python)
         LINK_LIBRARIES (intelihub python2.6)
     ENDIF(${TIO_PYTHON_PLUGIN_SUPPORT})
+	
+    SET(BOOST_INCLUDEDIR /usr/local/include)
+    SET(BOOST_LIBDIR /usr/local/lib)
 
 ENDIF(${WIN32})
 
@@ -69,7 +72,7 @@ ADD_EXECUTABLE(intelihub
     TioTcpSession.cpp
     TioPython.cpp
     tio.cpp
-    ../intelihubclient/tioclient.c)
+    ../InteliHubClient/tioclient.c)
 	
 # I can't get it to work, help is appreciated. Since tioclient.c is C and not C++, it can't
 # use the pch. /TP was supposed to force it to be compiled as C++, what is OK. But it doesn't work

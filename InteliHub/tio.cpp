@@ -21,7 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "MemoryStorage.h"
 //#include "BdbStorage.h"
 #include "LogDbStorage.h"
-#include "../intelihubclient/tioclient.hpp"
+#include "../InteliHubClient/tioclient.hpp"
 
 #if TIO_PYTHON_PLUGIN_SUPPORT
 #include "TioPython.h"

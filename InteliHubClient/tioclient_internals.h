@@ -120,6 +120,25 @@ struct PR1_MESSAGE* pr1_message_new_get_buffer_for_receive(struct PR1_MESSAGE_HE
 
 int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message);
 
+//
+// TODO: move to internal implementation file
+//
+struct PR1_MESSAGE* tio_generate_create_or_open_msg(unsigned int command_id, const char* name, const char* type);
+struct PR1_MESSAGE* tio_generate_data_message(unsigned int command_id, void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata);
+int pr1_message_get_error_code(struct PR1_MESSAGE* msg);
+void pr1_message_field_to_tio_data(const struct PR1_MESSAGE_FIELD_HEADER* field, struct TIO_DATA* tiodata);
+const char* message_field_id_to_string(int i);
+const char* tio_command_to_string(int i);
+void pr1_message_fill_header_info(struct PR1_MESSAGE* pr1_message);
+
+void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message);
+
+
+void pr1_message_field_get_as_tio_data(const struct PR1_MESSAGE* pr1_message, unsigned int field_id, struct TIO_DATA* tiodata);
+
+
+
+
 #ifdef __cplusplus
 } // extern "C" 
 #endif

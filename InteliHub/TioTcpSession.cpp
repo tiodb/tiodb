@@ -661,7 +661,7 @@ namespace tio
 		if(shouldSend)
 			SendEvent(subscriptionInfo, eventName, key, value, metadata);
 
-		for(auto i = extraEvents.cbegin() ; i != extraEvents.cend() ; ++i)
+		for(vector<EXTRA_EVENT>::const_iterator i = extraEvents.begin() ; i != extraEvents.end() ; ++i)
 		{
 			const EXTRA_EVENT& extraEvent = *i;
 

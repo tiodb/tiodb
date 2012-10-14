@@ -1,5 +1,5 @@
 #include "tioclient_internals.h"
-#include "tioclient.h"
+//#include "tioclient.h"
 
 #define MAX_ERROR_DESCRIPTION_SIZE 255
 
@@ -293,7 +293,7 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 
 void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
-	unsigned int copy_size = min(buffer_size, field->data_size);
+	unsigned int copy_size = buffer_size < field->data_size ? buffer : field->data_size;
 
 	field++;
 
