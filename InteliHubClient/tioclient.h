@@ -9,7 +9,7 @@
 	#include <stdio.h>
 	#include <tchar.h>
 	#include <assert.h>
-	#include <WinSock2.h>
+	#include <WinSock.h>
 	#pragma comment(lib ,"ws2_32.lib")
 #else
 	#include <unistd.h>
@@ -73,7 +73,7 @@ extern "C" {
 
 
 #ifndef SOCKET
-//#define SOCKET int
+#define SOCKET int
 #endif
 
 struct TIO_DATA
@@ -163,8 +163,8 @@ const char* tio_get_last_error_description();
 //
 struct KEY_AND_VALUE
 {
-	char* key;
-	char* value;
+	const char* key;
+	const char* value;
 };
 
 typedef void (*tio_plugin_start_t)(void* container_manager, struct KEY_AND_VALUE* parameters);

@@ -23,6 +23,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "TioTcpProtocol.h"
 #include "TioTcpSession.h"
 #include "auth.h"
+#include "logdb.h"
 
 namespace tio
 {
@@ -38,6 +39,175 @@ namespace tio
 	using std::deque;
 	
 	std::string Serialize(const std::list<const TioData*>& fields);
+
+
+	class BinaryProtocolLogger
+	{
+		map<string, unsigned> globalContainerHandle_;
+		int lastGlobalHandle_;
+		logdb::File f_;
+
+		void RawLog(const string& what)
+		{
+			f_.Write(what.c_str(), what.size());
+		}
+
+	public:
+
+		BinaryProtocolLogger()
+			: lastGlobalHandle_(0)
+			, f_(NULL)
+		{
+		}
+
+		void Start(const std::string& logFilePath)
+		{
+			f_.Create(logFilePath.c_str());
+			f_.SetPointer(f_.GetFileSize());
+		}
+
+		void SerializeTioData(string* lineLog, const TioData& data)
+		{
+			string serialized;
+
+			switch(data.GetDataType())
+			{
+			case TioData::None:
+				lineLog->append(",n,");
+				break;
+			case TioData::String:
+				lineLog->append(",s");
+				lineLog->append(lexical_cast<string>(data.GetSize()));
+				lineLog->append(",");
+				lineLog->append(data.AsSz(), data.GetSize());
+				break;
+			case TioData::Int:
+				lineLog->append(",i");
+				serialized = lexical_cast<string>(data.AsInt());
+				lineLog->append(lexical_cast<string>(serialized.length()));
+				lineLog->append(",");
+				lineLog->append(serialized);
+				break;
+			case TioData::Double:
+				lineLog->append(",d");
+				serialized = lexical_cast<string>(data.AsDouble());
+				lineLog->append(lexical_cast<string>(serialized.length()));
+				lineLog->append(",");
+				lineLog->append(serialized);
+				break;
+			}
+		}
+
+		void LogMessage(ITioContainer* container, PR1_MESSAGE* message)
+		{
+			if(!f_.IsValid())
+				return;
+
+			bool b;
+			int command;
+
+			b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_COMMAND, &command);
+
+			if(!b)
+				return;
+
+			string logLine;
+			logLine.reserve(100);
+
+			unsigned& globalHandle = globalContainerHandle_[container->GetName()];
+			string timeString = lexical_cast<string>(time(NULL));
+
+			switch(command)
+			{
+			case TIO_COMMAND_CREATE:
+			case TIO_COMMAND_OPEN:
+				if(globalHandle == 0)
+				{
+					string containerName = container->GetName();
+					string containerType = container->GetType();
+					
+					globalHandle = ++lastGlobalHandle_;
+					logLine.append(timeString);
+					logLine.append(",create,");
+					logLine.append(lexical_cast<string>(globalHandle));
+
+					logLine.append(",s");
+					logLine.append(lexical_cast<string>(containerName.size()));
+					logLine.append(",");
+
+					logLine.append(containerName);
+
+					logLine.append(",s");
+					logLine.append(lexical_cast<string>(containerType.size()));
+					logLine.append(",");
+
+					logLine.append(containerType);
+					logLine.append("\n");
+
+					RawLog(logLine);
+				}
+
+				return;
+
+				break;
+			case TIO_COMMAND_PUSH_BACK:
+				logLine.append(timeString);
+				logLine.append(",push_back");
+				break;
+			case TIO_COMMAND_PUSH_FRONT:
+				logLine.append(timeString);
+				logLine.append(",push_front");
+				break;
+			case TIO_COMMAND_POP_BACK:
+				logLine.append(timeString);
+				logLine.append(",pop_back");
+				break;
+			case TIO_COMMAND_POP_FRONT:
+				logLine.append(timeString);
+				logLine.append(",pop_front");
+				break;
+			case TIO_COMMAND_SET:
+				logLine.append(timeString);
+				logLine.append(",set");
+				break;
+			case TIO_COMMAND_INSERT:
+				logLine.append(timeString);
+				logLine.append(",insert");
+				break;
+			case TIO_COMMAND_DELETE:
+				logLine.append(timeString);
+				logLine.append(",delete");
+				break;
+			case TIO_COMMAND_CLEAR:
+				logLine.append(timeString);
+				logLine.append(",clear");
+				break;
+			case TIO_COMMAND_PROPSET:
+				logLine.append(timeString);
+				logLine.append(",propset");
+				break;
+			}
+
+			if(logLine.empty())
+				return;
+
+			int handle;
+			TioData key, value, metadata;
+
+			Pr1MessageGetHandleKeyValueAndMetadata(message, &handle, &key, &value, &metadata);
+
+			logLine.append(",");
+			logLine.append(lexical_cast<string>(globalHandle));
+
+			SerializeTioData(&logLine, key);
+			SerializeTioData(&logLine, value);
+			SerializeTioData(&logLine, metadata);
+			logLine.append("\n");
+
+			RawLog(logLine);
+		}
+	};
+
 	
 	class TioTcpServer
 	{
@@ -143,6 +313,8 @@ namespace tio
 
 		MetaContainers metaContainers_;
 
+		BinaryProtocolLogger logger_;
+
 		void DoAccept();
 		void OnAccept(shared_ptr<TioTcpSession> client, const error_code& err);
 		
@@ -210,7 +382,7 @@ namespace tio
 			const TioData& key, const TioData& value, const TioData& metadata);
 
 	public:
-		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint);
+		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint, const std::string& logFilePath);
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
 		void OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		

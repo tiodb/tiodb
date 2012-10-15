@@ -661,7 +661,7 @@ namespace tio
 		if(shouldSend)
 			SendEvent(subscriptionInfo, eventName, key, value, metadata);
 
-		for(auto i = extraEvents.cbegin() ; i != extraEvents.cend() ; ++i)
+		for(vector<EXTRA_EVENT>::const_iterator i = extraEvents.begin() ; i != extraEvents.end() ; ++i)
 		{
 			const EXTRA_EVENT& extraEvent = *i;
 
@@ -1195,6 +1195,28 @@ namespace tio
 	}
 
 	int EventNameToEventCode(const string& eventName)
+	{
+		if(eventName == "push_back")
+			return TIO_COMMAND_PUSH_BACK;
+		else if(eventName == "push_front")
+			return TIO_COMMAND_PUSH_FRONT;
+		else if(eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
+			return TIO_COMMAND_DELETE;
+		else if(eventName == "clear")
+			return TIO_COMMAND_CLEAR;
+		else if(eventName == "set")
+			return TIO_COMMAND_SET;
+		else if(eventName == "insert")
+			return TIO_COMMAND_INSERT;
+		else if(eventName == "wnp_next")
+			return TIO_COMMAND_WAIT_AND_POP_NEXT;
+		else if(eventName == "snapshot_end")
+			return TIO_EVENT_SNAPSHOT_END;
+
+		return 0;
+	}
+
+	int EventCodeToEventName(const string& eventName)
 	{
 		if(eventName == "push_back")
 			return TIO_COMMAND_PUSH_BACK;

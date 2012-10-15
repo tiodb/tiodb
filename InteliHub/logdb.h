@@ -1,3 +1,4 @@
+#pragma once
 /*
 Tio: The Information Overlord
 Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
@@ -39,8 +40,8 @@ namespace logdb
 		}
 
 	public:
-		File() 
-			: h(INVALID_HANDLE_VALUE), _flags(FILE_FLAG_NO_BUFFERING)
+		File(DWORD flags = FILE_FLAG_NO_BUFFERING) 
+			: h(INVALID_HANDLE_VALUE), _flags(flags)
 		{}
 
 		bool Create(const char* name)
@@ -78,7 +79,7 @@ namespace logdb
 			return read;
 		}
 
-		DWORD Write(void* buffer, DWORD size)
+		DWORD Write(const void* buffer, DWORD size)
 		{
 			ASSERT(IsValid());
 			DWORD written;
@@ -113,7 +114,7 @@ namespace logdb
 		int _file;	
 
 	public:
-		File() 
+		File(int flags = 0) 
 			: _file(-1)
 		{}
 
@@ -139,7 +140,7 @@ namespace logdb
 			return read(_file, buffer, size);
 		}
 
-		DWORD Write(void* buffer, DWORD size)
+		DWORD Write(const void* buffer, DWORD size)
 		{
 			DWORD ret = write(_file, buffer, size);
 		#ifdef __APPLE__
@@ -248,7 +249,7 @@ namespace logdb
 			return offset / _pageSize;
 		}
 	public:
-		PagedFile()
+		PagedFile()  
 		{
 			_cacheInMegabytes = 4;
 			SetPageSize(4096);

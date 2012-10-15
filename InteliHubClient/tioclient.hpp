@@ -94,11 +94,13 @@ namespace tio
 		}
 
 		// move
+#if defined(_MSC_VER)
 		TioDataConverter(const TioDataConverter&& rhv)
 		{
 			tiodata_ = rhv.tiodata_;
 			rhv.tiodata_.data_type = TIO_DATA_TYPE_NONE;
 		}
+#endif
 
 		TioDataConverter()
 		{
