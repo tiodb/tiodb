@@ -186,6 +186,8 @@ namespace tio
 	class Connection : private IContainerManager
 	{
 		TIO_CONNECTION* connection_;
+		string host_;
+		short port_;
 
 	protected:
 
@@ -285,7 +287,7 @@ namespace tio
 		}
 
 	public:
-		Connection() : connection_(NULL)
+		Connection() : connection_(NULL), port_(0)
 		{
 			tio_initialize();
 		}
@@ -294,6 +296,9 @@ namespace tio
 		{
 			return this;
 		}
+
+		string host() { return host_;}
+		short port() { return port_;}
 
 		void Connect(const string& host, short port)
 		{
@@ -304,6 +309,9 @@ namespace tio
 			result = tio_connect(host.c_str(), port, &connection_);
 
 			ThrowOnTioClientError(result);
+
+			host_ = host;
+			port_ = port;
 		}
 
 		void Disconnect()
