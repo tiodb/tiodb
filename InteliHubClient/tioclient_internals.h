@@ -84,6 +84,8 @@ struct TIO_CONNECTION
 	int containers_count;
 
 	int dispatch_events_on_receive;
+
+	unsigned int thread_id;
 };
 
 

@@ -758,7 +758,18 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 
 
 
+void thread_check(struct TIO_CONNECTION* connection)
+{
+	unsigned int current_thread_id = GetCurrentThreadId();
 
+	if(connection->thread_id == 0)
+	{
+		connection->thread_id = current_thread_id;
+		return;
+	}
+
+	assert(connection->thread_id == current_thread_id);
+}
 
 
 
@@ -834,6 +845,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
 	(*connection)->dispatch_events_on_receive = 0;
+	(*connection)->thread_id = 0;
 
 	return TIO_SUCCESS;
 }
@@ -945,6 +957,8 @@ int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int com
 	struct PR1_MESSAGE* pr1_message = 
 		tio_generate_data_message(command_id, container->handle, key, value, metadata);
 
+	thread_check(container->connection);
+
 	result = pr1_message_send_and_delete(socket, pr1_message);
 
 	return result;
@@ -1053,6 +1067,8 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 
 	struct PR1_MESSAGE* pr1_message;
 
+	thread_check(connection);
+
 	result = pr1_message_receive(socket, &pr1_message);
 	
 	if(TIO_FAILED(result))
@@ -1093,6 +1109,8 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
 
+	thread_check(connection);
+
 	for(; min_events != 0; min_events--)
 	{
 		result = pr1_message_receive(connection->socket, &received_message);
@@ -1128,6 +1146,8 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 	int result;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
+
+	thread_check(connection);
 
 	// we'll loop until we receive a response (anything that is not an event)
 	for(;;)
