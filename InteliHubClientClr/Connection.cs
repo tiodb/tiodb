@@ -36,7 +36,7 @@ namespace InteliHubClient
 
         public void Disconnect()
         {
-            //NativeImports.tio_disconnect(_nativeHandle);
+            NativeImports.tio_disconnect(_nativeHandle);
 
             _nativeHandle = new IntPtr();
         }

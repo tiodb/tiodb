@@ -293,7 +293,7 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 
 void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
-	unsigned int copy_size = buffer_size < field->data_size ? buffer : field->data_size;
+	unsigned int copy_size = buffer_size < field->data_size ? buffer_size : field->data_size;
 
 	field++;
 
@@ -955,7 +955,7 @@ int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int com
 	int result;
 
 	struct PR1_MESSAGE* pr1_message = 
-		tio_generate_data_message(command_id, container->handle, key, value, metadata);
+		tio_generate_data_message(command_id, (void*)container->handle, key, value, metadata);
 
 	thread_check(container->connection);
 

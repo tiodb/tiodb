@@ -168,7 +168,7 @@ namespace tio
 		//
 		// users
 		//
-		metaContainers_.users = containerManager_.CreateContainer("volatile_map", "meta/users");
+		metaContainers_.users = containerManager_.CreateContainer("volatile_map", "__meta__/users");
 
 		try
 		{
@@ -181,15 +181,15 @@ namespace tio
 
 		string userContainerType = containerManager_.ResolveAlias("users");
 
-		auth_.SetObjectDefaultRule(userContainerType, "meta/users", Auth::deny);
-		auth_.AddObjectRule(userContainerType, "meta/users", "*", "__admin__", Auth::allow);
+		auth_.SetObjectDefaultRule(userContainerType, "__meta__/users", Auth::deny);
+		auth_.AddObjectRule(userContainerType, "__meta__/users", "*", "__admin__", Auth::allow);
 
 		//
 		// sessions
 		//
-		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "meta/sessions");
+		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "__meta__/sessions");
 
-		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "meta/session_last_command");
+		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "__meta__/session_last_command");
 	}
 
 	Auth& TioTcpServer::GetAuth()
@@ -685,6 +685,9 @@ namespace tio
 		dispatchMap_["diff_start"] = boost::bind(&TioTcpServer::OnCommand_Diff_Start, this, _1, _2, _3, _4);
 		dispatchMap_["diff"] = boost::bind(&TioTcpServer::OnCommand_Diff, this, _1, _2, _3, _4);
 
+		dispatchMap_["group_add"] = boost::bind(&TioTcpServer::OnCommand_GroupAdd, this, _1, _2, _3, _4);
+		dispatchMap_["group_subscribe"] = boost::bind(&TioTcpServer::OnCommand_GroupSubscribe, this, _1, _2, _3, _4);
+
 	}
 
 	std::string Serialize(const std::list<const TioData*>& fields)
@@ -838,6 +841,70 @@ namespace tio
 		string serialized = Serialize(fields);
 
 		info.destination->PushBack(TIONULL, serialized, info.source->GetName());
+	}
+
+	void TioTcpServer::OnCommand_GroupAdd(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		//
+		// group_add group_name container_name
+		//
+		if(!CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		const string& groupName = cmd.GetParameters()[0];
+		const string& containerName = cmd.GetParameters()[1];
+
+		try
+		{
+			shared_ptr<ITioContainer> container;
+
+			container = containerManager_.OpenContainer("", containerName);
+
+			groupManager_.AddContainer(&containerManager_, groupName, containerName, container);
+
+			MakeAnswer(success, answer, "");
+		}
+		catch (std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+		}
+
+	}
+
+
+
+	void TioTcpServer::OnCommand_GroupSubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		//
+		// group_subscribe group_name [start]
+		//
+		if(!CheckParameterCount(cmd, 1, exact) && 
+		   !CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		const string& groupName = cmd.GetParameters()[0];
+		string start;
+
+		if(cmd.GetParameters().size() == 2)
+		{
+			start = cmd.GetParameters()[1];
+		}
+
+		try
+		{
+			groupManager_.SubscribeGroup(groupName, session, start);
+		}
+		catch (std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+		}
+
 	}
 
 	void TioTcpServer::OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)

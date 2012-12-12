@@ -787,6 +787,18 @@ namespace tio
     {
         if(pendingSendSize_)
         {
+			//
+			// If there is too much data pending, the client is not 
+			// receiving it anymore. We're going to disconnect him, otherwise
+			// we will consume too much memory
+			//
+			if(pendingSendSize_ > 10 * 1024 * 1024)
+			{
+				UnsubscribeAll();
+				server_.OnClientFailed(shared_from_this(), boost::system::error_code());
+				return;
+			}
+
             pendingSendData_.push(str);
             return;
         }
@@ -916,7 +928,7 @@ namespace tio
 		handles_.erase(i);
 	}
 
-	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd)
+	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer)
 	{
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
@@ -936,6 +948,17 @@ namespace tio
 		{
 			int numericStart = lexical_cast<int>(start);
 			
+
+
+			//
+			// This will make Tio not to lock until it finished sending 
+			// snapshot to a client. But it makes the logic more complicated.
+			// Now all the events are being buffered at session level if it
+			// fill up the connection buffer, so it's not a huge problem
+			// and the lock up time will not be that big, unless the container
+			// is really big
+			//
+#if 0
 			//
 			// lets try a query. Navigating a query is faster than accessing records
 			// using index. Imagine a linked list being accessed by index every time...
@@ -951,6 +974,7 @@ namespace tio
 				//
 			}
 
+			
 			subscriptionInfo->nextRecord = numericStart;
 
 			if(IsListContainer(container))
@@ -966,20 +990,22 @@ namespace tio
 			pendingSnapshots_[handle] = subscriptionInfo;
 			
 			subscriptions_[handle] = subscriptionInfo;
-			SendString("answer ok\r\n");
+
+			if(sendAnswer)
+				SendString("answer ok\r\n");
 			
 			SendPendingSnapshots();
 
 			return;
+#endif // #if 0
+
 		}
 		catch(boost::bad_lexical_cast&)
 		{
 
 		}
 
-		//
-		// if we're here, start is not numeric. We'll let the container deal with this
-		//
+		
 		subscriptions_[handle] = subscriptionInfo;
 
 		try
@@ -987,7 +1013,8 @@ namespace tio
 			subscriptionInfo->cookie = container->Subscribe(
 				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
 			
-			SendString("answer ok\r\n");
+			if(sendAnswer)
+				SendString("answer ok\r\n");
 		}
 		catch(std::exception& ex)
 		{

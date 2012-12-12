@@ -298,7 +298,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			const string& eventName,
 			bool readRecord)
 		{
-			ASSERT(index <= container->GetRecordCount());
+			ASSERT((size_t)index <= container->GetRecordCount());
 
 			this->eventName = eventName;
 			this->key.Set(index);
@@ -562,7 +562,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
 		void SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void Subscribe(unsigned int handle, const string& start, int filterEnd);
+		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer=true);
 		void BinarySubscribe(unsigned int handle, const string& start);
 		void Unsubscribe(unsigned int handle);
 

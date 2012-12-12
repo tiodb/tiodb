@@ -52,7 +52,7 @@ namespace InteliHubExplorer
 
             statusLabel.Text = "Connected! Click \"update list\" to download container list";
 
-            if (m_server == "localhost" || m_server == "localhost")
+            if (m_server == "localhost" || m_server == "127.0.0.1")
             {
                 LoadContainerList();
                 filterTextBox.Focus();
@@ -64,14 +64,14 @@ namespace InteliHubExplorer
             if (m_listingThread != null && m_listingThread.ThreadState == ThreadState.Running)
                 return;
 
-            m_containerCount = m_connection.Open("meta/containers").Count;
-
             containersListView.Items.Clear();
             m_containerList.Clear();
 
             m_listingThread = new Thread(delegate()
             {
-                m_connection.Open("meta/containers").Query(
+                m_containerCount = m_connection.Open("__meta__/containers").Count;
+
+                m_connection.Open("__meta__/containers").Query(
                     delegate(object key, object value, object metadata)
                     {
                         if (m_stopping)
@@ -272,6 +272,14 @@ namespace InteliHubExplorer
             {
                 m_newFilterExpression = filterTextBox.Text;
                 UpdateContainerListView();
+            }
+        }
+
+        private void serverTextBox_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                connectButton.PerformClick();
             }
         }
     }

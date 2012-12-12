@@ -11,6 +11,22 @@ namespace tio
 	using std::stringstream;
 	using std::runtime_error;
 
+	class tio_exception : public std::runtime_error
+	{
+		int errorCode_;
+	public:
+
+		explicit tio_exception(int errorCode, const string& message)
+			: std::runtime_error(message)
+			, errorCode_(errorCode)
+		{}
+
+		int code()
+		{
+			return errorCode_;
+		}
+	};
+
 	inline void ToTioData(int v, TIO_DATA* tiodata)
 	{
 		tiodata_set_as_none(tiodata);
@@ -69,7 +85,7 @@ namespace tio
 		{
 			stringstream str;
 			str << "client error " << result << ": \"" << tio_get_last_error_description() << "\"" ;
-			throw std::runtime_error(str.str());
+			throw tio_exception(result, str.str());
 		}
 	}
 

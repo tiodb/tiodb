@@ -28,13 +28,13 @@ namespace tio
 		managerByType_["volatile_list"] = volatileList;
 		managerByType_["volatile_map"] = volatileMap;
 
-		meta_containers_ = CreateContainer("volatile_map", "meta/containers");
-		meta_availableTypes_ = CreateContainer("volatile_list", "meta/available_types");
+		meta_containers_ = CreateContainer("volatile_map", "__meta__/containers");
+		meta_availableTypes_ = CreateContainer("volatile_list", "__meta__/available_types");
 
 		//
-		// it'll make it available on the meta/containers list itself...
+		// it'll make it available on the __meta__/containers list itself...
 		//
-		meta_containers_ = CreateContainer("volatile_map", "meta/containers");
+		meta_containers_ = CreateContainer("volatile_map", "__meta__/containers");
 		
 
 		meta_availableTypes_->PushBack(TIONULL, "volatile_list");

@@ -41,6 +41,113 @@ namespace tio
 	std::string Serialize(const std::list<const TioData*>& fields);
 
 
+	class GroupManager : boost::noncopyable
+	{
+		struct ContainerInfo
+		{
+			string name;
+			shared_ptr<ITioContainer> container;
+
+			ContainerInfo(){}
+
+			ContainerInfo(string name, shared_ptr<ITioContainer> container)
+				: container(container)
+				, name(name)
+			{
+			}
+		};
+
+		class GroupInfo : boost::noncopyable
+		{
+			string groupName_;
+			string containerListName_;
+			shared_ptr<ITioContainer> containerListContainer_;
+			map<string, ContainerInfo> containers_;
+		public:
+
+			GroupInfo(ContainerManager* containerManager, const string& name)
+				: groupName_(name)
+			{
+				containerListName_ = "__meta__/groups/";
+				containerListName_ += name;
+
+				containerListContainer_ = containerManager->CreateContainer("volatile_map", containerListName_);
+			}
+
+			GroupInfo(GroupInfo&& rhv)
+			{
+				std::swap(groupName_, rhv.groupName_);
+				std::swap(containerListName_, rhv.containerListName_);
+				std::swap(containerListContainer_, rhv.containerListContainer_);
+				std::swap(containers_, rhv.containers_);
+			}
+
+			void AddContainer(const string& containerName, shared_ptr<ITioContainer> container)
+			{
+				//
+				// TODO: check if already exists
+				//
+				containers_[containerName] = ContainerInfo(containerName, container);
+				containerListContainer_->Set(containerName, groupName_);
+			}
+
+			void Subscribe(const shared_ptr<TioTcpSession>& session, const string& start)
+			{
+				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+				
+				for(auto i = containers_.begin() ; i != containers_.end() ; ++i)
+				{
+					const ContainerInfo& containerInfo = i->second;
+
+					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
+
+					string answer = "group_container ";
+					answer += lexical_cast<string>(handle);
+					answer += " ";
+					answer += containerInfo.name;
+					answer += "\r\n";
+
+					session->SendAnswer(answer);
+
+					session->Subscribe(handle, start, 0, false);
+				}
+			}
+		};
+
+		map<string, GroupInfo> groups_;
+
+	public:
+		void AddContainer(ContainerManager* containerManager, const string& groupName, const string& containerName, shared_ptr<ITioContainer> container)
+		{
+			auto i = groups_.find(groupName);
+
+			if(i == groups_.end())
+			{
+				i = groups_.emplace(std::move(pair<string, GroupInfo>(groupName, GroupInfo(containerManager, groupName)))).first;
+			}
+
+			i->second.AddContainer(containerName, container);
+		}
+
+		bool RemoveContainer(const string& groupName, const string& containerName)
+		{
+			return false;
+		}
+		
+		bool SubscribeGroup(const string& groupName, const shared_ptr<TioTcpSession>& session, const string& start)
+		{
+			auto igroup = groups_.find(groupName);
+
+			if(igroup == groups_.end())
+				return false;
+
+			igroup->second.Subscribe(session, start);
+
+			return true;
+		}
+	};
+
+
 	class BinaryProtocolLogger
 	{
 		map<string, unsigned> globalContainerHandle_;
@@ -315,6 +422,8 @@ namespace tio
 
 		BinaryProtocolLogger logger_;
 
+		GroupManager groupManager_;
+				
 		void DoAccept();
 		void OnAccept(shared_ptr<TioTcpSession> client, const error_code& err);
 		
@@ -330,6 +439,9 @@ namespace tio
 		void OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
+
+		void OnCommand_GroupAdd(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
+		void OnCommand_GroupSubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_Ping(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_Version(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
@@ -391,10 +503,12 @@ namespace tio
 		void Start();
 
 		Auth& GetAuth();
+		
 
 	};
 
 	void StartServer();
 }
+
 
 

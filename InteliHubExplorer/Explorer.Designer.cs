@@ -64,7 +64,7 @@
             this.containersListView.Location = new System.Drawing.Point(12, 160);
             this.containersListView.Name = "containersListView";
             this.containersListView.Size = new System.Drawing.Size(448, 368);
-            this.containersListView.TabIndex = 0;
+            this.containersListView.TabIndex = 3;
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
             this.containersListView.DoubleClick += new System.EventHandler(this.containersListView_DoubleClick);
@@ -95,7 +95,7 @@
             this.groupBox1.Location = new System.Drawing.Point(12, 12);
             this.groupBox1.Name = "groupBox1";
             this.groupBox1.Size = new System.Drawing.Size(448, 114);
-            this.groupBox1.TabIndex = 1;
+            this.groupBox1.TabIndex = 0;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Connection info";
             // 
@@ -106,7 +106,7 @@
             this.btnOpenContainer.Name = "btnOpenContainer";
             this.btnOpenContainer.Size = new System.Drawing.Size(75, 23);
             this.btnOpenContainer.TabIndex = 7;
-            this.btnOpenContainer.Text = "open";
+            this.btnOpenContainer.Text = "&Open";
             this.btnOpenContainer.UseVisualStyleBackColor = true;
             this.btnOpenContainer.Click += new System.EventHandler(this.btnOpenContainer_Click);
             // 
@@ -126,7 +126,7 @@
             this.label3.Name = "label3";
             this.label3.Size = new System.Drawing.Size(51, 13);
             this.label3.TabIndex = 5;
-            this.label3.Text = "container";
+            this.label3.Text = "contai&ner";
             // 
             // connectButton
             // 
@@ -135,7 +135,7 @@
             this.connectButton.Name = "connectButton";
             this.connectButton.Size = new System.Drawing.Size(75, 23);
             this.connectButton.TabIndex = 4;
-            this.connectButton.Text = "connect";
+            this.connectButton.Text = "&Connect";
             this.connectButton.UseVisualStyleBackColor = true;
             this.connectButton.Click += new System.EventHandler(this.connectButton_Click);
             // 
@@ -169,6 +169,7 @@
             this.serverTextBox.TabIndex = 1;
             this.serverTextBox.Text = "localhost";
             this.serverTextBox.TextChanged += new System.EventHandler(this.serverTextBox_TextChanged);
+            this.serverTextBox.KeyUp += new System.Windows.Forms.KeyEventHandler(this.serverTextBox_KeyUp);
             // 
             // label1
             // 
@@ -177,7 +178,7 @@
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(36, 13);
             this.label1.TabIndex = 0;
-            this.label1.Text = "server";
+            this.label1.Text = "&server";
             // 
             // statusStrip
             // 
@@ -202,8 +203,8 @@
             this.updateContainerListButton.Location = new System.Drawing.Point(385, 534);
             this.updateContainerListButton.Name = "updateContainerListButton";
             this.updateContainerListButton.Size = new System.Drawing.Size(75, 23);
-            this.updateContainerListButton.TabIndex = 8;
-            this.updateContainerListButton.Text = "update list";
+            this.updateContainerListButton.TabIndex = 4;
+            this.updateContainerListButton.Text = "&Update List";
             this.updateContainerListButton.UseVisualStyleBackColor = true;
             this.updateContainerListButton.Click += new System.EventHandler(this.updateContainerListButton_Click);
             // 
@@ -220,7 +221,7 @@
             this.filterTextBox.Location = new System.Drawing.Point(12, 132);
             this.filterTextBox.Name = "filterTextBox";
             this.filterTextBox.Size = new System.Drawing.Size(354, 20);
-            this.filterTextBox.TabIndex = 9;
+            this.filterTextBox.TabIndex = 1;
             this.filterTextBox.TextChanged += new System.EventHandler(this.filterTextBox_TextChanged);
             this.filterTextBox.KeyUp += new System.Windows.Forms.KeyEventHandler(this.filterTextBox_KeyUp);
             // 
@@ -230,8 +231,8 @@
             this.filterButton.Location = new System.Drawing.Point(373, 131);
             this.filterButton.Name = "filterButton";
             this.filterButton.Size = new System.Drawing.Size(75, 23);
-            this.filterButton.TabIndex = 8;
-            this.filterButton.Text = "filter";
+            this.filterButton.TabIndex = 2;
+            this.filterButton.Text = "&Filter";
             this.filterButton.UseVisualStyleBackColor = true;
             this.filterButton.Click += new System.EventHandler(this.filterButton_Click);
             // 
