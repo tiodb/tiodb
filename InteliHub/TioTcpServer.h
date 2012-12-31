@@ -94,6 +94,8 @@ namespace tio
 			void Subscribe(const shared_ptr<TioTcpSession>& session, const string& start)
 			{
 				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+
+				session->SendAnswer("answer ok\r\n");
 				
 				for(auto i = containers_.begin() ; i != containers_.end() ; ++i)
 				{
@@ -102,9 +104,13 @@ namespace tio
 					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
 
 					string answer = "group_container ";
-					answer += lexical_cast<string>(handle);
+					answer += groupName_;
 					answer += " ";
 					answer += containerInfo.name;
+					answer += " ";
+					answer += containerInfo.container->GetType();
+					answer += " ";
+					answer += lexical_cast<string>(handle);
 					answer += "\r\n";
 
 					session->SendAnswer(answer);

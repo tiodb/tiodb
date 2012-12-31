@@ -1684,6 +1684,9 @@ namespace tio
 					return;
 				}
 
+				if(containerType.empty())
+					containerType = "volatile_list";
+
 				if(!CheckCommandAccess(cmd.GetCommand(), answer, session))
 					return;
 

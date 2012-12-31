@@ -26,11 +26,11 @@ def decode(value):
 
         there's always an space between the values, and IT'S NOT taken into account
         when calculating the field size
-        
+
     '''
     if value[:2] != 'X1':
         raise Exception('not a valid message')
-    
+
     header_size = 2
     field_count = int(value[header_size:header_size+4], 16) # expect hex
     current_data_offset = header_size + 1 + (field_count + 1) * 5
@@ -95,17 +95,17 @@ class ContainerPythonizer(object):
             return self.get(key)
 
     def __delitem__(self, key):
-        return self.delete(key)    
+        return self.delete(key)
 
     def __len__(self):
-        return self.get_count()    
+        return self.get_count()
 
     def __setitem__(self, key, valueOrValueAndMetadata):
         if isinstance(valueOrValueAndMetadata, tuple):
             value, metadata = valueOrValueAndMetadata
         else:
             value, metadata = valueOrValueAndMetadata, None
-            
+
         return self.set(key, value, metadata)
 
     def append(self, value, metadata=None):
@@ -114,9 +114,9 @@ class ContainerPythonizer(object):
     def extend(self, iterable):
         for x in iterable:
             self.push_back(x)
-            
+
     def values(self):
-        return self.query()    
+        return self.query()
 
     def keys(self):
         return [x[0] for x in self.query_with_key_and_metadata()]
@@ -139,14 +139,14 @@ class RemoteContainer(ContainerPythonizer):
         self.handle = handle
         self.type = type
         self.name = name
-        
+
     def __repr__(self):
         return '<tioclient.RemoteContainer name="%s", type="%s">' % (self.name, self.type)
-        
+
     def propget(self, key, withKeyAndMetadata=False):
         key, value, metadata = self.send_data_command('get_property', key, None, None)
-        return value if not withKeyAndMetadata else (key, value, metadata)    
-        
+        return value if not withKeyAndMetadata else (key, value, metadata)
+
     def propset(self, key, value, metadata=None):
         return self.send_data_command('set_property', key, value, metadata)
 
@@ -163,26 +163,26 @@ class RemoteContainer(ContainerPythonizer):
 
     def pop_front(self, withKeyAndMetadata=False):
         key, value, metadata = self.send_data_command('pop_front', None, None, None)
-        return value if not withKeyAndMetadata else (key, value, metadata)        
+        return value if not withKeyAndMetadata else (key, value, metadata)
 
     def insert(self, key, value, metadata=None):
         return self.send_data_command('insert', key, value, metadata)
 
     def set(self, key, value, metadata=None):
-        return self.send_data_command('set', key, value, metadata)    
-    
+        return self.send_data_command('set', key, value, metadata)
+
     def push_back(self, value, metadata=None):
         return self.send_data_command('push_back', None, value, metadata)
 
     def push_front(self, value, metadata=None):
         return self.send_data_command('push_front', None, value, metadata)
-        
+
     def get_count(self):
         return int(self.manager.SendCommand('get_count', self.handle)['count'])
 
     def clear(self):
         return self.manager.SendCommand('clear', self.handle)
-    
+
     def subscribe(self, sink, event_filter='*', start = None, end = None):
         self.manager.Subscribe(self.handle, sink, event_filter, start, end)
 
@@ -191,7 +191,7 @@ class RemoteContainer(ContainerPythonizer):
 
     def close(self):
         self.manager.CloseContainer(self.handle)
-    
+
     def send_data_command(self, command, key = None, value = None, metadata = None):
         return self.manager.SendDataCommand(command, self.handle, key, value, metadata)
 
@@ -230,6 +230,7 @@ class TioServerConnection(object):
         self.receiveBuffer = ''
         self.pendingEvents = {}
         self.sinks = {}
+        self.group_sinks = {}
         self.poppers = {}
         self.dontWaitForAnswers = False
         self.pendingAnswerCount = 0
@@ -247,24 +248,32 @@ class TioServerConnection(object):
             self.Connect(host, port)
 
     def __del__(self):
-       self.close() 
+       self.close()
 
     def close(self):
         self.s.close()
-        
-    def create(self, name, type):
+
+    def create(self, name, type=None):
         return self.__CreateOropen('create', name, type)
 
     def open(self, name, type = ''):
         return self.__CreateOropen('open', name, type)
 
+    def group_add(self, group_name, container_name):
+        return self.SendCommand('group_add', group_name, container_name)
+
+    def group_subscribe(self, group_name, sink, start):
+        self.group_sinks[group_name] = sink
+        return self.SendCommand('group_subscribe', group_name, start)
+
+        
     def __ReceiveLine(self):
         i = self.receiveBuffer.find('\r\n')
         while i == -1:
             self.receiveBuffer += self.s.recv(4096)
             if not self.receiveBuffer:
                 raise Exception('error reading from connection socket')
-            
+
             i = self.receiveBuffer.find('\r\n')
 
         ret = self.receiveBuffer[:i]
@@ -278,11 +287,11 @@ class TioServerConnection(object):
 
         if not events:
             return 0
-        
+
         for index, e in enumerate(events):
             if index >= max:
                 break
-            
+
             if e.name == 'wnp_key':
                 key = e.data[0]
                 f = self.poppers[handle]['wnp_key'][key].pop()
@@ -310,7 +319,7 @@ class TioServerConnection(object):
 
     def DispatchPendingEvents(self, max=0xFFFFFFFF):
         count = 0
-        
+
         for handle in self.pendingEvents.keys():
             count += self.DispatchPendingHandleEvents(handle, max=max-count)
             if count >= max:
@@ -321,7 +330,7 @@ class TioServerConnection(object):
     def DispatchPendingEventAndReceiveNext(self):
         self.DispatchPendingEvents()
         self.ReceiveAnswer(False)
-    
+
 
     def RunLoop(self, timeout=None):
         while 1:
@@ -333,7 +342,7 @@ class TioServerConnection(object):
     def __ReceiveData(self, size):
         while len(self.receiveBuffer) < size:
             self.receiveBuffer += self.s.recv(4096)
-            
+
         ret = self.receiveBuffer[:size]
         self.receiveBuffer = self.receiveBuffer[size:]
 
@@ -352,9 +361,9 @@ class TioServerConnection(object):
 
     def ping(self):
         return self.SendCommand('ping')
-                
+
     def ReceiveAnswer(self, wait_until_answer = True):
-        while 1:        
+        while 1:
             line = self.__ReceiveLine()
             params = line.split(' ')
             currentParam = 0
@@ -373,7 +382,7 @@ class TioServerConnection(object):
                 # just an ok, no data, no handle. just a happy end
                 if currentParam + 1 > len(params):
                     return
-                    
+
                 parameterType = params[currentParam]
 
                 #
@@ -390,7 +399,7 @@ class TioServerConnection(object):
 
                 if parameterType == 'diff_map' or parameterType == 'diff_list':
                     return { 'diff_type' : parameterType, 'diff_handle':  params[currentParam+1] }
-                
+
                 if parameterType == 'count' or parameterType == 'name':
                     return { parameterType : params[currentParam+1] }
 
@@ -402,12 +411,12 @@ class TioServerConnection(object):
                     self.RegisterQuery(query_id)
                     continue
 
-                raise Exception('invalid parameter type: ' + parameterType) 
+                raise Exception('invalid parameter type: ' + parameterType)
 
             elif answerType == 'diff_list' or answerType == 'diff_map':
                 diff_handle = params[1]
                 return (answerType, diff_handle)
-            
+
             elif answerType == 'query':
                 query_id = params[1]
                 what = params[2]
@@ -417,12 +426,19 @@ class TioServerConnection(object):
                     self.AddToQuery(query_id, self.ReceiveDataAnswer(params, 2))
                 elif what == 'end':
                     return self.FinishQuery(query_id)
+
+            elif answerType == 'group_container':
+                group_name, container_name, container_type, container_handle = params[1:]
+                container_handle = int(container_handle)
+                self.containers[container_handle] = RemoteContainer(self, container_handle, container_type, container_name)
+                sink = self.group_sinks[group_name]
+                self.sinks.setdefault(container_handle, {}).setdefault('*', []).append(sink)
                 
             elif answerType == 'event':
                 class Event: pass
-                
+
                 event = Event()
-                
+
                 currentParam += 1
                 event.handle = int(params[currentParam])
 
@@ -438,13 +454,13 @@ class TioServerConnection(object):
 
                 if not wait_until_answer:
                     return
-   
+
     def Stop(self):
         self.stop = True
-                    
+
     def HandleEvent(self, event):
         self.pendingEvents.setdefault(event.handle, []).append(event)
-            
+
     def ReceiveDataAnswer(self, params, currentParam):
         fields = {}
         while currentParam + 1 < len(params):
@@ -467,15 +483,15 @@ class TioServerConnection(object):
                 value = dataBuffer
             else:
                 raise Exception('unsupported data type: %s' % type)
-                
+
             fields[name] = value
-            
+
         return (fields.get('key'), fields.get('value'), fields.get('metadata'))
-        
+
     def SerializeData(self, data):
         if data is None:
             return None
-        
+
         if type(data) is str:
             return (data, 'string')
         elif type(data) is int or type(data) is long:
@@ -499,16 +515,16 @@ class TioServerConnection(object):
         halfCommand = ' '.join( ('set_permission', objectType, objectName, command, allowOrDeny) )
         self.SendCommand(halfCommand + (' ' + user if user != '' else ''))
 
-    def Subscribe(self, handle, sink, filter = '*', start = None, end = None):
+    def Subscribe(self, handle, sink, event_filter = '*', start = None, end = None):
         param = str(handle)
 
         if not start is None:
             param += ' ' + str(start)
             if not end is None:
                 param += ' ' + str(end)
-        
+
         #self.sinks[handle][filter](event_name, key, value, metadata)
-        self.sinks.setdefault(int(handle), {}).setdefault(filter, []).append(sink)
+        self.sinks.setdefault(int(handle), {}).setdefault(event_filter, []).append(sink)
         self.SendCommand('subscribe', param)
 
     def Unsubscribe(self, handle):
@@ -528,7 +544,7 @@ class TioServerConnection(object):
             self.poppers.setdefault(int(handle), {}).setdefault('wnp_key', {}).setdefault(key, []).append(sink)
         else:
             raise Exception('invalid wait and pop type')
-                    
+
     def GetFieldSpec(self, fieldName, fieldDataAndType):
         if fieldDataAndType:
             return ' ' + fieldName + ' ' + fieldDataAndType[1] + ' ' + str(len(fieldDataAndType[0]))
@@ -545,9 +561,9 @@ class TioServerConnection(object):
         if len(args):
             buffer += ' '
             buffer += ' '.join([str(x) for x in args])
-        
+
         if buffer[-2:] != '\r\n':
-            buffer += '\r\n'            
+            buffer += '\r\n'
 
         self.s.sendall(buffer)
 
@@ -557,12 +573,12 @@ class TioServerConnection(object):
         if self.dontWaitForAnswers:
             self.pendingAnswerCount += 1
             return
-        
+
         try:
             return self.ReceiveAnswer()
         except Exception, ex:
             raise Exception('%s - "%s"' % (ex, buffer.strip('\r\n ')))
-    
+
     def SendDataCommand(self, command, parameter, key, value, metadata):
         buffer = command
         if not parameter is None and len(parameter) > 0:
@@ -598,7 +614,7 @@ class TioServerConnection(object):
     def Disconnect(self):
         self.s.close()
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        
+
     def __CreateOropen(self, command, name, type):
         info = self.SendCommand(command, name if not type else name + ' ' + type)
         handle = info['handle']
@@ -618,7 +634,7 @@ class TioServerConnection(object):
         if not endOffset is None: l.append(str(endOffset))
 
         return self.SendCommand(' '.join(l))
-        
+
 class FieldParser:
     def __init__(self):
         pass
@@ -662,10 +678,10 @@ def parse_url(url):
         parts = (url[:slash_pos], url[slash_pos+1:])
     else:
         parts = (url,None)
-    
+
 
     try:
-        
+
         host_and_maybe_port = parts[0].split(':')
 
         if len(host_and_maybe_port) == 2:
@@ -674,7 +690,7 @@ def parse_url(url):
             host = host_and_maybe_port[0]
             port = INTELIHUB_DEFAULT_PORT
 
-        port = int(port)        
+        port = int(port)
 
         # data container name is optional
         return (host, port, parts[1]) if len(parts) == 2 else (host, port, None)
@@ -687,7 +703,7 @@ def open_by_url(url, create_container_type=None):
 
     if not container:
         raise Exception('url "%s" doesn\'t have a container specification' % url)
-    
+
     server = TioServerConnection(address, port)
     if create_container_type:
         return server.create(container, create_container_type)
@@ -698,7 +714,7 @@ def connect(url):
     address, port, container = parse_url(url)
     if container:
         raise Exception('container specified, you must inform a url with just the server/port')
-    
+
     return TioServerConnection(address, port)
 
 
@@ -707,8 +723,8 @@ def main():
     def sink(c, e, k, v, m): print c, e, k, v, m
     l = hub.create('xpto', 'volatile_list')
     l.subscribe(sink)
-    
+
     return
-       
+
 if __name__ == '__main__':
     main()

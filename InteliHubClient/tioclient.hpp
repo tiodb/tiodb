@@ -428,7 +428,7 @@ namespace tio
 			typedef TValue value_type;
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
-#if TIO_CLIENT_BOOST_SUPPORT
+#ifdef TIO_CLIENT_BOOST_SUPPORT
 			typedef boost::function<void (const string&, const TKey&, const TValue&)> EventCallbackT;
 #else
 			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);

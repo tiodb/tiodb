@@ -454,7 +454,40 @@ class ContainerTests(InteliHubTestCase):
         check_mirror([1,2])
 
         container.append(3)
-        check_mirror([2, 3])        
+        check_mirror([2, 3])
+
+    def test_group_subscribe(self):
+        container_count = 500
+        start_item_count = 5
+        added_item_count = 5
+
+        print 'creating containers...'
+        containers = [self.hub.create(self.get_me_a_random_container_name()) for x in range(container_count)]
+
+        def sink(*args):
+            pass#print args
+
+        print 'adding items...'
+        for index, container in enumerate(containers):
+            for x in range(start_item_count):
+                container.push_back(str(index))
+
+        print 'adding to group containers...'
+        for container in containers:
+            self.hub.group_add('test_group', container.name)
+
+        print 'group subscribe...'
+        self.hub.group_subscribe('test_group', sink, 0)
+
+        self.hub.ping()
+        self.hub.DispatchPendingEvents()
+
+        for index, container in enumerate(containers):
+            print 'adding items to container ' + str(index)
+            for x in range(added_item_count):
+                container.push_back(str(index) * 2)
+
+        self.hub.DispatchPendingEvents()
 
         
 if __name__ == '__main__':
