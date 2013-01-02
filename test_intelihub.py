@@ -457,9 +457,9 @@ class ContainerTests(InteliHubTestCase):
         check_mirror([2, 3])
 
     def test_group_subscribe(self):
-        container_count = 500
-        start_item_count = 5
-        added_item_count = 5
+        container_count = 1000
+        start_item_count = 50
+        added_item_count = 50
 
         print 'creating containers...'
         containers = [self.hub.create(self.get_me_a_random_container_name()) for x in range(container_count)]
@@ -482,8 +482,8 @@ class ContainerTests(InteliHubTestCase):
         self.hub.ping()
         self.hub.DispatchPendingEvents()
 
+        print 'adding items to container after subscription'
         for index, container in enumerate(containers):
-            print 'adding items to container ' + str(index)
             for x in range(added_item_count):
                 container.push_back(str(index) * 2)
 

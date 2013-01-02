@@ -485,7 +485,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			SendPendingBinaryData();
 		}
 
-		void SendBinaryMessage(shared_ptr<PR1_MESSAGE> message)
+		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
 		{
 			pendingBinarySendData_.push_back(message);
 			SendPendingBinaryData();

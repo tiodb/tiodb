@@ -1726,6 +1726,38 @@ int tio_container_unsubscribe(struct TIO_CONTAINER* container)
 	return TIO_SUCCESS;
 }
 
+int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name)
+{
+	int result;
+	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* response = NULL;
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_GROUP_ADD);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_GROUP_NAME, group_name);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_CONTAINER_NAME, container_name);
+
+
+	result = pr1_message_send_and_delete(connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = TIO_SUCCESS;
+	
+clean_up_and_return:
+	pr1_message_delete(response);
+
+	return result;
+}
+
+
 
 void tio_initialize()
 {

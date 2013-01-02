@@ -519,6 +519,58 @@ namespace tio
 				}
 				break;
 
+				case TIO_COMMAND_GROUP_ADD:
+					{
+						string groupName, containerName;
+						bool b;
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_GROUP_NAME, &groupName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_GROUP_NAME)");
+							break;
+						}
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_CONTAINER_NAME, &containerName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_CONTAINER_NAME)");
+							break;
+						}
+
+						shared_ptr<ITioContainer> container;
+
+						container = containerManager_.OpenContainer("", containerName);
+
+						groupManager_.AddContainer(&containerManager_, groupName, containerName, container);
+
+						session->SendBinaryAnswer();
+
+					}
+					break;
+
+				case TIO_COMMAND_GROUP_SUBSCRIBE:
+					{
+						string groupName, start;
+						bool b;
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_GROUP_NAME, &groupName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_GROUP_NAME)");
+							break;
+						}
+
+						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START, &start);
+
+						groupManager_.BinarySubscribeGroup(groupName, session, start);
+
+					}
+					break;
+
 				case TIO_COMMAND_SUBSCRIBE:
 				{
 					bool b;

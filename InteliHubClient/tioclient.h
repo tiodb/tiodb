@@ -68,6 +68,9 @@ extern "C" {
 #define TIO_COMMAND_PROPGET 			0x30
 #define TIO_COMMAND_PROPSET 			0x31
 
+#define TIO_COMMAND_GROUP_ADD 			0x32
+#define TIO_COMMAND_GROUP_SUBSCRIBE		0x33
+
 
 #define TIO_FAILED(x) (x < 0)
 

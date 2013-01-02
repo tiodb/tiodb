@@ -118,6 +118,31 @@ namespace tio
 					session->Subscribe(handle, start, 0, false);
 				}
 			}
+
+
+			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
+			{
+				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+
+				session->SendBinaryAnswer();
+
+				for(auto i = containers_.begin() ; i != containers_.end() ; ++i)
+				{
+					const ContainerInfo& containerInfo = i->second;
+
+					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
+
+					auto answer = Pr1CreateMessage();
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_NEW_GROUP_CONTAINER);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_GROUP_NAME, groupName_);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_NAME, containerInfo.name);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_TYPE, containerInfo.container->GetType());
+
+					session->SendBinaryMessage(answer);
+
+					session->Subscribe(handle, start, 0, false);
+				}
+			}
 		};
 
 		map<string, GroupInfo> groups_;
@@ -148,6 +173,19 @@ namespace tio
 				return false;
 
 			igroup->second.Subscribe(session, start);
+
+			return true;
+		}
+
+
+		bool BinarySubscribeGroup(const string& groupName, const shared_ptr<TioTcpSession>& session, const string& start)
+		{
+			auto igroup = groups_.find(groupName);
+
+			if(igroup == groups_.end())
+				return false;
+
+			igroup->second.BinarySubscribe(session, start);
 
 			return true;
 		}
