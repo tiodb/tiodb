@@ -7,6 +7,7 @@
 namespace asio = boost::asio;
 using std::string;
 using std::cout;
+using std::vector;
 using std::endl;
 using tio::async_error_info;
 using boost::lexical_cast;
@@ -404,8 +405,61 @@ void TestInteliMarketClient()
 		Sleep(50);
 }
 
+void test_group_subscribe()
+{
+	TIO_CONNECTION* cn;
+	static const int CONTAINER_COUNT = 50;
+	static const int ITEM_COUNT_BEFORE = 50;
+	const char* group_name = "test_group";
+	vector<TIO_CONTAINER*> containers(CONTAINER_COUNT);
+
+	tio_connect("localhost", 2605, &cn);
+	
+	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
+	{
+		string name = "container_";
+		name += lexical_cast<string>(a);
+
+		tio_create(cn, name.c_str(), "volatile_list", &containers[a]);
+
+		for(int b = 0 ; b < ITEM_COUNT_BEFORE ; b++)
+		{
+			TIO_DATA value;
+
+			tiodata_init(&value);
+			tiodata_set_int(&value, b);
+
+			tio_container_push_back(containers[a], NULL, &value, NULL);
+		}
+	}
+
+	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
+	{
+		tio_group_add(cn, group_name, containers[a]->name);
+	}
+
+	tio_group_subscribe(cn, group_name, NULL, NULL, NULL);
+
+	tio_ping(cn, "qwe");
+
+	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
+	{
+		for(int b = 0 ; b < ITEM_COUNT_BEFORE ; b++)
+		{
+			TIO_DATA value;
+
+			tiodata_init(&value);
+			tiodata_set_int(&value, b);
+
+			tio_container_push_back(containers[a], NULL, &value, NULL);
+		}
+	}
+}
+
 int _tmain(int argc, _TCHAR* argv[])
 {
+	test_group_subscribe();
+
 	TestInteliMarketClient();
 
 	return 0;

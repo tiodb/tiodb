@@ -68,8 +68,8 @@ extern "C" {
 #define TIO_COMMAND_PROPGET 			0x30
 #define TIO_COMMAND_PROPSET 			0x31
 
-#define TIO_COMMAND_GROUP_ADD 			0x32
-#define TIO_COMMAND_GROUP_SUBSCRIBE		0x33
+#define TIO_COMMAND_GROUP_ADD 			0x33
+#define TIO_COMMAND_GROUP_SUBSCRIBE		0x34
 
 
 #define TIO_FAILED(x) (x < 0)
@@ -157,6 +157,9 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie);
 int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie);
+
+int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name);
+int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start, event_callback_t event_callback, void* cookie);
 
 const char* tio_get_last_error_description();
 

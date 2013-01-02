@@ -772,10 +772,6 @@ void thread_check(struct TIO_CONNECTION* connection)
 }
 
 
-
-
-
-
 int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection)
 {
 	SOCKET sockfd;
@@ -841,7 +837,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->socket = sockfd;
 	(*connection)->serv_addr = serv_addr;
 	(*connection)->event_list_queue_end = NULL;
-	(*connection)->containers_count = 1;
+	(*connection)->containers_count = 64; // initial buffer size
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
 	(*connection)->dispatch_events_on_receive = 0;
@@ -1103,6 +1099,87 @@ void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* eve
 	connection->pending_event_count++;
 }
 
+int register_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* message, const char* name, struct TIO_CONTAINER** container)
+{
+	struct TIO_CONTAINER* new_container;
+	int name_len;
+	char* name_copy;
+	int handle;
+	struct PR1_MESSAGE_FIELD_HEADER* handle_field;
+
+	handle_field = pr1_message_field_find_by_id(message, MESSAGE_FIELD_ID_HANDLE);
+
+	if(handle_field == NULL)
+		return TIO_ERROR_MISSING_PARAMETER;
+
+	handle = pr1_message_field_get_int(handle_field);
+
+	name_len = strlen(name) + 1;
+
+	new_container = (struct TIO_CONTAINER*)malloc(sizeof(struct TIO_CONTAINER) + name_len);
+
+	name_copy = (char*) &new_container[1];
+	memcpy(name_copy, name, name_len);
+
+	new_container->connection = connection;
+	new_container->handle = handle;
+	new_container->event_callback = NULL;
+	new_container->wait_and_pop_next_callback = NULL;
+	new_container->wait_and_pop_next_cookie = 0;
+	new_container->subscription_cookie = NULL;
+	new_container->name = name_copy;
+
+	if(handle >= connection->containers_count)
+	{
+		connection->containers_count = handle * 2;
+		connection->containers = realloc(connection->containers, sizeof(void*) * connection->containers_count);
+	}
+
+	connection->containers[handle] = new_container;
+
+	if(container)
+		*container = new_container;
+
+	return TIO_SUCCESS;
+}
+
+int on_group_new_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* message)
+{
+	int ret = TIO_SUCCESS;
+	struct PR1_MESSAGE_FIELD_HEADER* name_field;
+	char* container_name = NULL;
+	int container_name_buffer_size;
+
+	name_field = pr1_message_field_find_by_id(message, MESSAGE_FIELD_ID_NAME);
+
+	if(name_field == NULL)
+	{
+		ret = TIO_ERROR_MISSING_PARAMETER;
+		goto clean_up_and_return;
+	}
+
+	// string too big?
+	if(name_field->data_size > 1024 * 1024)
+	{
+		ret = TIO_ERROR_MISSING_PARAMETER;
+		goto clean_up_and_return;
+	}
+
+	container_name_buffer_size = name_field->data_size + 1;
+
+	container_name = malloc(container_name_buffer_size);
+	
+	pr1_message_field_get_string(name_field, container_name, container_name_buffer_size);
+	
+	register_container(connection, message, container_name,  NULL);
+
+clean_up_and_return:
+	if(container_name)
+		free(container_name);
+
+	return ret;
+}
+
 int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
 {
 	int result = 0;
@@ -1144,6 +1221,7 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_MESSAGE** response)
 {
 	int result;
+	int command;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
 
@@ -1166,13 +1244,21 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 			return TIO_ERROR_PROTOCOL;
 		}
 
-		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
+		command = pr1_message_field_get_int(command_field);
+
+		if(command == TIO_COMMAND_EVENT)
+		{
+			on_event_receive(connection, received_message);
+		}
+		else if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
+		{
+			on_group_new_container(connection, received_message);
+		}
+		else
 		{
 			*response = received_message;
 			break;
 		}
-
-		on_event_receive(connection, received_message);
 	}
 
 	return result;
@@ -1254,9 +1340,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 {
 	struct PR1_MESSAGE* pr1_message = NULL;
 	struct PR1_MESSAGE* response = NULL;
-	struct PR1_MESSAGE_FIELD_HEADER* handle_field = NULL;
 	int result;
-	int handle;
 	SOCKET socket = connection->socket;
 
 	*container = NULL;
@@ -1274,34 +1358,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
 
-	handle_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_HANDLE);
-	if(!handle_field) {
-		result = TIO_ERROR_PROTOCOL;
-		goto clean_up_and_return;
-	}
-
-	*container = (struct TIO_CONTAINER*)malloc(sizeof(struct TIO_CONTAINER));
-
-	handle = pr1_message_field_get_int(handle_field);
-
-	(*container)->connection = connection;
-	(*container)->handle = handle;
-	(*container)->event_callback = NULL;
-	(*container)->wait_and_pop_next_callback = NULL;
-	(*container)->subscription_cookie = NULL;
-
-	//
-	// TODO: I'm indexing by handle because I really don't want to
-	// create another hash map implementation now. This array will grow really
-	// big if the user open and close lots of containers
-	//
-	if(handle >= connection->containers_count)
-	{
-		connection->containers_count = handle * 2;
-		connection->containers = realloc(connection->containers, sizeof(void*) * connection->containers_count);
-	}
-	
-	connection->containers[handle] = *container;
+	register_container(connection, response, name, container);
 
 clean_up_and_return:
 	pr1_message_delete(response);
@@ -1756,6 +1813,7 @@ clean_up_and_return:
 
 	return result;
 }
+
 
 int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start, event_callback_t event_callback, void* cookie)
 {

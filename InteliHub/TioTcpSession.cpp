@@ -52,6 +52,7 @@ namespace tio
 		socket_(io_service),
 		server_(server),
 		lastHandle_(0),
+		valid_(true),
         pendingSendSize_(0),
 		id_(id),
 		binaryProtocol_(false)
@@ -654,6 +655,9 @@ namespace tio
 	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
+		if(!valid_)
+			return;
+
 		vector<EXTRA_EVENT> extraEvents;
 		
 		bool shouldSend = ShouldSendEvent(subscriptionInfo, eventName, key, value, metadata, &extraEvents);
@@ -785,6 +789,9 @@ namespace tio
 
     void TioTcpSession::SendString(const string& str)
     {
+		if(!valid_)
+			return;
+
         if(pendingSendSize_)
         {
 			//
@@ -809,6 +816,9 @@ namespace tio
 
 	void TioTcpSession::SendStringNow(const string& str)
 	{
+		if(!valid_)
+			return;
+
 		size_t answerSize = str.size();
 
 		char* buffer = new char[answerSize];
@@ -855,6 +865,8 @@ namespace tio
 			UnsubscribeAll();
 
 			server_.OnClientFailed(shared_from_this(), err);
+
+			valid_ = false;
 
 			return true;
 		}

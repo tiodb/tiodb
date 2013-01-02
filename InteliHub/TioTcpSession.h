@@ -403,6 +403,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		vector<string> tokens_;
 
+		bool valid_;
+
 		void SendString(const string& str);
 		void SendStringNow(const string& str);
 		
@@ -487,6 +489,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
 		{
+			if(!valid_)
+				return;
+
 			pendingBinarySendData_.push_back(message);
 			SendPendingBinaryData();
 		}
