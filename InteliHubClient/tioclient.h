@@ -97,7 +97,7 @@ struct TIO_CONTAINER;
 
 
 //
-// TIO_DATA related funcions
+// TIO_DATA related functions
 //
 void tiodata_init(struct TIO_DATA* tiodata);
 unsigned int tiodata_get_type(struct TIO_DATA* tiodata);

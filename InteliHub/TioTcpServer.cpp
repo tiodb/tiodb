@@ -547,7 +547,6 @@ namespace tio
 						groupManager_.AddContainer(&containerManager_, groupName, containerName, container);
 
 						session->SendBinaryAnswer();
-
 					}
 					break;
 

@@ -1757,6 +1757,35 @@ clean_up_and_return:
 	return result;
 }
 
+int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start, event_callback_t event_callback, void* cookie)
+{
+	int result;
+	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* response = NULL;
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_GROUP_SUBSCRIBE);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_GROUP_NAME, group_name);
+
+	result = pr1_message_send_and_delete(connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = TIO_SUCCESS;
+
+clean_up_and_return:
+	pr1_message_delete(response);
+
+	return TIO_SUCCESS;
+}
+
 
 
 void tio_initialize()
