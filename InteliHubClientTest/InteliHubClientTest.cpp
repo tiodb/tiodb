@@ -6,6 +6,8 @@
 
 namespace asio = boost::asio;
 using std::string;
+using std::vector;
+using std::shared_ptr;
 using std::cout;
 using std::vector;
 using std::endl;
@@ -404,8 +406,37 @@ void TestInteliMarketClient()
 	for(bool b = true ; b ; )
 		Sleep(50);
 }
-void group_test_callback(const char* group_name, const char* container_name, 
-	unsigned int event_code, const struct TIO_DATA* k, const struct TIO_DATA* v, const struct TIO_DATA* m)
+
+void TestGroupCpp()
+{
+	tio::Connection cn;
+	vector<shared_ptr<tio::containers::list<string>>> containers;
+
+	static const int CONTAINER_COUNT = 5;
+	static const int ITEM_COUNT = 5;
+	static const char* GROUP_NAME = "test_group";
+
+	cn.Connect("localhost");
+
+	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
+	{
+		string name = "container_" + lexical_cast<string>(a + 1);
+
+		shared_ptr<tio::containers::list<string>> container(new tio::containers::list<string>());
+
+		container->create(&cn, name);
+
+		containers.push_back(container);
+
+		for(int b = 0 ; b < ITEM_COUNT ; b++)
+			container->push_back(lexical_cast<string>(b));
+
+		cn.AddToGroup(GROUP_NAME, container->name());
+	}
+}
+
+void group_test_callback(void* cookie, const char* group_name, const char* container_name, unsigned int handle,
+						 unsigned int event_code, const struct TIO_DATA* k, const struct TIO_DATA* v, const struct TIO_DATA* m)
 {
 	cout << group_name << ", " << container_name << ", " << event_code << endl;
 	return;

@@ -1460,7 +1460,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	int handle, event_code;
 	void* cookie;
 	event_callback_t event_callback;
-	group_event_callback_t group_event_callback;
+	
 
 	tiodata_init(&key);
 	tiodata_init(&value);
@@ -1500,36 +1500,30 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_VALUE), &value);
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_METADATA), &metadata);
 
+			container = connection->containers[handle];
 			event_callback = NULL;
 
 			if(event_code == TIO_COMMAND_WAIT_AND_POP_NEXT)
 			{
-				event_callback = connection->containers[handle]->wait_and_pop_next_callback;
-				cookie = connection->containers[handle]->wait_and_pop_next_cookie;
+				event_callback = container->wait_and_pop_next_callback;
+				cookie = container->wait_and_pop_next_cookie;
 			}
 			else
 			{
-				container = connection->containers[handle];
-
 				if(container->group_name == NULL)
 				{
 					event_callback = container->event_callback;
-					cookie = connection->containers[handle]->subscription_cookie;
+					cookie = container->subscription_cookie;
 				}
 				else
 				{
-					group_event_callback = connection->group_event_callback;
-
-					if(group_event_callback)
-					{
-						group_event_callback(container->group_name, container->name, 
-							event_code, &key, &value, &metadata);
-					}
+					event_callback = connection->group_event_callback;
+					cookie = NULL;
 				}
 			}
 
 			if(event_callback)
-				event_callback(cookie, handle, event_code, &key, &value, &metadata);
+				event_callback(cookie, container->group_name, container->name, handle, event_code, &key, &value, &metadata);
 		}
 
 		pr1_message_delete(event_message);
@@ -1883,7 +1877,7 @@ clean_up_and_return:
 	return result;
 }
 
-int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  group_event_callback_t callback)
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback)
 {
 	connection->group_event_callback = callback;
 	return 0;

@@ -821,10 +821,10 @@ namespace tio
 			pr1_message_add_field_int(msg.get(), MESSAGE_FIELD_ID_HANDLE, (int)handle);
 
 			if(start)
-				pr1_message_add_field_int(msg.get(), MESSAGE_FIELD_ID_START, *start);
+				pr1_message_add_field_int(msg.get(), MESSAGE_FIELD_ID_START_RECORD, *start);
 
 			if(end)
-				pr1_message_add_field_int(msg.get(), MESSAGE_FIELD_ID_START, *end);
+				pr1_message_add_field_int(msg.get(), MESSAGE_FIELD_ID_START_RECORD, *end);
 
 			queryCallback_ = query_callback;
 

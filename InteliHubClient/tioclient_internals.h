@@ -94,7 +94,7 @@ struct TIO_CONNECTION
 	struct TIO_CONTAINER** containers;
 	int containers_count;
 
-	group_event_callback_t group_event_callback;
+	event_callback_t group_event_callback;
 
 	int dispatch_events_on_receive;
 

@@ -323,7 +323,7 @@ namespace tio
 		string host() { return host_;}
 		short port() { return port_;}
 
-		void Connect(const string& host, short port)
+		void Connect(const string& host, short port = 2605)
 		{
 			int result;
 
@@ -376,6 +376,12 @@ namespace tio
 			return connection_;
 		}
 
+		void AddToGroup(const string& groupName, const string& containerName)
+		{
+			int ret = tio_group_add(connection_, groupName.c_str(), containerName.c_str());
+
+			ThrowOnTioClientError(ret);
+		}
 	};
 
 	template<typename TContainer, typename TKey, typename TValue>
@@ -436,7 +442,8 @@ namespace tio
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
 #ifdef TIO_CLIENT_BOOST_SUPPORT
-			typedef boost::function<void (const string&, const TKey&, const TValue&)> EventCallbackT;
+
+			typedef boost::function<void (const string& /*containerName*/, const string& /*eventName*/, const TKey&, const TValue&)> EventCallbackT;
 #else
 			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
 #endif
@@ -497,7 +504,7 @@ namespace tio
 
 
 			template<typename TConnection>
-			void create(TConnection* cn, const string& name, const string& type)
+			void create(TConnection* cn, const string& name, const string& type = "")
 			{
 				int result;
 
@@ -534,7 +541,7 @@ namespace tio
 				if(value->data_type != TIO_DATA_TYPE_NONE)
 					FromTioData(value, &typedValue);
 				
-				me->eventCallback_("event", typedKey, typedValue);
+				me->eventCallback_(name(), "event", typedKey, typedValue);
 			}
 
 			static void WaitAndPopNextCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)

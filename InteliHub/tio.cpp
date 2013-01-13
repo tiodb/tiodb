@@ -263,6 +263,17 @@ protected:
 		return 0;
 	}
 
+	virtual int group_add(const char* group_name, const char* container_name)
+	{
+		//
+		// TODO: no group subscription support for plugins yet
+		//
+		ASSERT(false);
+		return -666;
+
+
+	}
+
 	virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)
 	{
 		ITioContainer* container = ((shared_ptr<ITioContainer>*)handle)->get();
@@ -480,12 +491,18 @@ protected:
 
 	static void SubscribeBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+		//
+		// TODO: need to change code to use the new callback signature
+		//
+		//event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
 	static void WaitAndPopNextBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+		//
+		// TODO: need to change code to use the new callback signature
+		//
+		//event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
 	virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
