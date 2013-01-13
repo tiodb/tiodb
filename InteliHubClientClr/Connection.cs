@@ -7,11 +7,16 @@ namespace InteliHubClient
     public class Connection
     {
         IntPtr _nativeHandle = new IntPtr();
+        string _host = null;
+        short _port = 0;
 
         static Connection()
         {
             NativeImports.tio_initialize();
         }
+
+        public string Host { get { return _host; } }
+        public short Port { get { return _port; } }
 
         public Container Open(string name)
         {
@@ -32,6 +37,9 @@ namespace InteliHubClient
         {
             int result = NativeImports.tio_connect(host, port, out _nativeHandle);
             NativeImports.ThrowOnNativeApiError(result);
+
+            _host = host;
+            _port = port;
         }
 
         public void Disconnect()
@@ -39,6 +47,8 @@ namespace InteliHubClient
             NativeImports.tio_disconnect(_nativeHandle);
 
             _nativeHandle = new IntPtr();
+            _host = null;
+            _port = 0;
         }
 
         public void Ping(string host, short port)

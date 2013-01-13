@@ -69,9 +69,11 @@ namespace InteliHubExplorer
 
             m_listingThread = new Thread(delegate()
             {
-                m_containerCount = m_connection.Open("__meta__/containers").Count;
+                InteliHubClient.Connection cn = new InteliHubClient.Connection(m_connection.Host, m_connection.Port);
+                
+                m_containerCount = cn.Open("__meta__/containers").Count;
 
-                m_connection.Open("__meta__/containers").Query(
+                cn.Open("__meta__/containers").Query(
                     delegate(object key, object value, object metadata)
                     {
                         if (m_stopping)
@@ -85,6 +87,8 @@ namespace InteliHubExplorer
                             m_containerList.Add(new ContainerItem { key=key.ToString(), value=value.ToString() });
                         }
                     });
+                
+                cn.Close();
             });
 
             m_listingThread.Start();
@@ -157,7 +161,6 @@ namespace InteliHubExplorer
         {
             LoadContainerList();
             filterTextBox.Focus();
-            updateContainerListButton.Enabled = false;
         }
 
         void UpdateContainerListView()
