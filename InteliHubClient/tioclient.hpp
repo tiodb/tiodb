@@ -176,6 +176,8 @@ namespace tio
 		virtual int open(const char* name, const char* type, void** handle)=0;
 		virtual int close(void* handle)=0;
 
+		virtual int group_add(const char* group_name, const char* container_name)=0;
+
 		virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)=0;
 		virtual int container_push_back(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
 		virtual int container_push_front(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
@@ -215,6 +217,11 @@ namespace tio
 		virtual int open(const char* name, const char* type, void** handle)
 		{
 			return tio_open(connection_, name, type, (TIO_CONTAINER**)handle);
+		}
+
+		virtual int group_add(const char* group_name, const char* container_name)
+		{
+			return tio_group_add(connection_, group_name, container_name);
 		}
 
 		virtual int close(void* handle)
@@ -488,6 +495,7 @@ namespace tio
 				name_ = name;
 			}
 
+
 			template<typename TConnection>
 			void create(TConnection* cn, const string& name, const string& type)
 			{
@@ -555,7 +563,7 @@ namespace tio
 				int result;
 
 				if(callback.empty())
-					throw std::runtime_error("wait_and_pop_next callback can't bee null");
+					throw std::runtime_error("wait_and_pop_next callback can't be null");
 
 				if(waitAndPopNextCallback_)
 					return false;
@@ -568,6 +576,11 @@ namespace tio
 					this);
 
 				return true;
+			}
+
+			void AddToGroup(const string& groupName)
+			{
+				container_manager()->group_add(groupName.c_str(), tio_container_name(container_));
 			}
 
 			void subscribe(EventCallbackT callback)

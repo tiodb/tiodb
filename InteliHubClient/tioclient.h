@@ -90,6 +90,7 @@ struct TIO_DATA
 
 
 typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+typedef void (*group_event_callback_t)(const char* /*group_name*/, const char* /*container_name*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 typedef void (*query_callback_t)(void* /*cookie*/, unsigned int /*queryid*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
 struct TIO_CONNECTION;
@@ -139,6 +140,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 
 int tio_ping(struct TIO_CONNECTION* connection, char* payload);
 
+const char* tio_container_name(struct TIO_CONTAINER* container);
 
 int tio_container_propset(struct TIO_CONTAINER* container, const struct TIO_DATA* key, const struct TIO_DATA* value);
 int tio_container_propget(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* value);
@@ -159,7 +161,8 @@ int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie);
 
 int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name);
-int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start, event_callback_t event_callback, void* cookie);
+int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start);
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  group_event_callback_t callback);
 
 const char* tio_get_last_error_description();
 

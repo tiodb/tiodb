@@ -21,7 +21,7 @@ extern "C" {
 #define MESSAGE_FIELD_ID_ERROR_CODE		0x8
 #define MESSAGE_FIELD_ID_ERROR_DESC		0x9
 #define MESSAGE_FIELD_ID_EVENT			0xA
-#define MESSAGE_FIELD_ID_START			0xB
+#define MESSAGE_FIELD_ID_START_RECORD	0xB
 #define MESSAGE_FIELD_ID_END			0xC
 #define MESSAGE_FIELD_ID_QUERY_ID		0xD
 
@@ -70,10 +70,14 @@ struct TIO_CONNECTION;
 struct TIO_CONTAINER
 {
 	unsigned int handle;
+	
 	event_callback_t event_callback;
 	event_callback_t wait_and_pop_next_callback;
 	void* subscription_cookie;
+
+	const char* group_name;
 	const char* name;
+
 	void* wait_and_pop_next_cookie;
 	struct TIO_CONNECTION* connection;
 };
@@ -89,6 +93,8 @@ struct TIO_CONNECTION
 
 	struct TIO_CONTAINER** containers;
 	int containers_count;
+
+	group_event_callback_t group_event_callback;
 
 	int dispatch_events_on_receive;
 

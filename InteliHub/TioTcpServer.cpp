@@ -503,7 +503,7 @@ namespace tio
 
 					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
 					
-					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START, &start))
+					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start))
 						start = 0;
 
 					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
@@ -563,7 +563,7 @@ namespace tio
 							break;
 						}
 
-						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START, &start);
+						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start);
 
 						groupManager_.BinarySubscribeGroup(groupName, session, start);
 
@@ -589,7 +589,7 @@ namespace tio
 						if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start_int))
 							start_string = lexical_cast<string>(start_int);
 
-					session->BinarySubscribe(handle, start_string);
+					session->BinarySubscribe(handle, start_string, true);
 				}
 				break;
 

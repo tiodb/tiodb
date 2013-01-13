@@ -404,23 +404,35 @@ void TestInteliMarketClient()
 	for(bool b = true ; b ; )
 		Sleep(50);
 }
+void group_test_callback(const char* group_name, const char* container_name, 
+	unsigned int event_code, const struct TIO_DATA* k, const struct TIO_DATA* v, const struct TIO_DATA* m)
+{
+	cout << group_name << ", " << container_name << ", " << event_code << endl;
+	return;
+}
+
 
 void test_group_subscribe()
 {
 	TIO_CONNECTION* cn;
-	static const int CONTAINER_COUNT = 50;
-	static const int ITEM_COUNT_BEFORE = 50;
+	static const int CONTAINER_COUNT = 5;
+	static const int ITEM_COUNT_BEFORE = 5;
 	const char* group_name = "test_group";
-	vector<TIO_CONTAINER*> containers(CONTAINER_COUNT);
+	vector<TIO_CONTAINER*> containers;
 
 	tio_connect("localhost", 2605, &cn);
+
+	cout << "creating and filling containers..." << endl;
 	
 	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
 	{
 		string name = "container_";
 		name += lexical_cast<string>(a);
 
-		tio_create(cn, name.c_str(), "volatile_list", &containers[a]);
+		TIO_CONTAINER* container;
+
+		tio_create(cn, name.c_str(), "volatile_list", &container);
+		containers.push_back(container);
 
 		for(int b = 0 ; b < ITEM_COUNT_BEFORE ; b++)
 		{
@@ -438,9 +450,14 @@ void test_group_subscribe()
 		tio_group_add(cn, group_name, containers[a]->name);
 	}
 
-	tio_group_subscribe(cn, group_name, NULL, NULL, NULL);
+	cout << "subscribing..." << endl;
 
-	tio_ping(cn, "qwe");
+	tio_group_set_subscription_callback(cn, &group_test_callback);
+	tio_group_subscribe(cn, group_name, "0");
+
+	tio_dispatch_pending_events(cn, 0xFFFFFFFF);
+
+	cout << "adding more records..." << endl;
 
 	for(int a = 0 ; a < CONTAINER_COUNT ; a++)
 	{
@@ -454,17 +471,19 @@ void test_group_subscribe()
 			tio_container_push_back(containers[a], NULL, &value, NULL);
 		}
 	}
+
+	tio_dispatch_pending_events(cn, 0xFFFFFFFF);
 }
 
 int _tmain(int argc, _TCHAR* argv[])
 {
 	test_group_subscribe();
 
-	TestInteliMarketClient();
-
 	return 0;
 
 	/*
+	TestInteliMarketClient();
+	
 	AsyncClientTest();
 	QueueModificationsWhileConnecting();
 	AsyncClientTest();

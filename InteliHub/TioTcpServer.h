@@ -134,13 +134,14 @@ namespace tio
 
 					auto answer = Pr1CreateMessage();
 					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_NEW_GROUP_CONTAINER);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
 					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_GROUP_NAME, groupName_);
 					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_NAME, containerInfo.name);
 					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_TYPE, containerInfo.container->GetType());
 
 					session->SendBinaryMessage(answer);
 
-					session->Subscribe(handle, start, 0, false);
+					session->BinarySubscribe(handle, start, false);
 				}
 			}
 		};

@@ -1038,7 +1038,7 @@ namespace tio
 	}
 
 
-	void TioTcpSession::BinarySubscribe(unsigned int handle, const string& start)
+	void TioTcpSession::BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
 	{
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
@@ -1052,6 +1052,11 @@ namespace tio
 		subscriptionInfo->container = container;
 		subscriptionInfo->binaryProtocol = true;
 
+		//
+		// We are not checking if the container is changing during the snapshot,
+		// it can cause problems and crashes. 
+		//
+#if 0
 		if(!start.empty())
 		{
 			try
@@ -1097,6 +1102,7 @@ namespace tio
 
 			}
 		}
+#endif
 
 		//
 		// if we're here, start is not numeric. We'll let the container deal with this
@@ -1110,7 +1116,8 @@ namespace tio
 			// answer before the events. Is the the subscription fails, we're screwed,
 			// since we're sending a success answer before doing the subscription
 			//
-			SendBinaryAnswer();
+			if(sendAnswer)
+				SendBinaryAnswer();
 
 			subscriptionInfo->cookie = container->Subscribe(
 				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);

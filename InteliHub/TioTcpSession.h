@@ -568,7 +568,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
 		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer=true);
-		void BinarySubscribe(unsigned int handle, const string& start);
+		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer);
 		void Unsubscribe(unsigned int handle);
 
 		const vector<string>& GetTokens();
