@@ -161,7 +161,7 @@ int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callb
 
 int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name);
 int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start);
-int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback);
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback, void* cookie);
 
 const char* tio_get_last_error_description();
 

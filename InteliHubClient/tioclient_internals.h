@@ -95,6 +95,7 @@ struct TIO_CONNECTION
 	int containers_count;
 
 	event_callback_t group_event_callback;
+	void* group_event_cookie;
 
 	int dispatch_events_on_receive;
 

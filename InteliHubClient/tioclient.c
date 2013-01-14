@@ -861,6 +861,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->dispatch_events_on_receive = 0;
 	(*connection)->thread_id = 0;
 	(*connection)->group_event_callback = NULL;
+	(*connection)->group_event_cookie = NULL;
 
 	return TIO_SUCCESS;
 }
@@ -1518,7 +1519,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 				else
 				{
 					event_callback = connection->group_event_callback;
-					cookie = NULL;
+					cookie = connection->group_event_cookie;
 				}
 			}
 
@@ -1877,9 +1878,10 @@ clean_up_and_return:
 	return result;
 }
 
-int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback)
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback, void* cookie)
 {
 	connection->group_event_callback = callback;
+	connection->group_event_cookie = cookie;
 	return 0;
 }
 
@@ -1887,8 +1889,12 @@ int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  even
 int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start)
 {
 	int result;
-	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* request = NULL;
 	struct PR1_MESSAGE* response = NULL;
+
+	thread_check(connection);
+
+	request = pr1_message_new();
 
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_GROUP_SUBSCRIBE);
 	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_GROUP_NAME, group_name);

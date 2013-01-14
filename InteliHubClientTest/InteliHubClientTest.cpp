@@ -438,6 +438,7 @@ void TestGroupCpp()
 void group_test_callback(void* cookie, const char* group_name, const char* container_name, unsigned int handle,
 						 unsigned int event_code, const struct TIO_DATA* k, const struct TIO_DATA* v, const struct TIO_DATA* m)
 {
+	assert((int)cookie == 10);
 	cout << group_name << ", " << container_name << ", " << event_code << endl;
 	return;
 }
@@ -483,7 +484,7 @@ void test_group_subscribe()
 
 	cout << "subscribing..." << endl;
 
-	tio_group_set_subscription_callback(cn, &group_test_callback);
+	tio_group_set_subscription_callback(cn, &group_test_callback, (void*)10);
 	tio_group_subscribe(cn, group_name, "0");
 
 	tio_dispatch_pending_events(cn, 0xFFFFFFFF);

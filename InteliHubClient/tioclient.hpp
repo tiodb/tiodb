@@ -743,6 +743,11 @@ namespace tio
 
 				return static_cast<size_t>(count);
 			}
+
+			void add_to_group(const string& groupName)
+			{
+				container_manager()->group_add(groupName.c_str(), name_.c_str());
+			}
 		};
 	
 		template<typename TValue, typename TMetadata=std::string>
