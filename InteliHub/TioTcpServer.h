@@ -62,16 +62,24 @@ namespace tio
 			string groupName_;
 			string containerListName_;
 			shared_ptr<ITioContainer> containerListContainer_;
-			map<string, ContainerInfo> containers_;
+			typedef map<string, ContainerInfo> ContainersMap;
+			ContainersMap containers_;
+			bool valid_; // we're using member functions as callback
+
 		public:
 
 			GroupInfo(ContainerManager* containerManager, const string& name)
-				: groupName_(name)
+				: groupName_(name), valid_(true)
 			{
 				containerListName_ = "__meta__/groups/";
 				containerListName_ += name;
 
 				containerListContainer_ = containerManager->CreateContainer("volatile_map", containerListName_);
+			}
+
+			~GroupInfo()
+			{
+				valid_ = false;
 			}
 
 			GroupInfo(GroupInfo&& rhv)
@@ -116,17 +124,14 @@ namespace tio
 					session->SendAnswer(answer);
 
 					session->Subscribe(handle, start, 0, false);
+
+					//session->GetID()
 				}
 			}
 
-
-			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
+			void DoPendingSubscriptions(const shared_ptr<TioTcpSession>& session, ContainersMap::const_iterator i, const string& start)
 			{
-				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
-
-				session->SendBinaryAnswer();
-
-				for(auto i = containers_.begin() ; i != containers_.end() ; ++i)
+				for( ; i != containers_.end() ; ++i)
 				{
 					const ContainerInfo& containerInfo = i->second;
 
@@ -142,7 +147,31 @@ namespace tio
 					session->SendBinaryMessage(answer);
 
 					session->BinarySubscribe(handle, start, false);
+
+					if(session->IsPendingSendSizeTooBig())
+					{
+						session->RegisterLowPendingBytesCallback(
+							[this, i, start](const shared_ptr<TioTcpSession>& session)
+							{
+								BOOST_ASSERT(valid_);
+								// don't know why, but ++i triggers a const error...
+								auto i2 = i;
+								++i2;
+								this->DoPendingSubscriptions(session, i2, start);
+							});
+
+						return;
+					}
 				}
+			}
+
+			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
+			{
+				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+
+				session->SendBinaryAnswer();
+
+				DoPendingSubscriptions(session, containers_.begin(), start);
 			}
 		};
 

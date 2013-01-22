@@ -147,6 +147,7 @@ void pr1_message_field_to_tio_data(const struct PR1_MESSAGE_FIELD_HEADER* field,
 const char* message_field_id_to_string(int i);
 const char* tio_command_to_string(int i);
 void pr1_message_fill_header_info(struct PR1_MESSAGE* pr1_message);
+int pr1_message_get_data_size(struct PR1_MESSAGE* pr1_message);
 
 void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message);
 

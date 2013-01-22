@@ -93,7 +93,7 @@ namespace tio
 		//
 		// don't need to sync this, shared_ptr is already sync'ed, container are sync'ed too
 		// 
-		metaContainers_.sessions->Delete(lexical_cast<string>(client->GetID()), TIONULL, TIONULL);
+		metaContainers_.sessions->Delete(lexical_cast<string>(client->id()), TIONULL, TIONULL);
 		
 
 #if 0
@@ -227,7 +227,7 @@ namespace tio
 			sessions_.insert(session);
 		}
 
-		metaContainers_.sessions->Insert(lexical_cast<string>(session->GetID()), TIONULL, TIONULL);
+		metaContainers_.sessions->Insert(lexical_cast<string>(session->id()), TIONULL, TIONULL);
 
 		session->OnAccept();
 
@@ -675,7 +675,7 @@ namespace tio
 		if(*moreDataSize == 0)
 		{
 			metaContainers_.sessionLastCommand->Set(
-				lexical_cast<string>(session->GetID()),
+				lexical_cast<string>(session->id()),
 				TioData(cmd.GetSource().c_str()),
 				cmd.GetDataBuffer()->GetSize() ? 
 					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :

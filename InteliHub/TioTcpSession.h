@@ -360,9 +360,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		DiffMap diffs_;
 
 		unsigned int lastHandle_;
-        unsigned int pendingSendSize_;
+		int sentBytes_;
+        int pendingSendSize_;
+		int maxPendingSendingSize_;
 
 		bool binaryProtocol_;
+
+		boost::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback_;
 
         std::queue<std::string> pendingSendData_;
 		
@@ -393,7 +397,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			shared_ptr<ITioResultSet> resultSet;
 		};
 
-		//                  handle
+		//               handle
 		typedef std::map<unsigned int, shared_ptr<SUBSCRIPTION_INFO> > SubscriptionMap;
 		SubscriptionMap subscriptions_;
 		SubscriptionMap pendingSnapshots_;
@@ -404,6 +408,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		vector<string> tokens_;
 
 		bool valid_;
+
+		static const int PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
 
 		void SendString(const string& str);
 		void SendStringNow(const string& str);
@@ -474,6 +480,12 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 				//std::cerr << "ERROR sending binary data: " << err << std::endl;
 				return;
 			}
+
+
+			DecreasePendingSendSize(sent);
+			sentBytes_ += sent;
+
+			BOOST_ASSERT(pendingSendSize_ >= 0);
 			
 			//
 			// remove sent data from pending vector
@@ -487,12 +499,55 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			SendPendingBinaryData();
 		}
 
+		void IncreasePendingSendSize(int size)
+		{
+			pendingSendSize_ += size;
+
+			if(pendingSendSize_ > maxPendingSendingSize_)
+				maxPendingSendingSize_ = pendingSendSize_;
+		}
+
+
+		void RegisterLowPendingBytesCallback(boost::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
+		{
+			BOOST_ASSERT(!lowPendingBytesThresholdCallback_);
+			lowPendingBytesThresholdCallback_ = lowPendingBytesThresholdCallback;
+		}
+
+		void DecreasePendingSendSize(int size)
+		{
+			pendingSendSize_ -= size;
+
+			BOOST_ASSERT(pendingSendSize_ >= 0);
+			
+			if(pendingSendSize_ < PENDING_SEND_SIZE_TOO_BIG_THRESHOLD && lowPendingBytesThresholdCallback_)
+			{
+				// local copy, so callback can register another callback
+				auto callback = lowPendingBytesThresholdCallback_;
+				lowPendingBytesThresholdCallback_.clear();
+				callback(shared_from_this());
+			}
+		}
+
+		int pendingSendSize()
+		{
+			return pendingSendSize_;
+		}
+
+		bool IsPendingSendSizeTooBig()
+		{
+			return pendingSendSize_ > PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
+		}
+
 		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
 		{
 			if(!valid_)
 				return;
 
 			pendingBinarySendData_.push_back(message);
+
+			IncreasePendingSendSize(pr1_message_get_data_size(message.get()));
+
 			SendPendingBinaryData();
 		}
 
@@ -545,7 +600,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnAccept();
 		void ReadCommand();
 
-		unsigned int GetID();
+		unsigned int id();
 
 		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 
@@ -578,6 +633,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SetupDiffContainer(unsigned int handle, shared_ptr<ITioContainer> destinationContainer);
 		void StopDiffs();
 
+		
 		void SetCommandRunning()
 		{
 			commandRunning_ = true;

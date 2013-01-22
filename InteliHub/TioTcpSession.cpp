@@ -46,6 +46,8 @@ namespace tio
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
+	const int TioTcpSession::PENDING_SEND_SIZE_TOO_BIG_THRESHOLD = 1024;
+
 	
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
 		io_service_(io_service),
@@ -54,6 +56,8 @@ namespace tio
 		lastHandle_(0),
 		valid_(true),
         pendingSendSize_(0),
+		maxPendingSendingSize_(0),
+		sentBytes_(0),
 		id_(id),
 		binaryProtocol_(false)
 	{
@@ -134,7 +138,7 @@ namespace tio
 		diffs_[handle] = make_pair(destinationContainer, cookie); 
 	}
 
-	unsigned int TioTcpSession::GetID()
+	unsigned int TioTcpSession::id()
 	{
 		return id_;
 
@@ -799,7 +803,7 @@ namespace tio
 			// receiving it anymore. We're going to disconnect him, otherwise
 			// we will consume too much memory
 			//
-			if(pendingSendSize_ > 10 * 1024 * 1024)
+			if(pendingSendSize_ > 100 * 1024 * 1024)
 			{
 				UnsubscribeAll();
 				server_.OnClientFailed(shared_from_this(), boost::system::error_code());
@@ -824,7 +828,7 @@ namespace tio
 		char* buffer = new char[answerSize];
 		memcpy(buffer, str.c_str(), answerSize);
 
-        pendingSendSize_ += answerSize;
+		IncreasePendingSendSize(answerSize);
 
 		asio::async_write(
 			socket_,
@@ -832,11 +836,13 @@ namespace tio
 			boost::bind(&TioTcpSession::OnWrite, shared_from_this(), buffer, answerSize, asio::placeholders::error, asio::placeholders::bytes_transferred));
 	}
 
-	void TioTcpSession::OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read)
+	void TioTcpSession::OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t sent)
 	{
 		delete[] buffer;
 
         pendingSendSize_ -= bufferSize;
+
+		sentBytes_ += sent;
 
         if(CheckError(err))
 		{

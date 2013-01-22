@@ -322,6 +322,12 @@ void pr1_message_field_get_string_malloc(const struct PR1_MESSAGE_FIELD_HEADER* 
 }
 
 
+int pr1_message_get_data_size(struct PR1_MESSAGE* pr1_message)
+{
+	return stream_buffer_space_used(pr1_message->stream_buffer);
+}
+
+
 void pr1_message_fill_header_info(struct PR1_MESSAGE* pr1_message)
 {
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
