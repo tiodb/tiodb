@@ -7,12 +7,15 @@
 namespace asio = boost::asio;
 using std::string;
 using std::vector;
+using std::map;
 using std::shared_ptr;
 using std::cout;
 using std::vector;
 using std::endl;
 using tio::async_error_info;
 using boost::lexical_cast;
+
+#define ASSERT assert
 
 
 struct WnpNextHandler
@@ -435,11 +438,43 @@ void TestGroupCpp()
 	}
 }
 
+
+ map<string, int> g_nextExpectedValuePerContainer;
+
 void group_test_callback(void* cookie, const char* group_name, const char* container_name, unsigned int handle,
 						 unsigned int event_code, const struct TIO_DATA* k, const struct TIO_DATA* v, const struct TIO_DATA* m)
 {
 	assert((int)cookie == 10);
-	cout << group_name << ", " << container_name << ", " << event_code << endl;
+
+	
+
+	if(event_code != TIO_COMMAND_PUSH_BACK)
+		return;
+
+	static bool log = false;
+
+	if(log)
+	{
+		TIO_DATA value_copy;
+
+		tiodata_init(&value_copy);
+		tiodata_copy(v, &value_copy);
+		tiodata_convert_to_string(&value_copy);
+
+		cout << "group:" << group_name 
+			<< ", name:" << container_name 
+			<< ", event_code: " << event_code 
+			<< ", value: " << value_copy.string_ 
+			<< endl;
+
+		tiodata_set_as_none(&value_copy);
+	}
+
+	ASSERT(v->data_type == TIO_DATA_TYPE_INT);
+	ASSERT(g_nextExpectedValuePerContainer[container_name] == v->int_);
+
+	g_nextExpectedValuePerContainer[container_name] = v->int_ + 1;
+
 	return;
 }
 
@@ -447,8 +482,8 @@ void group_test_callback(void* cookie, const char* group_name, const char* conta
 void test_group_subscribe()
 {
 	TIO_CONNECTION* cn;
-	static const int CONTAINER_COUNT = 5;
-	static const int ITEM_COUNT_BEFORE = 5;
+	static const int CONTAINER_COUNT = 50 * 1000;
+	static const int ITEM_COUNT_BEFORE = 30;
 	const char* group_name = "test_group";
 	vector<TIO_CONTAINER*> containers;
 
@@ -465,6 +500,9 @@ void test_group_subscribe()
 
 		tio_create(cn, name.c_str(), "volatile_list", &container);
 		containers.push_back(container);
+		tio_container_clear(container);
+
+		tio_begin_network_batch(cn);
 
 		for(int b = 0 ; b < ITEM_COUNT_BEFORE ; b++)
 		{
@@ -474,6 +512,13 @@ void test_group_subscribe()
 			tiodata_set_int(&value, b);
 
 			tio_container_push_back(containers[a], NULL, &value, NULL);
+		}
+
+		tio_finish_network_batch(cn);
+
+		if(a % 100 == 0)
+		{
+			cout << name << endl;
 		}
 	}
 
@@ -498,13 +543,32 @@ void test_group_subscribe()
 			TIO_DATA value;
 
 			tiodata_init(&value);
-			tiodata_set_int(&value, b);
+			tiodata_set_int(&value, b + ITEM_COUNT_BEFORE);
 
 			tio_container_push_back(containers[a], NULL, &value, NULL);
+
+			tio_dispatch_pending_events(cn, 0xFFFFFFFF);
+		}
+
+		if(a % 1000 == 0)
+		{
+			string name = "container_";
+			name += lexical_cast<string>(a);
+
+			cout << name << endl;
 		}
 	}
 
 	tio_dispatch_pending_events(cn, 0xFFFFFFFF);
+
+	for(auto i = g_nextExpectedValuePerContainer.begin() ; i != g_nextExpectedValuePerContainer.end() ; ++i)
+	{
+		assert(i->second == ITEM_COUNT_BEFORE * 2);
+
+		if(i->second != ITEM_COUNT_BEFORE * 2)
+			cout << "ERROR IN CONTAINER EVENT COUNT. value=" << i->second
+			<< ", expected:" << ITEM_COUNT_BEFORE * 2 << endl;
+	}
 }
 
 int _tmain(int argc, _TCHAR* argv[])

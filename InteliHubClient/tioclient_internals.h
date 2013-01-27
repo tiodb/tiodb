@@ -82,7 +82,6 @@ struct TIO_CONTAINER
 	struct TIO_CONNECTION* connection;
 };
 
-
 struct TIO_CONNECTION
 {
 	SOCKET socket;
@@ -100,6 +99,9 @@ struct TIO_CONNECTION
 	int dispatch_events_on_receive;
 
 	unsigned int thread_id;
+
+	int wait_for_answer;
+	int pending_answer_count;
 };
 
 

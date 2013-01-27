@@ -793,6 +793,11 @@ void thread_check(struct TIO_CONNECTION* connection)
 	assert(connection->thread_id == current_thread_id);
 }
 
+void not_on_network_batch_check(struct TIO_CONNECTION* connection)
+{
+	assert(connection->wait_for_answer == TRUE);
+}
+
 
 int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection)
 {
@@ -863,11 +868,14 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->event_list_queue_end = NULL;
 	(*connection)->containers_count = 64; // initial buffer size
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
+	memset((*connection)->containers, 0, sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
 	(*connection)->dispatch_events_on_receive = 0;
 	(*connection)->thread_id = 0;
 	(*connection)->group_event_callback = NULL;
 	(*connection)->group_event_cookie = NULL;
+	(*connection)->wait_for_answer = TRUE;
+	(*connection)->pending_event_count = 0;
 
 	return TIO_SUCCESS;
 }
@@ -1095,6 +1103,7 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 	struct PR1_MESSAGE* pr1_message;
 
 	thread_check(connection);
+	not_on_network_batch_check(connection);
 
 	result = pr1_message_receive(socket, &pr1_message);
 	
@@ -1178,6 +1187,7 @@ int register_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* me
 	{
 		connection->containers_count = handle * 2;
 		connection->containers = realloc(connection->containers, sizeof(void*) * connection->containers_count);
+		memset(&connection->containers[handle], 0, (connection->containers_count - handle) * sizeof(void*));
 	}
 
 	connection->containers[handle] = new_container;
@@ -1226,8 +1236,10 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 	int result = 0;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
+	int command;
 
 	thread_check(connection);
+	not_on_network_batch_check(connection);
 
 	for(; min_events != 0; min_events--)
 	{
@@ -1244,8 +1256,18 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 			break;
 		}
 
+		command = pr1_message_field_get_int(command_field);
+
+		if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
+		{
+			on_group_new_container(connection, received_message);
+			pr1_message_delete(received_message);
+			min_events++;
+			continue;
+		}
+		
 		// MUST be an event
-		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
+		if(command != TIO_COMMAND_EVENT)
 		{
 			pr1_message_delete(received_message);
 			result = TIO_ERROR_PROTOCOL;
@@ -1267,6 +1289,7 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 	struct PR1_MESSAGE* received_message;
 
 	thread_check(connection);
+	not_on_network_batch_check(connection);
 
 	// we'll loop until we receive a response (anything that is not an event)
 	for(;;)
@@ -1294,6 +1317,7 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 		else if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
 		{
 			on_group_new_container(connection, received_message);
+			pr1_message_delete(received_message);
 		}
 		else
 		{
@@ -1603,17 +1627,29 @@ int tio_container_input_command(struct TIO_CONTAINER* container, unsigned short 
 	struct PR1_MESSAGE* response = NULL;
 	int result;
 
-	result = tio_container_send_command_and_get_response(container, command_id, key, value, metadata, &response);
+	if(container->connection->wait_for_answer)
+	{
+		result = tio_container_send_command_and_get_response(container, command_id, key, value, metadata, &response);
 
-	if(TIO_FAILED(result)) 
-		goto clean_up_and_return;
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
 
-	result = pr1_message_get_error_code(response);
+		result = pr1_message_get_error_code(response);
 
-	if(TIO_FAILED(result)) 
-		goto clean_up_and_return;
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
 
-	result = TIO_SUCCESS;
+		result = TIO_SUCCESS;
+	}
+	else
+	{
+		result = tio_container_send_command(container, command_id, key, value, metadata);
+
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
+
+		container->connection->pending_event_count++;
+	}
 
 clean_up_and_return:
 	pr1_message_delete(response);
@@ -1926,6 +1962,34 @@ clean_up_and_return:
 	pr1_message_delete(response);
 
 	return TIO_SUCCESS;
+}
+
+
+void tio_begin_network_batch(struct TIO_CONNECTION* connection)
+{
+	assert(connection->pending_event_count == 0);
+	assert(connection->wait_for_answer == TRUE);
+
+	connection->wait_for_answer = FALSE;
+}
+
+void tio_finish_network_batch(struct TIO_CONNECTION* connection)
+{
+	struct PR1_MESSAGE* response;
+	int result, a;
+	assert(connection->wait_for_answer == FALSE);
+
+	connection->wait_for_answer = TRUE;
+
+	for(a = 0 ; a < connection->pending_event_count ; a++)
+	{
+		result = tio_receive_until_not_event(connection, &response);
+
+		pr1_message_delete(response);
+	}
+
+	connection->pending_event_count = 0;
+	
 }
 
 
