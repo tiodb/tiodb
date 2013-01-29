@@ -409,7 +409,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		bool valid_;
 
-		static const int PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
+		static int PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
 
 		void SendString(const string& str);
 		void SendStringNow(const string& str);
@@ -520,7 +520,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 			BOOST_ASSERT(pendingSendSize_ >= 0);
 			
-			if(pendingSendSize_ < PENDING_SEND_SIZE_TOO_BIG_THRESHOLD && lowPendingBytesThresholdCallback_)
+			if(pendingSendSize_ <= PENDING_SEND_SIZE_TOO_BIG_THRESHOLD && lowPendingBytesThresholdCallback_)
 			{
 				// local copy, so callback can register another callback
 				auto callback = lowPendingBytesThresholdCallback_;

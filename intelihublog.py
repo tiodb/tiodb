@@ -43,6 +43,8 @@ class InteliHubLogParser(object):
         f = file(file_path, 'r')
 
     count = 0
+    total_data = 0
+    total_changes = 0
 
     while 1:
       line = f.readline()
@@ -50,9 +52,19 @@ class InteliHubLogParser(object):
       if not line:
         break
 
+      total_data += len(line)
       count += 1
-      if count % self.speed == 0:
-        print count, len(containers), 'containers'
+               
+      log = False
+      if self.speed == 0:
+        if count % 1000 == 0:
+          log = True
+      elif count % self.speed == 0:
+        log = True
+
+      if log:
+        print count, len(containers), 'containers,', total_changes, 'changes,' , (total_data / 1024), 'kb so far'
+      
 
       # remove \r
       line = line[:-1]
@@ -68,8 +80,10 @@ class InteliHubLogParser(object):
 
       if command == 'create':
         c = hub.create(key, value)
+        c.clear()
         containers[handle] = c
       else:
+        total_changes += 1
         c = containers[handle]
         if command == 'push_back':
           c.push_back(value)

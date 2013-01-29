@@ -441,12 +441,7 @@ namespace tio
 			typedef TValue value_type;
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
-#ifdef TIO_CLIENT_BOOST_SUPPORT
-
-			typedef boost::function<void (const string& /*containerName*/, const string& /*eventName*/, const TKey&, const TValue&)> EventCallbackT;
-#else
-			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
-#endif
+			typedef std::function<void (const string& /*containerName*/, const string& /*eventName*/, const TKey&, const TValue&)> EventCallbackT;
 
 		protected:
 			void* container_;
@@ -529,7 +524,8 @@ namespace tio
 				name_.clear();
 			}
 
-			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
+			static void EventCallback(void* cookie, const char* /*group_name*/, const char* container_name, unsigned int /*handle*/, unsigned int /*event_code*/, 
+				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
 				TKey typedKey;
@@ -541,10 +537,12 @@ namespace tio
 				if(value->data_type != TIO_DATA_TYPE_NONE)
 					FromTioData(value, &typedValue);
 				
-				me->eventCallback_(name(), "event", typedKey, typedValue);
+				me->eventCallback_(container_name, "event", typedKey, typedValue);
 			}
 
-			static void WaitAndPopNextCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
+			// typedef void (*event_callback_t)(void* /*cookie*/, const char* /*group_name*/, const char* /*container_name*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+			static void WaitAndPopNextCallback(void* cookie, const char* /*group_name*/, const char* container_name, unsigned int /*handle*/, unsigned int /*event_code*/, 
+				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
 				TKey typedKey;
@@ -562,14 +560,14 @@ namespace tio
 				EventCallbackT cb = me->waitAndPopNextCallback_;
 				me->waitAndPopNextCallback_ = NULL;
 				
-				cb("wnp_next", typedKey, typedValue);
+				cb("wnp_next", container_name, typedKey, typedValue);
 			}
 
 			bool wait_and_pop_next(EventCallbackT callback)
 			{
 				int result;
 
-				if(callback.empty())
+				if(!callback)
 					throw std::runtime_error("wait_and_pop_next callback can't be null");
 
 				if(waitAndPopNextCallback_)
