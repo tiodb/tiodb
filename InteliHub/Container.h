@@ -70,6 +70,69 @@ namespace tio
 		return __PairAssignDetail__<T1, T2>(t1, t2);
 	}
 
+#ifdef _WIN32
+
+	__declspec(selectany) LARGE_INTEGER g_PerformanceFrequency;
+	static BOOL xpto123 = QueryPerformanceFrequency(&g_PerformanceFrequency);
+
+	class Timer
+	{
+		LARGE_INTEGER _start, _stop;
+	public:
+		enum StartNow
+		{
+			startNow,
+			dontStartNow
+		};
+
+		Timer(StartNow start = dontStartNow)
+		{
+			if(start == startNow)
+				Start();
+		}
+
+		void Start()
+		{
+			QueryPerformanceCounter(&_start);
+			_stop.QuadPart = 0;
+		}
+
+		void Stop()
+		{
+			QueryPerformanceCounter(&_stop);
+		}
+
+		inline __int64 ElapsedInNanoseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000 * 1000 * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline __int64 ElapsedInMicroseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000 * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline __int64 ElapsedInMiliseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline unsigned int Elapsed()
+		{
+			return static_cast<unsigned int>(ElapsedInMiliseconds());
+		}
+	};
+
+#else
 	class Timer
 	{
 		clock_t start;
@@ -90,6 +153,7 @@ namespace tio
 			return ((clock() - start) * 1000) / CLOCKS_PER_SEC;
 		}
 	};
+#endif
 
 }
 

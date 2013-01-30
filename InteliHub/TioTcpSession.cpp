@@ -46,7 +46,7 @@ namespace tio
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
-	int TioTcpSession::PENDING_SEND_SIZE_TOO_BIG_THRESHOLD = 1024;
+	int TioTcpSession::PENDING_SEND_SIZE_TOO_BIG_THRESHOLD = 5 * 1024;
 
 	
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
