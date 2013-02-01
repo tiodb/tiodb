@@ -370,8 +370,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
         std::queue<std::string> pendingSendData_;
 		
-		std::vector< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
+		std::list< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 		std::vector< asio::const_buffer > beingSendData_;
+		shared_ptr<char> binarySendBuffer_;
 
 		struct SUBSCRIPTION_INFO
 		{
@@ -409,7 +410,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		bool valid_;
 
-		static int PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
+		static int PENDING_SEND_SIZE_BIG_THRESHOLD;
+		static int PENDING_SEND_SIZE_SMALL_THRESHOLD;
 
 		void SendString(const string& str);
 		void SendStringNow(const string& str);
@@ -452,24 +454,36 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			if(pendingBinarySendData_.empty())
 				return;
 
-			for(vector< shared_ptr<PR1_MESSAGE> >::const_iterator i = pendingBinarySendData_.begin() ; 
-				i != pendingBinarySendData_.end() ; 
-				++i)
+			static const int SEND_BUFFER_SIZE = 10 * 1024 * 1024;
+
+			if(!binarySendBuffer_)
+				binarySendBuffer_.reset(new char[SEND_BUFFER_SIZE]);
+
+			int bufferSpaceUsed = 0;
+			char* nextBufferSpace = binarySendBuffer_.get();
+
+			while(!pendingBinarySendData_.empty())
 			{
+				const shared_ptr<PR1_MESSAGE>& item = pendingBinarySendData_.front();
+
 				void* buffer;
 				unsigned int bufferSize;
 
-				pr1_message_get_buffer((*i).get(), &buffer, &bufferSize);
+				pr1_message_get_buffer(item.get(), &buffer, &bufferSize);
 
-				beingSendData_.push_back(asio::buffer(buffer, bufferSize));
+				if(bufferSpaceUsed + bufferSize > SEND_BUFFER_SIZE)
+					break;
 
-				//std::cout << "sending: binary message, " << (*i)->field_count << " fields" << std::endl;
+				memcpy(nextBufferSpace, buffer, bufferSize);
+				nextBufferSpace += bufferSize;
+				bufferSpaceUsed += bufferSize;
+
+				pendingBinarySendData_.pop_front();
 			}
-
 
 			asio::async_write(
 				socket_,
-				beingSendData_,
+				asio::buffer(binarySendBuffer_.get(), bufferSpaceUsed),
 				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), asio::placeholders::error, asio::placeholders::bytes_transferred));
 		}
 
@@ -487,13 +501,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 			BOOST_ASSERT(pendingSendSize_ >= 0);
 			
-			//
-			// remove sent data from pending vector
-			//
-			pendingBinarySendData_.erase(pendingBinarySendData_.begin(), pendingBinarySendData_.begin() + beingSendData_.size());
-
-			beingSendData_.clear();
-
 			SendPendingSnapshots();
 
 			SendPendingBinaryData();
@@ -520,7 +527,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 			BOOST_ASSERT(pendingSendSize_ >= 0);
 			
-			if(pendingSendSize_ <= PENDING_SEND_SIZE_TOO_BIG_THRESHOLD && lowPendingBytesThresholdCallback_)
+			if(pendingSendSize_ <= PENDING_SEND_SIZE_SMALL_THRESHOLD && lowPendingBytesThresholdCallback_)
 			{
 				// local copy, so callback can register another callback
 				auto callback = lowPendingBytesThresholdCallback_;
@@ -536,7 +543,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		bool IsPendingSendSizeTooBig()
 		{
-			return pendingSendSize_ > PENDING_SEND_SIZE_TOO_BIG_THRESHOLD;
+			return pendingSendSize_ > PENDING_SEND_SIZE_BIG_THRESHOLD;
 		}
 
 		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)

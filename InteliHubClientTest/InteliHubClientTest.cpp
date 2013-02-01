@@ -482,7 +482,7 @@ void group_test_callback(void* cookie, const char* group_name, const char* conta
 void test_group_subscribe()
 {
 	TIO_CONNECTION* cn;
-	static const int CONTAINER_COUNT = 50 * 1000;
+	static const int CONTAINER_COUNT = 20 * 1000;
 	static const int ITEM_COUNT_BEFORE = 30;
 	const char* group_name = "test_group";
 	vector<TIO_CONTAINER*> containers;
