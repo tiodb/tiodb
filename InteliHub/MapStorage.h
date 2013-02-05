@@ -244,7 +244,10 @@ public:
 		  //
 		  DataMap::const_iterator startIterator = data_.begin();
 
-		  if(!start.empty())
+		  //
+		  // start == 0 is a very common case, so we can skip all the math
+		  //
+		  if(!start.empty() && start != "0")
 		  {
 			  int index = 0;
 			  bool isNumeric = false;

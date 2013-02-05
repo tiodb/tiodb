@@ -577,6 +577,9 @@ namespace tio
 	//
 	inline unsigned int NormalizeIndex(int index, int size, bool checkBounds = true)
 	{	
+		if(index == 0)
+			return 0;
+
 		if(index < 0)
 		{
 			index = abs(index);

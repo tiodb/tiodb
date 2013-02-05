@@ -1082,8 +1082,10 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 	closesocket(connection->socket);
 	connection->socket = 0;
 
-	while( (pending_event = events_list_pop(connection)) )
+	for(pending_event = events_list_pop(connection) ; pending_event != NULL ; pending_event = events_list_pop(connection))
+	{
 		pr1_message_delete(pending_event);
+	}
 
 	free(connection->containers);
 }

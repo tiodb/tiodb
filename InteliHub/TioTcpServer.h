@@ -131,10 +131,13 @@ namespace tio
 
 			void DoPendingSubscriptions(const shared_ptr<TioTcpSession>& session, ContainersMap::const_iterator i, const string& start)
 			{
-				std::cout << GetTickCount() << " - DoPendingSubscriptions, start" << std::endl; 
+#ifdef _DEBUG
+				if(i == containers_.begin())
+					std::cout << GetTickCount() << " - DoPendingSubscriptions, start" << std::endl; 
 
 				Timer timer;
 				timer.Start();
+#endif
 
 				int howMany = 0;
 
@@ -159,11 +162,6 @@ namespace tio
 
 					if(session->IsPendingSendSizeTooBig())
 					{
-						long long elapsedMicro = timer.ElapsedInMicroseconds();
-						double persec = (howMany * 1000 * 1000) / static_cast<double>(elapsedMicro);
-
-						std::cout << GetTickCount() << " - " << howMany << " snapshots, " << persec << " snapshots per second" << std::endl;
-
 						session->RegisterLowPendingBytesCallback(
 							[this, i, start](const shared_ptr<TioTcpSession>& session)
 							{
@@ -178,11 +176,12 @@ namespace tio
 					}
 				}
 
-				std::cout << GetTickCount() << " - DoPendingSubscriptions, end" << std::endl;
+#ifdef _DEBUG
 				long long elapsedMicro = timer.ElapsedInMicroseconds();
 				double persec = (howMany * 1000 * 1000) / static_cast<double>(elapsedMicro);
 
 				std::cout << GetTickCount() << " - " << howMany << " snapshots, " << persec << " snapshots per second" << std::endl;
+#endif
 			}
 
 			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
