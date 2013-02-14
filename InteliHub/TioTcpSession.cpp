@@ -49,8 +49,8 @@ namespace tio
 	//
 	// I've found those numbers testing with a group containing 50k containers
 	//
-	int TioTcpSession::PENDING_SEND_SIZE_BIG_THRESHOLD = 2 * 1024 * 1024;
-	int TioTcpSession::PENDING_SEND_SIZE_SMALL_THRESHOLD = 1 * 1024 * 1024;
+	int TioTcpSession::PENDING_SEND_SIZE_BIG_THRESHOLD = 1024 * 1024;
+	int TioTcpSession::PENDING_SEND_SIZE_SMALL_THRESHOLD = 512 * 1024;
 	
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
 		io_service_(io_service),

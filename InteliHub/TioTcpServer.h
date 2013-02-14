@@ -316,6 +316,9 @@ namespace tio
 
 			unsigned& globalHandle = globalContainerHandle_[container->GetName()];
 			string timeString = lexical_cast<string>(time(NULL));
+			logLine.append(timeString);
+
+			bool logCommand = true;
 
 			switch(command)
 			{
@@ -327,7 +330,6 @@ namespace tio
 					string containerType = container->GetType();
 					
 					globalHandle = ++lastGlobalHandle_;
-					logLine.append(timeString);
 					logLine.append(",create,");
 					logLine.append(lexical_cast<string>(globalHandle));
 
@@ -351,44 +353,72 @@ namespace tio
 
 				break;
 			case TIO_COMMAND_PUSH_BACK:
-				logLine.append(timeString);
 				logLine.append(",push_back");
 				break;
 			case TIO_COMMAND_PUSH_FRONT:
-				logLine.append(timeString);
 				logLine.append(",push_front");
 				break;
 			case TIO_COMMAND_POP_BACK:
-				logLine.append(timeString);
 				logLine.append(",pop_back");
 				break;
 			case TIO_COMMAND_POP_FRONT:
-				logLine.append(timeString);
 				logLine.append(",pop_front");
 				break;
 			case TIO_COMMAND_SET:
-				logLine.append(timeString);
 				logLine.append(",set");
 				break;
 			case TIO_COMMAND_INSERT:
-				logLine.append(timeString);
 				logLine.append(",insert");
 				break;
 			case TIO_COMMAND_DELETE:
-				logLine.append(timeString);
 				logLine.append(",delete");
 				break;
 			case TIO_COMMAND_CLEAR:
-				logLine.append(timeString);
 				logLine.append(",clear");
 				break;
 			case TIO_COMMAND_PROPSET:
-				logLine.append(timeString);
 				logLine.append(",propset");
 				break;
+
+			case TIO_COMMAND_GROUP_ADD:
+				{
+					string groupName, containerName;
+					bool b;
+
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_GROUP_NAME, &groupName);
+					if(!b)
+						break;
+
+					b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_CONTAINER_NAME, &containerName);
+					if(!b)
+						break;
+
+					
+					logLine.append(",group_add,");
+					logLine.append(lexical_cast<string>(globalHandle));
+
+					logLine.append(",s");
+					logLine.append(lexical_cast<string>(groupName.size()));
+					logLine.append(",");
+					logLine.append(groupName);
+
+					logLine.append(",s");
+					logLine.append(lexical_cast<string>(containerName.size()));
+					logLine.append(",");
+					logLine.append(containerName);
+					
+					logLine.append("\n");
+
+					RawLog(logLine);
+					
+				}
+
+				return;
+			default:
+				logCommand = false;
 			}
 
-			if(logLine.empty())
+			if(!logCommand)
 				return;
 
 			int handle;

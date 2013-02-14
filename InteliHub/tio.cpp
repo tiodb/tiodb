@@ -667,7 +667,7 @@ int main(int argc, char* argv[])
 			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
 			("port", po::value<unsigned short>(), "listening port. If not informed, 2605")
 			("threads", po::value<unsigned short>(), "number of running threads")
-			("log-path", po::value<string>(), "log file path")
+			("log-path", po::value<string>(), "log file path. It must be a full file path, not just the directory. Ex: c:\\data\\intelihub.log")
 			("data-path", po::value<string>(), "sets data path");
 
 		po::variables_map vm;

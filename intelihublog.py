@@ -103,6 +103,8 @@ class InteliHubLogParser(object):
           c.clear()
         elif command == 'propset':
           c.propset(key, value)
+        elif command == 'group_add':
+          hub.group_add(key, value)
         else:
           raise Exception('unknown command ' + command)
           
