@@ -22,7 +22,7 @@ namespace MemoryStorage
 {
 	class VectorStorage : 
 		boost::noncopyable,
-		public boost::enable_shared_from_this<VectorStorage>,
+		public std::enable_shared_from_this<VectorStorage>,
 		public ITioStorage
 	{
 	private:

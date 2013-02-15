@@ -180,8 +180,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	}
 
 	
-	using boost::shared_ptr;
-	using boost::weak_ptr;
+	using std::shared_ptr;
+	using std::weak_ptr;
 	using boost::system::error_code;
 	using std::stringstream;
 
@@ -336,7 +336,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	*/
 
 	class TioTcpSession : 
-		public boost::enable_shared_from_this<TioTcpSession>,
+		public std::enable_shared_from_this<TioTcpSession>,
 		public boost::noncopyable
 	{
 	private:
@@ -366,7 +366,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		bool binaryProtocol_;
 
-		boost::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback_;
+		std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback_;
 
         std::queue<std::string> pendingSendData_;
 		
@@ -481,10 +481,15 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 				pendingBinarySendData_.pop_front();
 			}
 
+			auto shared_this = shared_from_this();
+
 			asio::async_write(
 				socket_,
 				asio::buffer(binarySendBuffer_.get(), bufferSpaceUsed),
-				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), asio::placeholders::error, asio::placeholders::bytes_transferred));
+				[shared_this](const error_code& err, size_t sent)
+				{
+					shared_this->OnBinaryMessageSent(err, sent);
+				});
 		}
 
 		void OnBinaryMessageSent(const error_code& err, size_t sent)
@@ -515,7 +520,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		}
 
 
-		void RegisterLowPendingBytesCallback(boost::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
+		void RegisterLowPendingBytesCallback(std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
 		{
 			BOOST_ASSERT(!lowPendingBytesThresholdCallback_);
 			lowPendingBytesThresholdCallback_ = lowPendingBytesThresholdCallback;
@@ -531,7 +536,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			{
 				// local copy, so callback can register another callback
 				auto callback = lowPendingBytesThresholdCallback_;
-				lowPendingBytesThresholdCallback_.clear();
+				lowPendingBytesThresholdCallback_ = nullptr;
 				callback(shared_from_this());
 			}
 		}

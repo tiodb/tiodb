@@ -29,7 +29,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 using namespace tio;
 
-using boost::shared_ptr;
+using std::shared_ptr;
 using boost::scoped_array;
 using std::cout;
 using std::endl;
@@ -521,7 +521,13 @@ protected:
 
 		try
 		{
-			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4), startString);
+			cppHandle = container->Subscribe(
+				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
+				},
+				startString);
+
 			subscriptionHandles_[handle] = cppHandle;
 		}
 		catch(std::exception&)
@@ -554,7 +560,11 @@ protected:
 
 		try
 		{
-			container->WaitAndPopNext(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4));
+			container->WaitAndPopNext(
+				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
+				});
 		}
 		catch(std::exception&)
 		{
@@ -574,7 +584,7 @@ class PluginThread
 {
 	tio_plugin_start_t func_;
 	tio::IContainerManager* containerManager_;
-	queue<boost::function<void()> > eventQueue_;
+	queue<std::function<void()> > eventQueue_;
 	boost::condition_variable hasWork_;
 
 public:

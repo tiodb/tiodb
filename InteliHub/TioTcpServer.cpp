@@ -21,7 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using boost::system::error_code;
 
 	using boost::lexical_cast;
@@ -67,7 +67,10 @@ namespace tio
 		// it will probably be called from a TioTcpSession callback
 		// and removing now will delete the session's pointer
 		//
-		io_service_.post(boost::bind(&TioTcpServer::RemoveClient, this, client));
+		io_service_.post([this, client]()
+			{
+				RemoveClient(client);
+			});
 	}
 
 	void TioTcpServer::RemoveClient(shared_ptr<TioTcpSession> client)
@@ -212,7 +215,10 @@ namespace tio
 		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, GenerateSessionId()));
 
 		acceptor_.async_accept(session->GetSocket(),
-			boost::bind(&TioTcpServer::OnAccept, this, session, asio::placeholders::error));
+			[this, session](const error_code& err)
+			{
+				OnAccept(session, err);
+			});
 	}
 
 	void TioTcpServer::OnAccept(shared_ptr<TioTcpSession> session, const error_code& err)
@@ -657,11 +663,11 @@ namespace tio
 
 		if(i != dispatchMap_.end())
 		{
-			CommandFunction& f = i->second;
+			CommandCallbackFunction& f = i->second;
 
 			try
 			{
-				f(cmd, answer, moreDataSize, session);
+				(this->*f)(cmd, answer, moreDataSize, session);
 			}
 			catch(std::exception& ex)
 			{
@@ -685,61 +691,62 @@ namespace tio
 		}
 	}
 
+
 	//
 	// commands
 	//
 	void TioTcpServer::LoadDispatchMap()
 	{
-		dispatchMap_["ping"] = boost::bind(&TioTcpServer::OnCommand_Ping, this, _1, _2, _3, _4);
-		dispatchMap_["ver"] = boost::bind(&TioTcpServer::OnCommand_Version, this, _1, _2, _3, _4);
+		dispatchMap_["ping"] = &TioTcpServer::OnCommand_Ping;
+		dispatchMap_["ver"] = &TioTcpServer::OnCommand_Version;
 		
-		dispatchMap_["create"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["open"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["close"] = boost::bind(&TioTcpServer::OnCommand_CloseContainer, this, _1, _2, _3, _4);
+		dispatchMap_["create"] = &TioTcpServer::OnCommand_CreateContainer_OpenContainer;
+		dispatchMap_["open"] = &TioTcpServer::OnCommand_CreateContainer_OpenContainer;
+		dispatchMap_["close"] = &TioTcpServer::OnCommand_CloseContainer;
 
-		dispatchMap_["delete_container"] = boost::bind(&TioTcpServer::OnCommand_DeleteContainer, this, _1, _2, _3, _4);
+		dispatchMap_["delete_container"] = &TioTcpServer::OnCommand_DeleteContainer;
 
-		dispatchMap_["list_handles"] = boost::bind(&TioTcpServer::OnCommand_ListHandles, this, _1, _2, _3, _4);
+		dispatchMap_["list_handles"] = &TioTcpServer::OnCommand_ListHandles;
 		
-		dispatchMap_["push_back"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["push_front"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["push_back"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["push_front"] = &TioTcpServer::OnAnyDataCommand;
 		
-		dispatchMap_["pop_back"] = boost::bind(&TioTcpServer::OnCommand_Pop, this, _1, _2, _3, _4);
-		dispatchMap_["pop_front"] = boost::bind(&TioTcpServer::OnCommand_Pop, this, _1, _2, _3, _4);
+		dispatchMap_["pop_back"] = &TioTcpServer::OnCommand_Pop;
+		dispatchMap_["pop_front"] = &TioTcpServer::OnCommand_Pop;
 
-		dispatchMap_["modify"] = boost::bind(&TioTcpServer::OnModify, this, _1, _2, _3, _4);
+		dispatchMap_["modify"] = &TioTcpServer::OnModify;
 
-		dispatchMap_["wnp_next"] = boost::bind(&TioTcpServer::OnCommand_WnpNext, this, _1, _2, _3, _4);
-		dispatchMap_["wnp_key"] = boost::bind(&TioTcpServer::OnCommand_WnpKey, this, _1, _2, _3, _4);
+		dispatchMap_["wnp_next"] = &TioTcpServer::OnCommand_WnpNext;
+		dispatchMap_["wnp_key"] = &TioTcpServer::OnCommand_WnpKey;
 		
-		dispatchMap_["set"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["insert"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["delete"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["clear"] = boost::bind(&TioTcpServer::OnCommand_Clear, this, _1, _2, _3, _4);
+		dispatchMap_["set"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["insert"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["delete"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["clear"] = &TioTcpServer::OnCommand_Clear;
 
-		dispatchMap_["get_property"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["set_property"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["get_property"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["set_property"] = &TioTcpServer::OnAnyDataCommand;
 
-		dispatchMap_["get"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["get"] = &TioTcpServer::OnAnyDataCommand;
 
-		dispatchMap_["get_count"] = boost::bind(&TioTcpServer::OnCommand_GetRecordCount, this, _1, _2, _3, _4);
+		dispatchMap_["get_count"] = &TioTcpServer::OnCommand_GetRecordCount;
 
-		dispatchMap_["subscribe"] = boost::bind(&TioTcpServer::OnCommand_SubscribeUnsubscribe, this, _1, _2, _3, _4);
-		dispatchMap_["unsubscribe"] = boost::bind(&TioTcpServer::OnCommand_SubscribeUnsubscribe, this, _1, _2, _3, _4);
+		dispatchMap_["subscribe"] = &TioTcpServer::OnCommand_SubscribeUnsubscribe;
+		dispatchMap_["unsubscribe"] = &TioTcpServer::OnCommand_SubscribeUnsubscribe;
 
-		dispatchMap_["command"] = boost::bind(&TioTcpServer::OnCommand_CustomCommand, this, _1, _2, _3, _4);
+		dispatchMap_["command"] = &TioTcpServer::OnCommand_CustomCommand;
 		
-		dispatchMap_["auth"] = boost::bind(&TioTcpServer::OnCommand_Auth, this, _1, _2, _3, _4);
+		dispatchMap_["auth"] = &TioTcpServer::OnCommand_Auth;
 
-		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
+		dispatchMap_["set_permission"] = &TioTcpServer::OnCommand_SetPermission;
 
-		dispatchMap_["query"] = boost::bind(&TioTcpServer::OnCommand_Query, this, _1, _2, _3, _4);
+		dispatchMap_["query"] = &TioTcpServer::OnCommand_Query;
 		
-		dispatchMap_["diff_start"] = boost::bind(&TioTcpServer::OnCommand_Diff_Start, this, _1, _2, _3, _4);
-		dispatchMap_["diff"] = boost::bind(&TioTcpServer::OnCommand_Diff, this, _1, _2, _3, _4);
+		dispatchMap_["diff_start"] = &TioTcpServer::OnCommand_Diff_Start;
+		dispatchMap_["diff"] = &TioTcpServer::OnCommand_Diff;
 
-		dispatchMap_["group_add"] = boost::bind(&TioTcpServer::OnCommand_GroupAdd, this, _1, _2, _3, _4);
-		dispatchMap_["group_subscribe"] = boost::bind(&TioTcpServer::OnCommand_GroupSubscribe, this, _1, _2, _3, _4);
+		dispatchMap_["group_add"] = &TioTcpServer::OnCommand_GroupAdd;
+		dispatchMap_["group_subscribe"] = &TioTcpServer::OnCommand_GroupSubscribe;
 
 	}
 
@@ -1098,12 +1105,20 @@ namespace tio
 			if(infoCopy.diffType == DiffSessionType_List)
 			{
 				subscriptionCookie =
-					infoCopy.source->Subscribe(boost::bind(&ListChangeRecorder, infoCopy, _1, _2, _3, _4), "0");
+					infoCopy.source->Subscribe(
+					[infoCopy](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+					{
+						ListChangeRecorder(infoCopy, event_name, key, value, metadata);
+					}, "0");
 			}
 			else if(infoCopy.diffType == DiffSessionType_Map)
 			{
 				subscriptionCookie =
-					infoCopy.source->Subscribe(boost::bind(&MapChangeRecorder, infoCopy, _1, _2, _3, _4), "");
+					infoCopy.source->Subscribe(
+					[infoCopy](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+					{
+						MapChangeRecorder(infoCopy, event_name, key, value, metadata);
+					}, "");
 			}
 
 			SendResultSet(session, infoCopy.destination->Query(0, 0, TIONULL));

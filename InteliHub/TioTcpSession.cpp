@@ -26,7 +26,7 @@ namespace tio
 	using std::cerr;
 	using std::endl;
 
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using boost::scoped_ptr;
 	using boost::system::error_code;
 
@@ -135,7 +135,11 @@ namespace tio
 	{
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
-		unsigned int cookie = container->Subscribe(boost::bind(&MapContainerMirror, container, destinationContainer, _1, _2, _3, _4), 
+		unsigned int cookie = container->Subscribe(
+			[container, destinationContainer](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+			{
+				MapContainerMirror(container, destinationContainer, event_name, key, value, metadata);
+			},
 			"__none__"); // "__none__" will make us receive only the updates (not the snapshot)
 
 		diffs_[handle] = make_pair(destinationContainer, cookie); 
@@ -201,8 +205,14 @@ namespace tio
 			throw std::runtime_error(string("wait and pop next command already pending for handle ") + lexical_cast<string>(handle));
 
 		unsigned int popId;
+
+		auto shared_this = shared_from_this();
 		
-		popId = container->WaitAndPopNext(boost::bind(&TioTcpSession::OnPopEvent, shared_from_this(), handle, _1, _2, _3, _4));
+		popId = container->WaitAndPopNext(
+			[shared_this, handle](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+			{
+				shared_this->OnPopEvent(handle, eventName, key, value, metadata);
+			});
 
 		//
 		// id is zero id the pop is not pending
@@ -224,38 +234,44 @@ namespace tio
 
 		message = pr1_message_new_get_buffer_for_receive(header.get(), &buffer);
 
+		auto shared_this = shared_from_this();
+
 		asio::async_read(
 					socket_, 
 					asio::buffer(buffer, header->message_size),
-					boost::bind(
-						&TioTcpSession::OnBinaryProtocolMessage, 
-						shared_from_this(), 
-						message,
-						asio::placeholders::error)
-						);
+					[shared_this, message](const error_code& err, size_t read)
+					{
+						shared_this->OnBinaryProtocolMessage(message, err);
+						
+					});
 	}
 
 	void TioTcpSession::ReadBinaryProtocolMessage()
 	{
 		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
 
+		auto shared_this = shared_from_this();
+
 		asio::async_read(
 					socket_, 
 					asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
-					boost::bind(
-						&TioTcpSession::OnBinaryProtocolMessageHeader, 
-						shared_from_this(), 
-						header,
-						asio::placeholders::error)
-						);
+					[shared_this, header](const error_code& err, size_t read)
+					{
+						shared_this->OnBinaryProtocolMessageHeader(header, err);
+					});
 	}
 
 	void TioTcpSession::ReadCommand()
 	{
 		currentCommand_ = Command();
 
+		auto shared_this = shared_from_this();
+
 		asio::async_read_until(socket_, buf_, '\n', 
-			boost::bind(&TioTcpSession::OnReadCommand, shared_from_this(), asio::placeholders::error, asio::placeholders::bytes_transferred));
+			[shared_this](const error_code& err, size_t read)
+			{
+				shared_this->OnReadCommand(err, read);
+			});
 	}
 
 	void TioTcpSession::OnReadCommand(const error_code& err, size_t read)
@@ -318,16 +334,24 @@ namespace tio
 
 			if(buf_.size() >= moreDataSize)
 			{
+				auto shared_this = shared_from_this();
+
 				io_service_.post(
-					boost::bind(&TioTcpSession::OnCommandData, shared_from_this(), 
-					moreDataSize, boost::system::error_code(), moreDataSize));
+					[shared_this, moreDataSize]()
+					{
+						shared_this->OnCommandData(moreDataSize, boost::system::error_code(), moreDataSize);
+					});
 			}
 			else
 			{
+				auto shared_this = shared_from_this();
+
 				asio::async_read(
 					socket_, buf_, asio::transfer_at_least(moreDataSize - buf_.size()),
-					boost::bind(&TioTcpSession::OnCommandData, shared_from_this(), 
-					moreDataSize, asio::placeholders::error, asio::placeholders::bytes_transferred));
+					[shared_this, moreDataSize](const error_code& err, size_t read)
+					{
+						shared_this->OnCommandData(moreDataSize, err, read);
+					});
 			}
 
 			moreDataToRead = true;
@@ -833,10 +857,15 @@ namespace tio
 
 		IncreasePendingSendSize(answerSize);
 
+		auto shared_this = shared_from_this();
+
 		asio::async_write(
 			socket_,
 			asio::buffer(buffer, answerSize), 
-			boost::bind(&TioTcpSession::OnWrite, shared_from_this(), buffer, answerSize, asio::placeholders::error, asio::placeholders::bytes_transferred));
+			[shared_this, buffer, answerSize](const error_code& err, size_t sent)
+			{
+				shared_this->OnWrite(buffer, answerSize, err, sent);
+			});
 	}
 
 	void TioTcpSession::OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t sent)
@@ -967,9 +996,6 @@ namespace tio
 
 		try
 		{
-			int numericStart = lexical_cast<int>(start);
-			
-
 
 			//
 			// This will make Tio not to lock until it finished sending 
@@ -980,6 +1006,8 @@ namespace tio
 			// is really big
 			//
 #if 0
+
+			int numericStart = lexical_cast<int>(start);
 			//
 			// lets try a query. Navigating a query is faster than accessing records
 			// using index. Imagine a linked list being accessed by index every time...
@@ -1031,8 +1059,14 @@ namespace tio
 
 		try
 		{
+			auto shared_this = shared_from_this();
+
 			subscriptionInfo->cookie = container->Subscribe(
-				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
+				[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
+
+				}, start);
 			
 			if(sendAnswer)
 				SendString("answer ok\r\n");
@@ -1128,8 +1162,14 @@ namespace tio
 			if(sendAnswer)
 				SendBinaryAnswer();
 
+			auto shared_this = shared_from_this();
+
 			subscriptionInfo->cookie = container->Subscribe(
-				boost::bind(&TioTcpSession::OnEvent, shared_from_this(), subscriptionInfo, _1, _2, _3, _4), start);
+				[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
+				}, 
+				start);
 		}
 		catch(std::exception&)
 		{
@@ -1159,28 +1199,33 @@ namespace tio
 			{
 				unsigned int handle;
 				string event_name;
-				shared_ptr<SUBSCRIPTION_INFO> info;
+				shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo;
 				TioData searchKey, key, value, metadata;
 
-				pair_assign(handle, info) = p;
+				pair_assign(handle, subscriptionInfo) = p;
 
-				if(info->resultSet)
+				if(subscriptionInfo->resultSet)
 				{
 					bool b;
 					
-					b = info->resultSet->GetRecord(&key, &value, &metadata);
+					b = subscriptionInfo->resultSet->GetRecord(&key, &value, &metadata);
 
 					if(b)
 					{
-						OnEvent(info, info->event_name, key, value, metadata);
-						info->nextRecord++;
+						OnEvent(subscriptionInfo, subscriptionInfo->event_name, key, value, metadata);
+						subscriptionInfo->nextRecord++;
 					}
 
-					if(!b || !info->resultSet->MoveNext())
+					if(!b || !subscriptionInfo->resultSet->MoveNext())
 					{
 						// done
-						info->cookie = info->container->Subscribe(
-							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
+						auto shared_this = shared_from_this();
+
+						subscriptionInfo->cookie = subscriptionInfo->container->Subscribe(
+							[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+							{
+								shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
+							}, "");
 
 						toRemove.push_back(handle);
 
@@ -1189,24 +1234,30 @@ namespace tio
 				}
 				else
 				{
-					unsigned int recordCount = info->container->GetRecordCount();
+					unsigned int recordCount = subscriptionInfo->container->GetRecordCount();
 
 					if(recordCount)
 					{
-						searchKey = static_cast<int>(info->nextRecord);
+						searchKey = static_cast<int>(subscriptionInfo->nextRecord);
 
-						info->container->GetRecord(searchKey, &key, &value, &metadata);
+						subscriptionInfo->container->GetRecord(searchKey, &key, &value, &metadata);
 
-						OnEvent(info, info->event_name, key, value, metadata);
+						OnEvent(subscriptionInfo, subscriptionInfo->event_name, key, value, metadata);
 
-						info->nextRecord++;
+						subscriptionInfo->nextRecord++;
 					}
 
-					if(recordCount == 0 || info->nextRecord >= recordCount)
+					if(recordCount == 0 || subscriptionInfo->nextRecord >= recordCount)
 					{
 						// done
-						info->cookie = info->container->Subscribe(
-							boost::bind(&TioTcpSession::OnEvent, shared_from_this(), info, _1, _2, _3, _4), "");
+						auto shared_this = shared_from_this();
+
+						subscriptionInfo->cookie = subscriptionInfo->container->Subscribe(
+							[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+							{
+								shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
+							}
+							, "");
 
 						toRemove.push_back(handle);
 

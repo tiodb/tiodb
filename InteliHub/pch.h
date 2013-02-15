@@ -20,7 +20,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 // Python plugin support. Need Python and Boost Python
 //
 #ifndef TIO_PYTHON_PLUGIN_SUPPORT
-#define TIO_PYTHON_PLUGIN_SUPPORT 1
+#define TIO_PYTHON_PLUGIN_SUPPORT 0
 #endif
 
 
@@ -59,9 +59,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 //  #include <google/profiler.h>
 #endif
 
-#include <boost/bind.hpp>
 #include <boost/asio.hpp>
-#include <boost/function.hpp>
+#include <boost/bind.hpp>
 #include <boost/array.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_array.hpp>

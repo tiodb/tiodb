@@ -83,7 +83,7 @@ namespace tio {
 
 		class LogDbVectorStorage : 
 			boost::noncopyable,
-			public boost::enable_shared_from_this<LogDbVectorStorage>,
+			public std::enable_shared_from_this<LogDbVectorStorage>,
 			public ITioStorage,
 			public ITioPropertyMap
 		{
@@ -584,6 +584,7 @@ namespace tio {
 			virtual pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> > 
 				CreateOrOpenStorage(const string& type, const string& name, bool create)
 			{
+				typedef pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap>> ReturnType;
 				CheckType(type);
 
 				if(name.empty())
@@ -599,7 +600,7 @@ namespace tio {
 				// exists, here it goes
 				//
 				if(i != containers_.end() && !i->second.first.expired() && !i->second.second.expired())
-					return i->second;
+					return ReturnType(i->second.first.lock(), i->second.second.lock());
 
 				LogDbVectorStorage::AccessType accessType;
 
@@ -651,7 +652,7 @@ namespace tio {
 				p.first = container;
 				p.second = propertyMap;
 
-				return p;
+				return ReturnType(p.first.lock(), p.second.lock());
 			}
 
 			virtual vector<StorageInfo> GetStorageList()

@@ -47,7 +47,7 @@ class ListMirror(object):
 
 class InteliHubTestCase(unittest.TestCase):
     def setUp(self):
-        self.hub = intelihubclient.connect('tio://127.0.0.1')
+        self.hub = intelihubclient.connect('localhost')
 
     def get_me_a_random_container_name(self):
         return uuid.uuid4().hex
@@ -77,7 +77,7 @@ class PerfomanceTests(InteliHubTestCase):
         return count / ((d.seconds * 1000 + d.microseconds / 1000.0) / 1000.0)
 
     #@unittest.skipIf(sys.modules.has_key('pywin'), 'not running perftest inside the IDE')
-    def _test_perf(self):
+    def test_perf(self):
         tests = (
                   {'type': 'volatile_map',      'hasKey': True},
                   {'type': 'persistent_map',    'hasKey': True},

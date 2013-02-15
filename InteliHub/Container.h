@@ -27,8 +27,8 @@ namespace tio
 	using std::string;
 	using std::vector;
 	using std::pair;
-	using boost::function;
-	using boost::shared_ptr;
+	using std::function;
+	using std::shared_ptr;
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -160,7 +160,7 @@ namespace tio
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 
 	class TioData
 	{
@@ -626,7 +626,7 @@ namespace tio
 			*start = *end;
 	}
 
-	typedef boost::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
+	typedef std::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
 
 	static const TioData TIONULL = TioData();
 

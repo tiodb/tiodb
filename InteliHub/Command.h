@@ -25,7 +25,7 @@ namespace tio
 	using std::string;
 	using std::ostream;
 	using std::pair;
-	using boost::shared_ptr;
+	using std::shared_ptr;
 
 	class Command
 	{

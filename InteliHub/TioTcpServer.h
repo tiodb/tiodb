@@ -28,7 +28,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using boost::system::error_code;
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
@@ -101,7 +101,7 @@ namespace tio
 
 			void Subscribe(const shared_ptr<TioTcpSession>& session, const string& start)
 			{
-				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+				session->RegisterContainer(containerListName_, containerListContainer_);
 
 				session->SendAnswer("answer ok\r\n");
 				
@@ -186,7 +186,7 @@ namespace tio
 
 			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
 			{
-				int handle = session->RegisterContainer(containerListName_, containerListContainer_);
+				session->RegisterContainer(containerListName_, containerListContainer_);
 
 				session->SendBinaryAnswer();
 
@@ -442,7 +442,7 @@ namespace tio
 	class TioTcpServer
 	{
 	public:
-		typedef boost::function<void (Command&, ostream&, size_t*, shared_ptr<TioTcpSession>)> CommandFunction;
+		typedef std::function<void (Command&, ostream&, size_t*, shared_ptr<TioTcpSession>)> CommandFunction;
 
 		enum DiffSessionType
 		{
@@ -527,7 +527,9 @@ namespace tio
 		NextPoppersMap nextPoppers_;
 		tio::recursive_mutex nextPoppersMutex_;
 
-		typedef std::map<string, CommandFunction> CommandFunctionMap;
+		typedef void (__thiscall tio::TioTcpServer::* CommandCallbackFunction)(tio::Command &,std::ostream &,size_t *,std::shared_ptr<TioTcpSession>);
+
+		typedef std::map<string, CommandCallbackFunction> CommandFunctionMap;
 		CommandFunctionMap dispatchMap_;
 
 		Auth auth_;
