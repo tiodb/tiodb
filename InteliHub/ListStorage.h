@@ -289,17 +289,18 @@ public:
 			return dispatcher_.Subscribe(sink);
 		}
 
-		i =  GetOffset(startIndex);
+		size_t realIndex;
+		i =  GetOffset(startIndex, &realIndex);
 
 		cookie = dispatcher_.Subscribe(sink);
 
 		//
 		// key is the start index to send
 		//
-		for( ; i != data_.end() ; ++i)
+		for( ; i != data_.end() ; ++i, ++realIndex)
 		{
 			const ValueAndMetadata& data = *i;
-			sink("push_back", TIONULL, data.value, data.metadata);
+			sink("push_back", TioData((int)realIndex), data.value, data.metadata);
 		}
 
 		sink("snapshot_end", TIONULL, TIONULL, TIONULL);
