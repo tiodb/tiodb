@@ -362,6 +362,12 @@ class TioServerConnection(object):
     def ping(self):
         return self.SendCommand('ping')
 
+    def server_pause(self):
+        return self.SendCommand('pause')
+
+    def server_resume(self):
+        return self.SendCommand('resume')
+
     def ReceiveAnswer(self, wait_until_answer = True):
         while 1:
             line = self.__ReceiveLine()

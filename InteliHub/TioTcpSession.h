@@ -659,5 +659,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void BinaryWaitAndPopNext(unsigned int handle);
 		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
 		bool commandRunning_;
+
+
+		void InvalidateConnection(const error_code& err);
 	};		
 }

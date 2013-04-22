@@ -4,8 +4,6 @@ import time
 import argparse
 import bz2
 
-
-
 class InteliHubLogParser(object):
   def __init__(self):
     self.speed = 10
@@ -104,7 +102,7 @@ class InteliHubLogParser(object):
         print '%d seconds waiting for file to grow...' % slept_time
     
   
-  def replay(self, hub, file_path, speed, delay_seconds=0, follow=False):
+  def replay(self, hub, file_path, speed, delay_seconds=0, follow=False, pause=False):
     containers = {}
     self.speed = speed
 
@@ -117,47 +115,55 @@ class InteliHubLogParser(object):
     total_data = 0
     total_changes = 0
 
-    while 1:
-      line = f.readline()
+    if pause:
+      hub.server_pause()
 
-      if not line:
-        if not follow:
-          break
-        else:
-          line = self.wait_for_line(f)
+    try:
+      while 1:
+        line = f.readline()
 
-      if delay_seconds > 0:
-        now = int(time.time())
-        message_time = int(line.split(',')[0])
-        message_time += delay_seconds
-        delta = message_time - now
+        if not line:
+          if not follow:
+            break
+          else:
+            line = self.wait_for_line(f)
 
-        if delta > 0:
-          if delta > 10:
-            print 'sleep for %s seconds to apply a %s seconds delay' % (delta, delay_seconds)
-          time.sleep(delta)
+        if delay_seconds > 0:
+          now = int(time.time())
+          message_time = int(line.split(',')[0])
+          message_time += delay_seconds
+          delta = message_time - now
 
-      total_data += len(line)
-      count += 1
+          if delta > 0:
+            if delta > 10:
+              print 'sleep for %s seconds to apply a %s seconds delay' % (delta, delay_seconds)
+            time.sleep(delta)
 
-      changed = self.play_log_line(hub, containers, line)
+        total_data += len(line)
+        count += 1
 
-      if changed:
-        total_changes += 1
-               
-      log = False
-      if self.speed == 0:
-        if count % 1000 == 0:
+        changed = self.play_log_line(hub, containers, line)
+
+        if changed:
+          total_changes += 1
+                 
+        log = False
+        if self.speed == 0:
+          if count % 1000 == 0:
+            log = True
+        elif count % self.speed == 0:
           log = True
-      elif count % self.speed == 0:
-        log = True
 
-      if log:
-        print count, len(containers), 'containers,', total_changes, 'changes,' , (total_data / 1024), 'kb so far'
-     
-         
-      if self.speed > 0:
-          time.sleep(1.0 / self.speed)
+        if log:
+          print count, len(containers), 'containers,', total_changes, 'changes,' , (total_data / 1024), 'kb so far'
+       
+           
+        if self.speed > 0:
+            time.sleep(1.0 / self.speed)
+
+    finally:
+      if pause:
+        hub.server_resume()
         
 def main():
   parser = InteliHubLogParser()
@@ -168,12 +174,13 @@ def main():
   argparser.add_argument('--speed', default=0, type=int)
   argparser.add_argument('--delay', default=0, type=int)
   argparser.add_argument('--follow', action='store_true')
+  argparser.add_argument('--pause', action='store_true', help='Pauses the server while loading. **This will disconnect all client during load time**')
 
   params = argparser.parse_args()
 
-  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec, %d seconds delay %s' % \
+  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec, %d seconds delay %s, %s' % \
     (params.file_path, params.hub, params.speed,
-     params.delay, '(follow file)' if params.follow else '')
+     params.delay, '(follow file)' if params.follow else '', ' (pause server while loading)' if params.pause else '')
    
   hub = intelihubclient.connect(params.hub)
   
@@ -182,7 +189,8 @@ def main():
     params.file_path,
     params.speed,
     params.delay,
-    params.follow)
+    params.follow,
+    params.pause)
     
 
 if __name__ == '__main__':

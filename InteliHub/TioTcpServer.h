@@ -533,6 +533,8 @@ namespace tio
 		CommandFunctionMap dispatchMap_;
 
 		Auth auth_;
+
+		bool serverPaused_;
 		
 		tcp::acceptor acceptor_;
 		asio::io_service& io_service_;
@@ -589,6 +591,8 @@ namespace tio
 		void OnCommand_WnpKey(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		string GetFullQualifiedName(shared_ptr<ITioContainer> container);
+
+		void OnCommand_PauseResume(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_Auth(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_SetPermission(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);

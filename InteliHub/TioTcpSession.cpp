@@ -896,16 +896,22 @@ namespace tio
 		return;
 	}
 
+	void TioTcpSession::InvalidateConnection(const error_code& err)
+	{
+		UnsubscribeAll();
+
+		server_.OnClientFailed(shared_from_this(), err);
+
+		socket_.close();
+
+		valid_ = false;
+	}
+
 	bool TioTcpSession::CheckError(const error_code& err)
 	{
 		if(!!err)
 		{
-			UnsubscribeAll();
-
-			server_.OnClientFailed(shared_from_this(), err);
-
-			valid_ = false;
-
+			InvalidateConnection(err);
 			return true;
 		}
 

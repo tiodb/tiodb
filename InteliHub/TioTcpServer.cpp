@@ -128,7 +128,8 @@ namespace tio
 		acceptor_(io_service, endpoint),
 		io_service_(io_service),
 		lastSessionID_(0),
-		lastQueryID_(0)
+		lastQueryID_(0),
+		serverPaused_(false)
 	{
 		LoadDispatchMap();
 		InitializeMetaContainers();
@@ -226,6 +227,12 @@ namespace tio
 		if(!!err)
 		{
 			throw err;
+		}
+
+		if(serverPaused_)
+		{
+			DoAccept();
+			return;
 		}
 
 		{
@@ -737,6 +744,9 @@ namespace tio
 		dispatchMap_["command"] = &TioTcpServer::OnCommand_CustomCommand;
 		
 		dispatchMap_["auth"] = &TioTcpServer::OnCommand_Auth;
+
+		dispatchMap_["pause"] = &TioTcpServer::OnCommand_PauseResume;
+		dispatchMap_["resume"] = &TioTcpServer::OnCommand_PauseResume;
 
 		dispatchMap_["set_permission"] = &TioTcpServer::OnCommand_SetPermission;
 
@@ -1651,6 +1661,43 @@ namespace tio
 		}
 
 		MakeAnswer(success, answer);
+	}
+
+	void TioTcpServer::OnCommand_PauseResume(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 0, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		//
+		// This command will pause the server and disconnect everyone, except
+		// the current connection. It's useful when you want to load some
+		// data to the server without having everyone receiving the events
+		//
+		if(cmd.GetCommand() == "pause")
+		{
+			for(auto i = sessions_.begin() ; i != sessions_.end() ; ++i)
+			{
+				//
+				// We will not drop the current connection
+				//
+				if((*i) == session)
+					continue;
+				
+				(*i)->InvalidateConnection(error_code());
+			}
+
+			serverPaused_ = true;
+		}
+		else if(cmd.GetCommand() == "resume")
+		{
+			serverPaused_ = false;
+		}
+
+		MakeAnswer(success, answer);
+
 	}
 
 	void TioTcpServer::OnCommand_Auth(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
