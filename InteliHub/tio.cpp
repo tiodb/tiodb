@@ -521,8 +521,9 @@ protected:
 
 		try
 		{
+			// adding "this" due to a bug in gcc...
 			cppHandle = container->Subscribe(
-				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
 				},
@@ -561,7 +562,7 @@ protected:
 		try
 		{
 			container->WaitAndPopNext(
-				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
 				});

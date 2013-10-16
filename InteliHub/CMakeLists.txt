@@ -43,6 +43,7 @@ IF(${WIN32})
 	ENDIF(NOT ${TIO_PYTHON_PLUGIN_SUPPORT})
 
 ELSE(${WIN32})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
     LINK_LIBRARIES (intelihub debug boost_system optimized boost_system)
     LINK_LIBRARIES (intelihub debug boost_program_options optimized boost_program_options)
     LINK_LIBRARIES (intelihub debug boost_filesystem optimized boost_filesystem)

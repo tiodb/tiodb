@@ -203,7 +203,7 @@ namespace tio
 
 			if(i == groups_.end())
 			{
-				i = groups_.emplace(std::move(pair<string, GroupInfo>(groupName, GroupInfo(containerManager, groupName)))).first;
+				i = groups_.insert(std::move(pair<string, GroupInfo>(groupName, GroupInfo(containerManager, groupName)))).first;
 			}
 
 			i->second.AddContainer(containerName, container);
@@ -527,7 +527,7 @@ namespace tio
 		NextPoppersMap nextPoppers_;
 		tio::recursive_mutex nextPoppersMutex_;
 
-		typedef void (__thiscall tio::TioTcpServer::* CommandCallbackFunction)(tio::Command &,std::ostream &,size_t *,std::shared_ptr<TioTcpSession>);
+		typedef void (tio::TioTcpServer::* CommandCallbackFunction)(tio::Command &,std::ostream &,size_t *,std::shared_ptr<TioTcpSession>);
 
 		typedef std::map<string, CommandCallbackFunction> CommandFunctionMap;
 		CommandFunctionMap dispatchMap_;

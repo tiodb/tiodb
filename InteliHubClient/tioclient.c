@@ -3,6 +3,14 @@
 
 #define MAX_ERROR_DESCRIPTION_SIZE 255
 
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
 char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
 
 const char* pr1_get_last_error_description()
@@ -782,7 +790,11 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 
 void thread_check(struct TIO_CONNECTION* connection)
 {
+#ifdef _WIN32
 	unsigned int current_thread_id = GetCurrentThreadId();
+#else
+	unsigned int current_thread_id = pthread_self();
+#endif
 
 	if(connection->thread_id == 0)
 	{
