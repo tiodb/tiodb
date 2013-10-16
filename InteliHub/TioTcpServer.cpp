@@ -511,26 +511,43 @@ namespace tio
 				break;
 
 				case TIO_COMMAND_QUERY:
-				{
-					int start, end;
+					{
+						int start, end;
 
-					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
+						shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
 					
-					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start))
-						start = 0;
+						if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start))
+							start = 0;
 
-					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
-						end = 0;
+						if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
+							end = 0;
 
-					shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
+						function<bool(const TioData& key)> filterFunction;
+						shared_ptr<boost::regex> e;
 
-					//
-					// TODO: hardcoded query id
-					//
-					session->SendBinaryResultSet(resultSet, 1);
-					
-				}
-				break;
+						string queryExpression;
+
+						Pr1MessageGetField(message, MESSAGE_FIELD_ID_QUERY_EXPRESSION, &queryExpression);
+
+						if(!queryExpression.empty())
+						{
+							e.reset(new boost::regex(queryExpression));
+
+							filterFunction = [e](const TioData& key) -> bool
+							{
+								if(key.GetDataType() != TioData::String)
+									return false;
+
+								return regex_match(key.AsSz(), *e);
+							};
+						}
+
+						shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
+						
+
+						session->SendBinaryResultSet(resultSet, CreateNewQueryId(), filterFunction);
+					}
+					break;
 
 				case TIO_COMMAND_GROUP_ADD:
 					{
@@ -751,6 +768,8 @@ namespace tio
 		dispatchMap_["set_permission"] = &TioTcpServer::OnCommand_SetPermission;
 
 		dispatchMap_["query"] = &TioTcpServer::OnCommand_Query;
+
+		dispatchMap_["queryex"] = &TioTcpServer::OnCommand_QueryEx;
 		
 		dispatchMap_["diff_start"] = &TioTcpServer::OnCommand_Diff_Start;
 		dispatchMap_["diff"] = &TioTcpServer::OnCommand_Diff;
@@ -811,6 +830,66 @@ namespace tio
 		return header.str();
 	}
 
+
+	void TioTcpServer::OnCommand_QueryEx(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		shared_ptr<ITioContainer> container;
+		unsigned int handle;
+
+		try
+		{
+			handle = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+			container = session->GetRegisteredContainer(handle);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid handle");
+			return;
+		}
+
+		string queryRegex = cmd.GetParameters()[1];
+
+		const boost::regex e(queryRegex);
+
+		shared_ptr<ITioResultSet> resultSet = container->Query(0, 0, TioData());
+
+		unsigned queryId = CreateNewQueryId();
+
+		session->SendResultSetStart(queryId);
+
+		for(;;)
+		{
+			TioData key, value, metadata;
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+
+			if(!b)
+				break;
+
+			b = resultSet->MoveNext();
+
+			if(key.GetDataType() != TioData::String)
+				continue;
+
+			if(regex_match(key.AsSz(), e))
+			{
+				session->SendResultSetItem(queryId, key, value, metadata);
+			}
+
+			if(!b) break;
+		}
+
+		session->SendResultSetEnd(queryId);
+
+		return;
+
+	}
 
 	void TioTcpServer::OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
@@ -1058,7 +1137,13 @@ namespace tio
 
 	void TioTcpServer::SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet)
 	{
-		session->SendResultSet(resultSet, ++lastQueryID_);
+		session->SendResultSet(resultSet, CreateNewQueryId());
+	}
+
+
+	unsigned TioTcpServer::CreateNewQueryId()
+	{
+		return ++lastQueryID_;
 	}
 
 	//

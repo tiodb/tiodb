@@ -1478,6 +1478,17 @@ clean_up_and_return:
 	return result;
 }
 
+unsigned long get_n_readable_bytes(SOCKET sock) 
+{
+	unsigned long n = -1;
+	if (ioctlsocket(sock, FIONREAD, &n) < 0) 
+	{
+		/* look in WSAGetLastError() for the error code */
+		return 0;
+	}
+	return n;
+}
+
 /*
 	tio_dispatch_pending_events
 	returns: number of still pending events
@@ -1499,14 +1510,9 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	tiodata_init(&value);
 	tiodata_init(&metadata);
 
-	if(event_list_is_empty(connection))
+	if(event_list_is_empty(connection) && get_n_readable_bytes(connection->socket))
 	{
-		//
-		// This will make we receive all pending events from the server.
-		// It will also create a roundtrip, but only if user calls dispacth_pending
-		// with no pending events
-		//
-		tio_ping(connection, "r");
+		tio_receive_pending_events(connection, 1);
 	}
 
 	for(a = 0 ; a < max_events ; a++)
@@ -1556,7 +1562,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			}
 
 			if(event_callback)
-				event_callback(cookie, container->group_name, container->name, handle, event_code, &key, &value, &metadata);
+				event_callback(TIO_SUCCESS, (unsigned int)container, cookie, event_code, container->group_name, container->name, &key, &value, &metadata);
 		}
 
 		pr1_message_delete(event_message);
@@ -1773,7 +1779,9 @@ clean_up_and_return:
 }
 
 
-int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie)
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, 
+						const char* regex,
+						query_callback_t query_callback, void* cookie)
 {
 	int result;
 	struct PR1_MESSAGE* request = pr1_message_new();
@@ -1788,6 +1796,9 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, container->handle);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START_RECORD, start);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
+
+	if(regex)
+		pr1_message_add_field_string(request, MESSAGE_FIELD_ID_QUERY_EXPRESSION, regex);
 
 
 	result = pr1_message_send_and_delete(container->connection->socket, request);
@@ -1839,7 +1850,7 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 		if(key.data_type == TIO_DATA_TYPE_NONE)
 			break;
 
-		query_callback(cookie, query_id, &key, &value, &metadata);
+		query_callback(TIO_SUCCESS, container->handle, cookie, query_id, container->name, &key, &value, &metadata);
 	}
 
 

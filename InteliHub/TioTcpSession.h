@@ -420,8 +420,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendPendingSnapshots();
 
-		void SendResultSetItem(unsigned int queryID, 
-			const TioData& key, const TioData& value, const TioData& metadata);
+		
 				
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
@@ -430,6 +429,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 
 	public:
+
+		void SendResultSetItem(unsigned int queryID, 
+			const TioData& key, const TioData& value, const TioData& metadata);
 
 		void SendBinaryErrorAnswer(int errorCode, const string& description)
 		{
@@ -616,6 +618,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 
+		void SendResultSetStart(unsigned int queryID);
+		void SendResultSetEnd(unsigned int queryID);
+
 		void OnReadCommand(const error_code& err, size_t read);
 		void OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read);
 		void OnReadMessage(const error_code& err);
@@ -655,12 +660,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			commandRunning_ = false;
 		}
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
-		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
+		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction);
 		void BinaryWaitAndPopNext(unsigned int handle);
 		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
 		bool commandRunning_;
 
 
 		void InvalidateConnection(const error_code& err);
+		
 	};		
 }

@@ -215,6 +215,7 @@ namespace InteliHubClient
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void query_callback_t(
+            int result,
             IntPtr cookie, 
             uint queryid, 
             ref TIO_DATA key,
@@ -234,6 +235,7 @@ namespace InteliHubClient
         // typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void event_callback_t(
+            int result,
             IntPtr cookie,
             IntPtr container,
             uint event_code,

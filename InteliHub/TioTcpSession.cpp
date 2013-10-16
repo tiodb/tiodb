@@ -708,12 +708,24 @@ namespace tio
 		}
 	}
 
-	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	void TioTcpSession::SendResultSetStart(unsigned int queryID)
 	{
 		stringstream answer;
 		answer << "answer ok query " << queryID << "\r\n";
 
 		SendAnswer(answer);
+	}
+
+	void TioTcpSession::SendResultSetEnd(unsigned int queryID)
+	{
+		stringstream answer;
+		answer << "query " << queryID << " end\r\n";
+		SendAnswer(answer);
+	}
+
+	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	{
+		SendResultSetStart(queryID);
 
 		for(;;)
 		{
@@ -723,9 +735,7 @@ namespace tio
 
 			if(!b)
 			{
-				stringstream answer;
-				answer << "query " << queryID << " end\r\n";
-				SendAnswer(answer);
+				SendResultSetEnd(queryID);
 				break;
 			}
 
@@ -735,7 +745,8 @@ namespace tio
 		}
 	}
 
-	void TioTcpSession::SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	void TioTcpSession::SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, 
+		function<bool(const TioData& key)> filterFunction)
 	{
 		shared_ptr<PR1_MESSAGE> answer = Pr1CreateAnswerMessage();
 		
@@ -746,27 +757,36 @@ namespace tio
 		for(;;)
 		{
 			TioData key, value, metadata;
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+			
+			if(b)
+				break;
+
+			if(filterFunction && !filterFunction(key))
+				continue;
+
 			shared_ptr<PR1_MESSAGE> item = Pr1CreateMessage();
 
 			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY_ITEM);
 			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
-
-			bool b = resultSet->GetRecord(&key, &value, &metadata);
-
-			//
-			// is no more records, we'll just send an empty publication
-			//
-			if(b)
-				Pr1MessageAddFields(item, &key, &value, &metadata);
-
+			Pr1MessageAddFields(item, &key, &value, &metadata);
 			SendBinaryMessage(item);
 
-			if(!b)
-				break;
-				
+			
 			resultSet->MoveNext();
 		}
+
+		//
+		// no more records, we'll just send an empty publication
+		//
+		shared_ptr<PR1_MESSAGE> queryEnd = Pr1CreateMessage();
+
+		Pr1MessageAddField(queryEnd.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY_ITEM);
+		Pr1MessageAddField(queryEnd.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
+		SendBinaryMessage(queryEnd);
 	}
+
 
 	void TioTcpSession::SendResultSetItem(unsigned int queryID, 
 		const TioData& key, const TioData& value, const TioData& metadata)
@@ -1364,6 +1384,9 @@ namespace tio
 
 		SendBinaryMessage(message);
 	}
+
+	
+
 
 
 	

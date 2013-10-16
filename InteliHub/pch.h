@@ -82,6 +82,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include <boost/typeof/std/utility.hpp>
 #include <boost/typeof/std/vector.hpp>
 
+#include <boost/regex.hpp>
+
 #if TIO_PYTHON_PLUGIN_SUPPORT
 #include <boost/python.hpp>
 #endif

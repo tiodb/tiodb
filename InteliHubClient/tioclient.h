@@ -71,7 +71,6 @@ extern "C" {
 #define TIO_COMMAND_GROUP_ADD 			0x33
 #define TIO_COMMAND_GROUP_SUBSCRIBE		0x34
 
-
 #define TIO_FAILED(x) (x < 0)
 
 
@@ -89,8 +88,11 @@ struct TIO_DATA
 };
 
 
-typedef void (*event_callback_t)(void* /*cookie*/, const char* /*group_name*/, const char* /*container_name*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
-typedef void (*query_callback_t)(void* /*cookie*/, unsigned int /*queryid*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+typedef void (*event_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/,  unsigned int /*event_code*/, 
+								 const char* /*group_name*/, const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+
+typedef void (*query_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
+								 const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
 struct TIO_CONNECTION;
 struct TIO_CONTAINER;
@@ -158,7 +160,7 @@ int tio_container_clear(struct TIO_CONTAINER* container);
 int tio_container_delete(struct TIO_CONTAINER* container, const struct TIO_DATA* key);
 int tio_container_get(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata);
 int tio_container_get_count(struct TIO_CONTAINER* container, int* count);
-int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie);
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, const char* regex, query_callback_t query_callback, void* cookie);
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie);
 int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie);
