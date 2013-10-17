@@ -291,7 +291,7 @@ namespace tio
 
 		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)
 		{
-			return tio_container_query((TIO_CONTAINER*)handle, start, end, query_callback, cookie);
+			return tio_container_query((TIO_CONTAINER*)handle, start, end, nullptr, query_callback, cookie);
 		}
 
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)

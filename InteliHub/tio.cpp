@@ -477,7 +477,7 @@ protected:
 
 			while(resultset->GetRecord(&key, &value, &metadata))
 			{
-				query_callback(0, cookie, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+				query_callback(0, (unsigned int)handle, cookie, 0, container->GetName().c_str(), cpp2c(key), cpp2c(value), cpp2c(metadata));
 				resultset->MoveNext();
 			}
 		}
@@ -521,8 +521,9 @@ protected:
 
 		try
 		{
+			// adding "this" due to a bug in gcc...
 			cppHandle = container->Subscribe(
-				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
 				},
@@ -561,7 +562,7 @@ protected:
 		try
 		{
 			container->WaitAndPopNext(
-				[cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
 				});
