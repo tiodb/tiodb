@@ -87,7 +87,8 @@ struct TIO_CONTAINER
 struct TIO_CONNECTION
 {
 	SOCKET socket;
-	struct sockaddr_in serv_addr;
+	char* host;
+	unsigned short port;
 
 	struct EVENT_INFO_NODE* event_list_queue_end;
 	int pending_event_count;
@@ -106,6 +107,19 @@ struct TIO_CONNECTION
 	int pending_answer_count;
 };
 
+struct X1_FIELD
+{
+	char data_type;
+	char* value;
+};
+
+
+char* to_lower(char* p);
+
+char* duplicate_string(const char* src);
+
+struct X1_FIELD* x1_decode(const char* buffer, unsigned int size);
+void x1_free(struct X1_FIELD* fields);
 
 unsigned int stream_buffer_space_used(struct STREAM_BUFFER* stream_buffer);
 unsigned int stream_buffer_space_left(struct STREAM_BUFFER* stream_buffer);

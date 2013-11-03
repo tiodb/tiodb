@@ -13,6 +13,120 @@
 
 char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
 
+
+char* to_lower(char* p)
+{
+	for(; *p; ++p)
+	{
+		*p = (char)tolower(*p);
+	}
+	return p;
+}
+
+char* duplicate_string(const char* src)
+{
+	char* buf;
+
+	if(!src)
+		return NULL;
+
+	buf = (char*)malloc(strlen(src) + 1);
+
+	strcpy(buf, src);
+	return buf;
+}
+
+void x1_free(struct X1_FIELD* fields)
+{
+	struct X1_FIELD* field;
+
+	if(!fields)
+		return;
+
+	for(field = fields; field->value != NULL; field++)
+		free(field->value);
+
+	free(fields);
+}
+
+
+struct X1_FIELD* x1_decode(const char* buffer, unsigned int size)
+{
+	struct X1_FIELD* ret = NULL;
+	struct X1_FIELD* field = NULL;
+	unsigned offset;
+	unsigned a;
+	unsigned ret_buffer_size;
+	char* bufferCopy;
+	unsigned fieldCount;
+	// header + fields + space before data
+	unsigned fieldSpecStartOffset = 7;
+	char* currentData;
+	unsigned fieldSpecOffset;
+	unsigned fieldDataSize;
+
+	if(memcmp(buffer, "X1", 2) != 0)
+		return NULL;
+
+	// copy the buffer so we can add the \0s that will make our lives easier
+	bufferCopy = (char*)malloc(size);
+	memcpy(bufferCopy, buffer, size);
+
+
+	offset = 2 + 4;
+	if(offset > size)
+		goto clean_up_and_return;
+
+	bufferCopy[offset] = '\0';
+
+	// + 2: skip "X1"
+	//
+	// going to use sscanf instead of atoi because atoi doesn't support hex
+	//	
+	sscanf(bufferCopy + 2, "%X", &fieldCount);
+
+	offset = fieldSpecStartOffset + (5 * fieldCount) + 1;
+	if(offset > size)
+		goto clean_up_and_return;
+
+	currentData = &bufferCopy[offset];
+
+	ret_buffer_size = (fieldCount + 1) * sizeof(struct X1_FIELD);
+	ret = (struct X1_FIELD*) malloc(ret_buffer_size);
+	memset(ret, 0, ret_buffer_size);
+
+	for(a = 0; a < fieldCount; a++)
+	{
+		fieldSpecOffset = fieldSpecStartOffset + (5 * a);
+
+		if(fieldSpecOffset + 4 > size)
+			goto clean_up_and_return;
+
+		ret[a].data_type = bufferCopy[fieldSpecOffset + 4];
+
+		bufferCopy[fieldSpecOffset + 4] = '\0';
+
+		sscanf(&bufferCopy[fieldSpecOffset], "%X", &fieldDataSize);
+
+		currentData[fieldDataSize] = '\0';
+
+		ret[a].value = (char*)malloc(strlen(currentData) + 1);
+		strcpy(ret[a].value, currentData);
+
+		currentData += fieldDataSize + 1;
+	}
+
+	return ret;
+
+clean_up_and_return:
+	if(ret)
+	for(field = ret; field->value != NULL; field++)
+		free(field->value);
+
+	free(ret);
+	return NULL;
+}
+
 const char* pr1_get_last_error_description()
 {
 	return g_last_error_description;
@@ -876,7 +990,8 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 
 	*connection = (struct TIO_CONNECTION*)malloc(sizeof(struct TIO_CONNECTION));
 	(*connection)->socket = sockfd;
-	(*connection)->serv_addr = serv_addr;
+	(*connection)->host = duplicate_string(host);
+	(*connection)->port = port;
 	(*connection)->event_list_queue_end = NULL;
 	(*connection)->containers_count = 64; // initial buffer size
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
@@ -1092,6 +1207,7 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 		return;
 
 	closesocket(connection->socket);
+
 	connection->socket = 0;
 
 	for(pending_event = events_list_pop(connection) ; pending_event != NULL ; pending_event = events_list_pop(connection))
@@ -1100,6 +1216,7 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 	}
 
 	free(connection->containers);
+	free(connection->host);
 }
 
 const char* tio_get_last_error_description()

@@ -512,7 +512,7 @@ namespace tio
 
 				case TIO_COMMAND_QUERY:
 					{
-						int start, end;
+						int start, end, maxRecords;
 
 						shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
 					
@@ -521,6 +521,8 @@ namespace tio
 
 						if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
 							end = 0;
+
+						maxRecords = end;
 
 						function<bool(const TioData& key)> filterFunction;
 						shared_ptr<boost::regex> e;
@@ -540,12 +542,13 @@ namespace tio
 
 								return regex_match(key.AsSz(), *e);
 							};
+
+							end = start = 0;
 						}
 
 						shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
 						
-
-						session->SendBinaryResultSet(resultSet, CreateNewQueryId(), filterFunction);
+						session->SendBinaryResultSet(resultSet, CreateNewQueryId(), filterFunction, maxRecords);
 					}
 					break;
 
@@ -833,7 +836,7 @@ namespace tio
 
 	void TioTcpServer::OnCommand_QueryEx(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		if(!CheckParameterCount(cmd, 2, exact))
+		if(!CheckParameterCount(cmd, 2, at_least))
 		{
 			MakeAnswer(error, answer, "invalid parameter count");
 			return;
@@ -853,6 +856,21 @@ namespace tio
 			return;
 		}
 
+		unsigned maxRecords = 0xFFFFFFFF;
+
+		if(cmd.GetParameters().size() > 2)
+		{
+			try
+			{
+				maxRecords = lexical_cast<unsigned>(cmd.GetParameters()[2]);
+			}
+			catch(std::exception&)
+			{
+				MakeAnswer(error, answer, "invalid record limit parameter");
+				return;
+			}
+		}
+
 		string queryRegex = cmd.GetParameters()[1];
 
 		const boost::regex e(queryRegex);
@@ -863,7 +881,7 @@ namespace tio
 
 		session->SendResultSetStart(queryId);
 
-		for(;;)
+		for(unsigned a = 0 ; a < maxRecords ; )
 		{
 			TioData key, value, metadata;
 
@@ -880,6 +898,7 @@ namespace tio
 			if(regex_match(key.AsSz(), e))
 			{
 				session->SendResultSetItem(queryId, key, value, metadata);
+				a++;
 			}
 
 			if(!b) break;

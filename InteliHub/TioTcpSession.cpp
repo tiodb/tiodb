@@ -21,7 +21,6 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 namespace tio
 {
-	
 	using std::cout;
 	using std::cerr;
 	using std::endl;
@@ -746,22 +745,27 @@ namespace tio
 	}
 
 	void TioTcpSession::SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, 
-		function<bool(const TioData& key)> filterFunction)
+		function<bool(const TioData& key)> filterFunction, unsigned maxRecords)
 	{
 		shared_ptr<PR1_MESSAGE> answer = Pr1CreateAnswerMessage();
 		
 		pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
 
 		SendBinaryMessage(answer);
+
+		if(maxRecords == 0)
+			maxRecords = 0xFFFFFFFF;
 		
-		for(;;)
+		for(unsigned a = 0; a < maxRecords; )
 		{
 			TioData key, value, metadata;
 
 			bool b = resultSet->GetRecord(&key, &value, &metadata);
-			
-			if(b)
+
+			if(!b)
 				break;
+
+			resultSet->MoveNext();
 
 			if(filterFunction && !filterFunction(key))
 				continue;
@@ -773,8 +777,9 @@ namespace tio
 			Pr1MessageAddFields(item, &key, &value, &metadata);
 			SendBinaryMessage(item);
 
+			++a;
+		
 			
-			resultSet->MoveNext();
 		}
 
 		//
