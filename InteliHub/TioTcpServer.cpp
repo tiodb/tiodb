@@ -679,17 +679,16 @@ namespace tio
 
 	void TioTcpServer::OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		/*
-		if(cmd.GetCommand() == "stop")
+		if(cmd.GetCommand() == "stop_the_car")
 		{
 			io_service_.stop();
 			return;
 		}
-		*/
 		CommandFunctionMap::iterator i = dispatchMap_.find(cmd.GetCommand());
 
 		if(i != dispatchMap_.end())
 		{
+
 			CommandCallbackFunction& f = i->second;
 
 			try

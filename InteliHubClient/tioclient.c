@@ -11,6 +11,8 @@
 #define FALSE 0
 #endif
 
+int g_initialized = FALSE;
+
 char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
 
 
@@ -932,6 +934,9 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	struct hostent *server;
 	int result;
 	char buffer[sizeof("going binary") -1];
+
+	if(!g_initialized)
+		tio_initialize();
 
 	*connection = NULL;
 
@@ -2142,6 +2147,8 @@ void tio_initialize()
 	WSADATA wsadata;
 	WSAStartup(MAKEWORD(2,2), &wsadata);
 #endif
+
+	g_initialized = TRUE;
 }
 
 
