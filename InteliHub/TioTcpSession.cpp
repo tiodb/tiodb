@@ -1389,13 +1389,6 @@ namespace tio
 
 		SendBinaryMessage(message);
 	}
-
-	
-
-
-
-	
-
 } // namespace tio
 
 

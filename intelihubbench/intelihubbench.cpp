@@ -89,8 +89,8 @@ int main()
 	ret = tio_connect("localhost", 2605, &cn);
 	if(TIO_FAILED(ret)) return ret;
 
-	unsigned VOLATILE_TEST_COUNT = 50 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 1 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 500 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 10 * 1000;
 
 	{
 		TIO_CONTAINER* container;

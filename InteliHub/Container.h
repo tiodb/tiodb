@@ -228,6 +228,18 @@ namespace tio
 			Free();
 		}
 
+		/*TioData(TioData&& data)
+		{
+			type_ = data.type_;
+
+			if(data.type_ == None)
+				return;
+			
+			data.type_ = None;
+
+			double_ = data.double_;
+		}*/
+
 		TioData(const TioData& data)
 		{
 			type_ = None;
@@ -1026,6 +1038,12 @@ namespace tio
 			: value(value), metadata(metadata)
 		{
 			
+		}
+
+		ValueAndMetadata(ValueAndMetadata&& data) 
+			: value(std::move(data.value)), metadata(std::move(data.metadata))
+		{
+
 		}
 
 		TioData value;
