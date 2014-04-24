@@ -138,7 +138,7 @@ namespace tio
 		{
 			string finalFilePath = logFilePath;
 
-#ifdef _WIN32
+#if 0
 			SYSTEMTIME now;
 
 			GetLocalTime(&now);
