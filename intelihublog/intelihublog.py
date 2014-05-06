@@ -181,62 +181,6 @@ def must_ignore_this_container(name):
   return name.startswith('__')
 
 
-class InstrumentToDbSink(object):
-  def __init__(self, connection_string):
-    self.instruments = defaultdict(dict)
-    self.handles = {}
-    self.cn = Dispatch('ADODB.Connection')
-    print 'connecting to ', connection_string
-    self.cn.Open(connection_string)
-
-    #self.query = "INSERT INTO INTELIMARKET_PRICES (DS_ATIVO, DS_MERCADO, DT_COTACAO, VL_ATUAL, VL_ABERTURA, VL_FECHAMENTO, VL_MINIMO, VL_MEDIO, VL_MAXIMO, DT_ATUALIZACAO) " +
-    #  "VALUES ('$(Symbol)s', 'VIS', TO_DATE('2014-03-24 19:33:21', 'YYYY-MM-DD HH24:MI:SS'), '%(Price)s', '19.4', '19.5', '19.2', '19.3', '19.7', TO_DATE('2014-03-25 15:33:51', 'YYYY-MM-DD HH24:MI:SS'))"
-
-
-  def on_log_entry(self, log_entry):
-    if log_entry.command == 'create':
-      items = log_entry.key.split('/')
-      if items[-1] == 'properties':
-        self.handles[log_entry.handle] = items[-2]
-
-    elif log_entry.command == 'set':
-      symbol = self.handles.get(log_entry.handle)
-
-      if symbol is None:
-        return
-      
-      self.instruments[symbol][log_entry.key] = log_entry.value
-      self.__send_symbol_to_db(symbol)
-
-  def __send_symbol_to_db(self, symbol):
-    properties = self.instruments[symbol]
-
-    required_keys = ('Price', 'LastTradeDateTime', 'OpeningPrice', 'AveragePrice', 'MaxPrice')
-
-    if not all([properties.has_key(x) for x in required_keys]):
-      return
-
-    #self.query = "INSERT INTO INTELIMARKET_PRICES (DS_ATIVO, DS_MERCADO, DT_COTACAO, VL_ATUAL, VL_ABERTURA, VL_FECHAMENTO, VL_MINIMO, VL_MEDIO, VL_MAXIMO, DT_ATUALIZACAO) " +
-    #  "VALUES ('$(Symbol)s', 'VIS', TO_DATE('2014-03-24 19:33:21', 'YYYY-MM-DD HH24:MI:SS'), '%(Price)s', '19.4', '19.5', '19.2', '19.3', '19.7', TO_DATE('2014-03-25 15:33:51', 'YYYY-MM-DD HH24:MI:SS'))"
-
-    query = '''INSERT INTO INTELIMARKET_PRICES (DS_ATIVO, DS_MERCADO, DT_COTACAO, DT_ATUALIZACAO, VL_ATUAL, VL_ABERTURA, VL_MINIMO, VL_MEDIO, VL_MAXIMO) 
-      VALUES
-      ('%(Symbol)s',
-      'VIS',
-      TO_DATE('%(LastTradeDateTime)s', 'YYYYMMDDHH24MISS'),
-      TO_DATE('%(LastTradeDateTime)s', 'YYYYMMDDHH24MISS'),
-      '%(Price)s',
-      '%(OpeningPrice)s',
-      '%(MinPrice)s',
-      '%(AveragePrice)s',
-      '%(MaxPrice)s')
-      '''
-
-    sql = query % properties
-
-    print 'price for %(Symbol)s, %(LastTradeDateTime)s, %(Price)s' % properties
-
-    self.cn.Execute(sql)
 
 class NullSink(object):
   def on_log_entry(self, log_entry):
