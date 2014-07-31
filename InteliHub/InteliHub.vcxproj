@@ -228,9 +228,6 @@
     <ClCompile Include="TioTcpServer.cpp" />
     <ClCompile Include="TioTcpSession.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="intelihub.rc" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
