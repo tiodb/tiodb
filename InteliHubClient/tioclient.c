@@ -1008,6 +1008,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->group_event_cookie = NULL;
 	(*connection)->wait_for_answer = TRUE;
 	(*connection)->pending_event_count = 0;
+	(*connection)->pending_answer_count = 0;
 
 	return TIO_SUCCESS;
 }
