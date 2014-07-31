@@ -403,15 +403,15 @@ def main():
 
   #multisink.sinks.append(InteliHubLoadToMemorySink())
 
-  #hub_sink = InteliHubReplaySink(params.hub)
-  #multisink.sinks.append(hub_sink)
+  hub_sink = InteliHubReplaySink(params.hub)
+  multisink.sinks.append(hub_sink)
   
   #multisink.sinks.append(NullSink())
 
-  multisink.sinks.append(InstrumentToDbSink('Provider=OraOLEDB.Oracle.1;Password=123mudar;Persist Security Info=True;User ID=system;Data Source=localhost'))
+  #multisink.sinks.append(InstrumentToDbSink('Provider=OraOLEDB.Oracle.1;Password=123mudar;Persist Security Info=True;User ID=system;Data Source=localhost'))
   #multisink.sinks.append(InstrumentToDbSink('Provider=OraOLEDB.Oracle.1;Password=int3l1m4rk3t;Persist Security Info=True;User ID=intelimarket;Data Source=10.8.8.36'))
 
-  multisink.sinks.append(StatsLogSink(params.speed))
+  #multisink.sinks.append(StatsLogSink(params.speed))
 
   parser = InteliHubLogParser(multisink)
 
