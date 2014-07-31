@@ -312,7 +312,7 @@ namespace tio
 			size_t needSize = GetSerializedSize();
 
 			if(needSize > bufferSize)
-				throw std::invalid_argument("buffer to small");
+				throw std::invalid_argument("buffer too small");
 
 			unsigned int* data = (unsigned int*)buffer;
 
