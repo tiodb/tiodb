@@ -607,7 +607,7 @@ int pr1_message_send(SOCKET socket, struct PR1_MESSAGE* pr1_message)
 
 	pr1_message_get_buffer(pr1_message, &buffer, &size);
 
-#if 0
+#if _DEBUG
 	if(!pr1_message->field_array)
 		pr1_message_parse(pr1_message);
 	dump_pr1_message("SEND", pr1_message);
@@ -669,7 +669,7 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 
 	pr1_message_parse(*pr1_message);
 
-#if 0
+#if _DEBUG
 	if(!(*pr1_message)->field_array)
 		pr1_message_parse(*pr1_message);
 

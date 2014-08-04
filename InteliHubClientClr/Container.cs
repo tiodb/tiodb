@@ -49,9 +49,12 @@ namespace InteliHubClient
                 _nativeContainerHandle,
                 0,
                 0,
+                null,
                 delegate(int result,
+                IntPtr handle,
                 IntPtr cookie,
                 uint queryid,
+                string containerName,
                 ref NativeImports.TIO_DATA key,
                 ref NativeImports.TIO_DATA value,
                 ref NativeImports.TIO_DATA metadata)

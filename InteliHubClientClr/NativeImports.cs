@@ -213,20 +213,33 @@ namespace InteliHubClient
             IntPtr container,
             out int count);
 
+
+        
+        // typedef void (*query_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
+		// const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void query_callback_t(
             int result,
+            IntPtr handle, 
             IntPtr cookie, 
-            uint queryid, 
+            uint queryid,
+            [MarshalAs(UnmanagedType.LPStr)] string containerName,
             ref TIO_DATA key,
             ref TIO_DATA value,
             ref TIO_DATA metadata);
 
+
+        /*
+         * int tio_container_query(struct TIO_CONTAINER* container, int start, int end, 
+						const char* regex,
+						query_callback_t query_callback, void* cookie)
+         */ 
         [DllImport("intelihubclientdll.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int tio_container_query(
             IntPtr container,
             int start, 
-            int end, 
+            int end,
+            [MarshalAs(UnmanagedType.LPStr)] string regex,
             query_callback_t query_callback, 
             IntPtr cookie);
 

@@ -290,7 +290,26 @@ public:
 		}
 
 		size_t realIndex;
-		i =  GetOffset(startIndex, &realIndex);
+		try
+		{
+			i = GetOffset(startIndex, &realIndex);
+		}
+		catch(std::invalid_argument&)
+		{
+			//
+			// if it happens, the index is out of bonds. It's not really an error, we
+			// just don't have records to send
+			//
+
+			//
+			// if the index is before beginning, we're going to send
+			// from beginning. If it's after the end, we have nothing to send
+			//
+			if(startIndex > 0)
+				i = data_.end();
+			else
+				i = data_.begin();
+		}
 
 		cookie = dispatcher_.Subscribe(sink);
 
