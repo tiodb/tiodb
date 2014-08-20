@@ -92,6 +92,7 @@ struct TIO_CONNECTION
 
 	struct EVENT_INFO_NODE* event_list_queue_end;
 	int pending_event_count;
+	int max_pending_event_count;
 
 	struct TIO_CONTAINER** containers;
 	int containers_count;
@@ -105,6 +106,8 @@ struct TIO_CONNECTION
 
 	int wait_for_answer;
 	int pending_answer_count;
+
+	int debug_flags;
 };
 
 struct X1_FIELD

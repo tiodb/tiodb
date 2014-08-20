@@ -50,7 +50,7 @@ class InteliHubTestCase(unittest.TestCase):
         self.hub = intelihubclient.connect('localhost')
 
     def get_me_a_random_container_name(self):
-        return uuid.uuid4().hex
+        return 'TEST_' + uuid.uuid4().hex
 
 
 class PerfomanceTests(InteliHubTestCase):

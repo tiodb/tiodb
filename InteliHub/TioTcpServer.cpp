@@ -87,9 +87,8 @@ namespace tio
 			if(i == sessions_.end())
 				return; // something is VERY wrong...
 
-	#ifdef _DEBUG
 			std::cout << "disconnect" << std::endl;
-	#endif
+
 			sessions_.erase(i);
 		}
 
@@ -138,7 +137,6 @@ namespace tio
 		{
 			string finalFilePath = logFilePath;
 
-#if 0
 			SYSTEMTIME now;
 
 			GetLocalTime(&now);
@@ -162,7 +160,7 @@ namespace tio
 				finalFilePath.insert(finalFilePath.rend() - ri - 1, dateString.str());
 			else
 				finalFilePath += dateString.str();
-#endif
+
 			logger_.Start(finalFilePath);
 		}
 	}
@@ -600,8 +598,13 @@ namespace tio
 
 						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start);
 
-						groupManager_.BinarySubscribeGroup(groupName, session, start);
+						b = groupManager_.BinarySubscribeGroup(groupName, session, start);
 
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_NO_SUCH_OBJECT, "group not found");
+							break;
+						}
 					}
 					break;
 

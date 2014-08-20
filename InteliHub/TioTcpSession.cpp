@@ -157,9 +157,7 @@ namespace tio
 
 	void TioTcpSession::OnAccept()
 	{
-		#ifdef _DEBUG
 		std::cout << "<< new connection" << std::endl;
-		#endif
 
 		socket_.set_option(tcp::no_delay(true));
 		ReadCommand();
@@ -932,6 +930,11 @@ namespace tio
 		valid_ = false;
 	}
 
+	bool TioTcpSession::Valid()
+	{
+		return valid_;
+	}
+
 	bool TioTcpSession::CheckError(const error_code& err)
 	{
 		if(!!err)
@@ -1186,7 +1189,7 @@ namespace tio
 		try
 		{
 			//
-			// TODO: this isn't really right, I`m just doing this to send the
+			// TODO: this isn't really right, I'm just doing this to send the
 			// answer before the events. Is the the subscription fails, we're screwed,
 			// since we're sending a success answer before doing the subscription
 			//
@@ -1215,6 +1218,11 @@ namespace tio
 	{
 		if(pendingSnapshots_.empty())
 			return;
+
+		//
+		// This feature is disabled and we should never get here
+		//
+		BOOST_ASSERT(false);
 
 		//
 		// TODO: hard coded counter

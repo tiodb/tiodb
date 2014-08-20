@@ -73,6 +73,8 @@ extern "C" {
 
 #define TIO_FAILED(x) (x < 0)
 
+#define TIO_DEBUG_FLAG_DUMP_MESSAGES_TO_STDOUT 0x01
+
 
 #ifndef SOCKET
 #define SOCKET int
@@ -128,6 +130,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata);
 
 // MUST call it before using tio
 void tio_initialize();
+void tio_set_debug_flags(int flags);
 
 int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection);
 void tio_disconnect(struct TIO_CONNECTION* connection);

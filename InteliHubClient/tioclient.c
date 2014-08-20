@@ -12,9 +12,9 @@
 #endif
 
 int g_initialized = FALSE;
+volatile int g_dump_protocol_messages = FALSE;
 
 char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
-
 
 char* to_lower(char* p)
 {
@@ -320,19 +320,6 @@ void stream_buffer_delete(struct STREAM_BUFFER* message_buffer)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 struct PR1_MESSAGE* pr1_message_new()
 {
 	struct PR1_MESSAGE_HEADER* header;
@@ -523,6 +510,9 @@ void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message)
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
 	struct PR1_MESSAGE_FIELD_HEADER* field_header;
 
+	if(!g_dump_protocol_messages)
+		return;
+
 	pr1_message_parse(pr1_message);
 
 
@@ -607,11 +597,7 @@ int pr1_message_send(SOCKET socket, struct PR1_MESSAGE* pr1_message)
 
 	pr1_message_get_buffer(pr1_message, &buffer, &size);
 
-#if _DEBUG
-	if(!pr1_message->field_array)
-		pr1_message_parse(pr1_message);
 	dump_pr1_message("SEND", pr1_message);
-#endif
 
 	return socket_send(socket, buffer, size);
 }
@@ -669,12 +655,7 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 
 	pr1_message_parse(*pr1_message);
 
-#if _DEBUG
-	if(!(*pr1_message)->field_array)
-		pr1_message_parse(*pr1_message);
-
 	dump_pr1_message("RCEV", *pr1_message);
-#endif
 
 	return result;
 }
@@ -931,7 +912,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 {
 	SOCKET sockfd;
 	struct sockaddr_in serv_addr;
-	struct hostent *server;
+	struct hostent *server = NULL;
 	int result;
 	char buffer[sizeof("going binary") -1];
 
@@ -1008,7 +989,9 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->group_event_cookie = NULL;
 	(*connection)->wait_for_answer = TRUE;
 	(*connection)->pending_event_count = 0;
+	(*connection)->max_pending_event_count = 0;
 	(*connection)->pending_answer_count = 0;
+	(*connection)->debug_flags = 0;
 
 	return TIO_SUCCESS;
 }
@@ -1152,6 +1135,8 @@ void events_list_push(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* mes
 	}
 
 	connection->event_list_queue_end = node;
+
+	connection->pending_event_count++;
 }
 
 int event_list_is_empty(struct TIO_CONNECTION* connection)
@@ -1179,6 +1164,8 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 	pr1_message = first->message;
 
 	free(first);
+
+	connection->pending_event_count--;
 
 	return pr1_message;
 }
@@ -1273,7 +1260,9 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* event_message)
 {
 	events_list_push(connection, event_message);
-	connection->pending_event_count++;
+	
+	if(connection->pending_event_count >= connection->max_pending_event_count)
+		tio_dispatch_pending_events(connection, 0xFFFFFFFF);
 }
 
 int register_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* message, const char* name, const char* group_name, struct TIO_CONTAINER** container)
@@ -1572,6 +1561,11 @@ int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* 
 	return tio_create_or_open(connection, TIO_COMMAND_CREATE, name, type, container);
 }
 
+void tio_set_debug_flags(int flags)
+{
+	g_dump_protocol_messages = flags;
+}
+
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container)
 {
 	return tio_create_or_open(connection, TIO_COMMAND_OPEN, name, type, container);
@@ -1645,10 +1639,10 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	tiodata_init(&value);
 	tiodata_init(&metadata);
 
-	if(event_list_is_empty(connection) && get_n_readable_bytes(connection->socket))
+	/*if(event_list_is_empty(connection) && get_n_readable_bytes(connection->socket))
 	{
 		tio_receive_pending_events(connection, 1);
-	}
+	}*/
 
 	for(a = 0 ; a < max_events ; a++)
 	{
@@ -1656,8 +1650,6 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 
 		if(!event_message)
 			break;
-
-		connection->pending_event_count--;
 
 		handle_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_HANDLE);
 		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT);
@@ -2109,7 +2101,7 @@ int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_nam
 clean_up_and_return:
 	pr1_message_delete(response);
 
-	return TIO_SUCCESS;
+	return result;
 }
 
 

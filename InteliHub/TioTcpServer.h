@@ -131,19 +131,19 @@ namespace tio
 
 			void DoPendingSubscriptions(const shared_ptr<TioTcpSession>& session, ContainersMap::const_iterator i, const string& start)
 			{
-#ifdef _DEBUG
 				if(i == containers_.begin())
-					std::cout << GetTickCount() << " - DoPendingSubscriptions, start" << std::endl; 
+					std::cout << "DoPendingSubscriptions start, " << containers_.size() << " containers" << std::endl; 
 
 				Timer timer;
 				timer.Start();
-#endif
-
 				int howMany = 0;
 
 				for( ; i != containers_.end() ; ++i)
 				{
 					const ContainerInfo& containerInfo = i->second;
+
+					if(!session->Valid())
+						break;
 
 					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
 
@@ -160,28 +160,32 @@ namespace tio
 
 					howMany++;
 
-					if(session->IsPendingSendSizeTooBig())
-					{
-						session->RegisterLowPendingBytesCallback(
-							[this, i, start](const shared_ptr<TioTcpSession>& session)
-							{
-								BOOST_ASSERT(valid_);
-								// don't know why, but ++i triggers a const error...
-								auto i2 = i;
-								++i2;
-								this->DoPendingSubscriptions(session, i2, start);
-							});
+					//
+					// This is causing problems if user subscribe to more than one groups, 
+					// because 
+					// 
 
-						return;
-					}
+					//if(session->IsPendingSendSizeTooBig())
+					//{
+					//	session->RegisterLowPendingBytesCallback(
+					//		[this, i, start](const shared_ptr<TioTcpSession>& session)
+					//		{
+					//			BOOST_ASSERT(valid_);
+					//			// don't know why, but ++i triggers a const error...
+					//			auto i2 = i;
+					//			++i2;
+					//			this->DoPendingSubscriptions(session, i2, start);
+					//		});
+
+					//	return;
+					//}
 				}
 
-#ifdef _DEBUG
 				long long elapsedMicro = timer.ElapsedInMicroseconds();
-				double persec = (howMany * 1000 * 1000) / static_cast<double>(elapsedMicro);
+				long long elapsedInSeconds = elapsedMicro / (1000 * 1000);
+				double persec = (containers_.size() * 1000 * 1000) / static_cast<double>(elapsedMicro);
 
-				std::cout << GetTickCount() << " - " << howMany << " snapshots, " << persec << " snapshots per second" << std::endl;
-#endif
+				std::cout << howMany << " snapshots, " << elapsedInSeconds << " seconds, " << persec << " snapshots per second" << std::endl;
 			}
 
 			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
