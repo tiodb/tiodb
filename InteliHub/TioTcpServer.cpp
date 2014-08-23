@@ -59,6 +59,11 @@ namespace tio
 		return false;
 	}
 
+	void TioTcpServer::PostCallback(function<void()> callback)
+	{
+		io_service_.post(callback);
+	}
+
 
 	void TioTcpServer::OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err)
 	{
@@ -67,7 +72,7 @@ namespace tio
 		// it will probably be called from a TioTcpSession callback
 		// and removing now will delete the session's pointer
 		//
-		io_service_.post([this, client]()
+		PostCallback([this, client]()
 			{
 				RemoveClient(client);
 			});

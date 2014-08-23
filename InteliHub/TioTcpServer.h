@@ -142,7 +142,7 @@ namespace tio
 				{
 					const ContainerInfo& containerInfo = i->second;
 
-					if(!session->Valid())
+					if(!session->IsValid())
 						break;
 
 					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
@@ -165,20 +165,20 @@ namespace tio
 					// because 
 					// 
 
-					//if(session->IsPendingSendSizeTooBig())
-					//{
-					//	session->RegisterLowPendingBytesCallback(
-					//		[this, i, start](const shared_ptr<TioTcpSession>& session)
-					//		{
-					//			BOOST_ASSERT(valid_);
-					//			// don't know why, but ++i triggers a const error...
-					//			auto i2 = i;
-					//			++i2;
-					//			this->DoPendingSubscriptions(session, i2, start);
-					//		});
+					if(session->IsPendingSendSizeTooBig())
+					{
+						session->RegisterLowPendingBytesCallback(
+							[this, i, start](const shared_ptr<TioTcpSession>& session)
+							{
+								BOOST_ASSERT(valid_);
+								// don't know why, but ++i triggers a const error...
+								auto i2 = i;
+								++i2;
+								this->DoPendingSubscriptions(session, i2, start);
+							});
 
-					//	return;
-					//}
+						return;
+					}
 				}
 
 				long long elapsedMicro = timer.ElapsedInMicroseconds();
@@ -633,6 +633,8 @@ namespace tio
 		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint, const std::string& logFilePath);
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
 		void OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
+
+		void PostCallback(function<void()> callback);
 		
 		void OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message);
 

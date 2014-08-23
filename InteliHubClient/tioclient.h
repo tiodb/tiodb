@@ -76,9 +76,9 @@ extern "C" {
 #define TIO_DEBUG_FLAG_DUMP_MESSAGES_TO_STDOUT 0x01
 
 
-#ifndef SOCKET
-#define SOCKET int
-#endif
+//#ifndef SOCKET
+//#define SOCKET int
+//#endif
 
 struct TIO_DATA
 {	
@@ -90,10 +90,10 @@ struct TIO_DATA
 };
 
 
-typedef void (*event_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/,  unsigned int /*event_code*/, 
+typedef void (*event_callback_t)(int /*result*/, void* /*handle*/, void* /*cookie*/,  unsigned int /*event_code*/, 
 								 const char* /*group_name*/, const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
-typedef void (*query_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
+typedef void (*query_callback_t)(int /*result*/, void* /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
 								 const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
 struct TIO_CONNECTION;
