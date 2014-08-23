@@ -489,6 +489,26 @@ class ContainerTests(InteliHubTestCase):
 
         self.hub.DispatchPendingEvents()
 
+    def test_batch(self):
+        container_count = 100
+        item_count = 50
+        self.hub.wait_for_answers = False
+
+        self.hub.ping()
+
+        print 'creating containers...'
+        for index in range(container_count):
+            container =  self.hub.create(self.get_me_a_random_container_name())
+            for x in range(item_count):
+                container.push_back(str(x))
+
+        self.hub.ReceivePendingAnswers()
         
 if __name__ == '__main__':
+    '''
+    suite = unittest.TestSuite()
+    suite.addTest(ContainerTests('test_batch'))
+    unittest.TextTestRunner().run(suite)
+    '''
+    
     unittest.main()
