@@ -68,6 +68,7 @@
             this.containersListView.UseCompatibleStateImageBehavior = false;
             this.containersListView.View = System.Windows.Forms.View.Details;
             this.containersListView.DoubleClick += new System.EventHandler(this.containersListView_DoubleClick);
+            this.containersListView.KeyDown += new System.Windows.Forms.KeyEventHandler(this.containersListView_KeyDown);
             this.containersListView.KeyUp += new System.Windows.Forms.KeyEventHandler(this.containersListView_KeyUp);
             // 
             // columnHeader1

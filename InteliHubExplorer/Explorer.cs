@@ -285,5 +285,16 @@ namespace InteliHubExplorer
                 connectButton.PerformClick();
             }
         }
+
+        private void containersListView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if( e.Control && e.KeyCode == Keys.C )
+            {
+                StringBuilder toClipboard;
+                foreach (var item in containersListView.SelectedItems)
+                    toClipboard += item.ToString();
+                Clipboard.SetText(toClipboard);
+            }
+        }
     }
 }
