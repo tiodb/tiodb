@@ -477,7 +477,7 @@ protected:
 
 			while(resultset->GetRecord(&key, &value, &metadata))
 			{
-				query_callback(0, (unsigned int)handle, cookie, 0, container->GetName().c_str(), cpp2c(key), cpp2c(value), cpp2c(metadata));
+				query_callback(0, handle, cookie, 0, container->GetName().c_str(), cpp2c(key), cpp2c(value), cpp2c(metadata));
 				resultset->MoveNext();
 			}
 		}
