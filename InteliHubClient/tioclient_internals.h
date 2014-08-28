@@ -57,7 +57,7 @@ struct STREAM_BUFFER
 {
 	char* buffer;
 	char* current;
-	unsigned int buffer_size;
+	unsigned buffer_size;
 };
 
 struct PR1_MESSAGE
@@ -71,7 +71,7 @@ struct TIO_CONNECTION;
 
 struct TIO_CONTAINER
 {
-	unsigned int handle;
+	int handle;
 	
 	event_callback_t event_callback;
 	event_callback_t wait_and_pop_next_callback;
@@ -92,6 +92,7 @@ struct TIO_CONNECTION
 
 	struct EVENT_INFO_NODE* event_list_queue_end;
 	int pending_event_count;
+	int max_pending_event_count;
 
 	struct TIO_CONTAINER** containers;
 	int containers_count;
@@ -105,6 +106,8 @@ struct TIO_CONNECTION
 
 	int wait_for_answer;
 	int pending_answer_count;
+
+	int debug_flags;
 };
 
 struct X1_FIELD
@@ -159,7 +162,7 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message);
 // TODO: move to internal implementation file
 //
 struct PR1_MESSAGE* tio_generate_create_or_open_msg(unsigned int command_id, const char* name, const char* type);
-struct PR1_MESSAGE* tio_generate_data_message(unsigned int command_id, void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata);
+struct PR1_MESSAGE* tio_generate_data_message(unsigned int command_id, int handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata);
 int pr1_message_get_error_code(struct PR1_MESSAGE* msg);
 void pr1_message_field_to_tio_data(const struct PR1_MESSAGE_FIELD_HEADER* field, struct TIO_DATA* tiodata);
 const char* message_field_id_to_string(int i);

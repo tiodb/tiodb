@@ -306,9 +306,15 @@ public:
 			// from beginning. If it's after the end, we have nothing to send
 			//
 			if(startIndex > 0)
+			{
 				i = data_.end();
+				realIndex = data_.size();
+			}
 			else
+			{
 				i = data_.begin();
+				realIndex = 0;
+			}
 		}
 
 		cookie = dispatcher_.Subscribe(sink);

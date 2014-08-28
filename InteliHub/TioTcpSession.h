@@ -23,6 +23,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 namespace tio
 {
+	using std::endl;
 
 	inline TioData Pr1MessageToCppTioData(const PR1_MESSAGE_FIELD_HEADER* field)
 	{
@@ -366,7 +367,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		bool binaryProtocol_;
 
-		std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback_;
+		static std::ostream& logstream_;
+
+		std::queue<std::function<void (shared_ptr<TioTcpSession>)>> lowPendingBytesThresholdCallbacks_;
 
         std::queue<std::string> pendingSendData_;
 		
@@ -433,85 +436,11 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendResultSetItem(unsigned int queryID, 
 			const TioData& key, const TioData& value, const TioData& metadata);
 
-		void SendBinaryErrorAnswer(int errorCode, const string& description)
-		{
-			shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
+		void SendBinaryErrorAnswer(int errorCode, const string& description);
 
-			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
-			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
-			pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_ERROR_DESC, description.c_str());
+		void SendPendingBinaryData();
 
-#if _DEBUG
-			std::cout << "ERROR: " << errorCode << ": " << description << std::endl;
-#endif
-
-			SendBinaryMessage(answer);
-		}
-
-		void SendPendingBinaryData()
-		{
-			if(!beingSendData_.empty())
-				return;
-
-			if(pendingBinarySendData_.empty())
-				return;
-
-			static const int SEND_BUFFER_SIZE = 10 * 1024 * 1024;
-
-			if(!binarySendBuffer_)
-				binarySendBuffer_.reset(new char[SEND_BUFFER_SIZE]);
-
-			int bufferSpaceUsed = 0;
-			char* nextBufferSpace = binarySendBuffer_.get();
-
-			while(!pendingBinarySendData_.empty())
-			{
-				const shared_ptr<PR1_MESSAGE>& item = pendingBinarySendData_.front();
-
-				void* buffer;
-				unsigned int bufferSize;
-
-				pr1_message_get_buffer(item.get(), &buffer, &bufferSize);
-
-				if(bufferSpaceUsed + bufferSize > SEND_BUFFER_SIZE)
-					break;
-
-				memcpy(nextBufferSpace, buffer, bufferSize);
-				nextBufferSpace += bufferSize;
-				bufferSpaceUsed += bufferSize;
-
-				pendingBinarySendData_.pop_front();
-			}
-
-			auto shared_this = shared_from_this();
-
-			asio::async_write(
-				socket_,
-				asio::buffer(binarySendBuffer_.get(), bufferSpaceUsed),
-				[shared_this](const error_code& err, size_t sent)
-				{
-					shared_this->OnBinaryMessageSent(err, sent);
-				});
-		}
-
-		void OnBinaryMessageSent(const error_code& err, size_t sent)
-		{
-			if(CheckError(err))
-			{
-				//std::cerr << "ERROR sending binary data: " << err << std::endl;
-				return;
-			}
-
-
-			DecreasePendingSendSize(sent);
-			sentBytes_ += sent;
-
-			BOOST_ASSERT(pendingSendSize_ >= 0);
-			
-			SendPendingSnapshots();
-
-			SendPendingBinaryData();
-		}
+		void OnBinaryMessageSent(const error_code& err, size_t sent);
 
 		void IncreasePendingSendSize(int size)
 		{
@@ -522,26 +451,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		}
 
 
-		void RegisterLowPendingBytesCallback(std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
-		{
-			BOOST_ASSERT(!lowPendingBytesThresholdCallback_);
-			lowPendingBytesThresholdCallback_ = lowPendingBytesThresholdCallback;
-		}
+		void RegisterLowPendingBytesCallback(std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback);
 
-		void DecreasePendingSendSize(int size)
-		{
-			pendingSendSize_ -= size;
-
-			BOOST_ASSERT(pendingSendSize_ >= 0);
-			
-			if(pendingSendSize_ <= PENDING_SEND_SIZE_SMALL_THRESHOLD && lowPendingBytesThresholdCallback_)
-			{
-				// local copy, so callback can register another callback
-				auto callback = lowPendingBytesThresholdCallback_;
-				lowPendingBytesThresholdCallback_ = nullptr;
-				callback(shared_from_this());
-			}
-		}
+		void DecreasePendingSendSize(int size);
 
 		int pendingSendSize()
 		{
@@ -553,27 +465,11 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			return pendingSendSize_ > PENDING_SEND_SIZE_BIG_THRESHOLD;
 		}
 
-		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
-		{
-			if(!valid_)
-				return;
+		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message);
 
-			pendingBinarySendData_.push_back(message);
+		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata);
 
-			IncreasePendingSendSize(pr1_message_get_data_size(message.get()));
-
-			SendPendingBinaryData();
-		}
-
-		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata)
-		{
-			SendBinaryMessage(Pr1CreateAnswerMessage(key, value, metadata));
-		}
-
-		void SendBinaryAnswer()
-		{
-			SendBinaryMessage(Pr1CreateAnswerMessage(NULL, NULL, NULL));
-		}
+		void SendBinaryAnswer();
 
 
 		/*
@@ -620,6 +516,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendResultSetStart(unsigned int queryID);
 		void SendResultSetEnd(unsigned int queryID);
+
+		bool IsValid();
 
 		void OnReadCommand(const error_code& err, size_t read);
 		void OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read);

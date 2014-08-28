@@ -232,8 +232,8 @@ class TioServerConnection(object):
         self.sinks = {}
         self.group_sinks = {}
         self.poppers = {}
-        self.dontWaitForAnswers = False
-        self.pendingAnswerCount = 0
+        self.wait_for_answers = True
+        self.pending_answers_count = 0
         self.containers = {}
         self.stop = False
 
@@ -558,8 +558,8 @@ class TioServerConnection(object):
             return ''
 
     def ReceivePendingAnswers(self):
-        for x in xrange(self.pendingAnswerCount):
-            self.pendingAnswerCount -= 1
+        for x in xrange(self.pending_answers_count):
+            self.pending_answers_count -= 1
             self.ReceiveAnswer()
 
     def SendCommand(self, command, *args):
@@ -576,14 +576,24 @@ class TioServerConnection(object):
         if self.log_sends:
             print buffer
 
-        if self.dontWaitForAnswers:
-            self.pendingAnswerCount += 1
+        if not self.wait_for_answers:
+            self.pending_answers_count += 1
             return
 
         try:
             return self.ReceiveAnswer()
         except Exception, ex:
             raise Exception('%s - "%s"' % (ex, buffer.strip('\r\n ')))
+
+    def SendCommandAndForceAnswer(self, command, *args):
+        if self.wait_for_answers:
+            return self.SendCommand(command, *args)
+        else:
+            self.ReceivePendingAnswers()
+            self.wait_for_answers = True
+            ret = self.SendCommand(command, *args)
+            self.wait_for_answers = False
+            return ret
 
     def SendDataCommand(self, command, parameter, key, value, metadata):
         buffer = command
@@ -622,7 +632,7 @@ class TioServerConnection(object):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     def __CreateOropen(self, command, name, type):
-        info = self.SendCommand(command, name if not type else name + ' ' + type)
+        info = self.SendCommandAndForceAnswer(command, name if not type else name + ' ' + type)
         handle = info['handle']
         type = info['type']
         container = RemoteContainer(self, handle, type, name)
