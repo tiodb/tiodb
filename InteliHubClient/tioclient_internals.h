@@ -94,6 +94,8 @@ struct TIO_CONNECTION
 	int pending_event_count;
 	int max_pending_event_count;
 
+	unsigned total_messages_received;
+
 	struct TIO_CONTAINER** containers;
 	int containers_count;
 

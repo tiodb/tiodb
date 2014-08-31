@@ -992,6 +992,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	(*connection)->pending_event_count = 0;
 	(*connection)->dispatch_events_on_receive = 0;
 	(*connection)->thread_id = 0;
+	(*connection)->total_messages_received = 0;
 	(*connection)->group_event_callback = NULL;
 	(*connection)->group_event_cookie = NULL;
 	(*connection)->wait_for_answer = TRUE;
@@ -1237,6 +1238,8 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 	not_on_network_batch_check(connection);
 
 	result = pr1_message_receive(socket, &pr1_message);
+
+	connection->total_messages_received++;
 	
 	if(TIO_FAILED(result))
 		return result;
@@ -1267,7 +1270,7 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* event_message)
 {
 	events_list_push(connection, event_message);
-	
+
 	if(connection->pending_event_count >= connection->max_pending_event_count)
 		tio_dispatch_pending_events(connection, 0xFFFFFFFF);
 }
@@ -1381,6 +1384,8 @@ int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int m
 		if(TIO_FAILED(result))
 			return result;
 
+		connection->total_messages_received++;
+
 		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
 
 		if(!command_field) {
@@ -1428,8 +1433,11 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 	for(;;)
 	{
 		result = pr1_message_receive(connection->socket, &received_message);
+		
 		if(TIO_FAILED(result))
 			return result;
+
+		connection->total_messages_received++;
 
 		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
 
