@@ -111,5 +111,10 @@ namespace InteliHubExplorer
 
             UpdateData();
         }
+
+        private void ContainerViewer_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            GC.Collect();
+        }
     }
 }

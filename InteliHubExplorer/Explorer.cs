@@ -61,6 +61,11 @@ namespace InteliHubExplorer
 
         private void LoadContainerList()
         {
+            //
+            // When we keep reconnecting the memory usage goes thru the roof
+            //
+            GC.Collect();
+
             if (m_listingThread != null && m_listingThread.ThreadState == ThreadState.Running)
                 return;
 
@@ -218,9 +223,6 @@ namespace InteliHubExplorer
 
         void ApplyFilter()
         {
-            //if (m_currentFilterExpression == m_newFilterExpression)
-            //    return;
-
             if (String.IsNullOrWhiteSpace(m_newFilterExpression))
             {
                 if (m_currentFilterExpression != m_newFilterExpression)

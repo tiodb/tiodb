@@ -106,6 +106,7 @@
             this.KeyPreview = true;
             this.Name = "ContainerViewer";
             this.Text = "ContainerViewer";
+            this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.ContainerViewer_FormClosed);
             this.Load += new System.EventHandler(this.ContainerViewer_Load);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.ContainerViewer_KeyUp);
             this.statusStrip1.ResumeLayout(false);
