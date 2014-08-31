@@ -319,7 +319,24 @@ namespace tio
 			logLine.reserve(100);
 
 			unsigned& globalHandle = globalContainerHandle_[container->GetName()];
-			string timeString = lexical_cast<string>(time(NULL));
+			
+			SYSTEMTIME now;
+			char timeString[64];
+			GetLocalTime(&now);
+
+			_snprintf_s(
+				timeString,
+				sizeof(timeString),
+				_TRUNCATE,
+				"%04d-%02d-%02d %02d:%02d:%02d.%03d",
+				now.wYear,
+				now.wMonth,
+				now.wDay,
+				now.wHour,
+				now.wMinute,
+				now.wSecond,
+				now.wMilliseconds);
+
 			logLine.append(timeString);
 
 			bool logCommand = true;
