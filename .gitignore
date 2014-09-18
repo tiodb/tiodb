@@ -155,3 +155,15 @@ $RECYCLE.BIN/
 # Mac desktop service store files
 .DS_Store
 *.pyc
+
+ALL_BUILD.vcxproj
+ALL_BUILD.vcxproj.filters
+CMakeCache.txt
+CMakeFiles
+ZERO_CHECK.vcxproj
+ZERO_CHECK.vcxproj.filters
+cmake_install.cmake
+intelihubclient.sln
+intelihubclient.vcxproj
+intelihubclient.vcxproj.filters
+
