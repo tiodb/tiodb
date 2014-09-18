@@ -1,5 +1,8 @@
-import intelihubclient
 import sys
+import os
+sys.path.append(os.path.normpath(os.getcwd() + "\\.."))
+
+import intelihubclient
 import time
 import datetime
 import argparse
