@@ -152,7 +152,11 @@ public:
 		// advance a list iterator is expensive. If it's near the end, will
 		// walk backwards
 		//
-		if(index <= static_cast<int>(data_.size() / 2))
+		if (data_.empty())
+		{
+			i = data_.end();
+		}
+		else if(index <= static_cast<int>(data_.size() / 2))
 		{
 			i = data_.begin();
 			for(int x = 0  ; x < index ; ++x, ++i)
@@ -210,11 +214,14 @@ public:
 
 		ListType::iterator i = GetOffset(key, &realIndex);
 		
-		realKey.Set(static_cast<int>(realIndex));
+		if (i != data_.end())
+		{
+			realKey.Set(static_cast<int>(realIndex));
 
-		data_.erase(i);
+			data_.erase(i);
 
-		dispatcher_.RaiseEvent("delete", realKey, value, metadata); 
+			dispatcher_.RaiseEvent("delete", realKey, value, metadata);
+		}
 	}
 
 	virtual void Clear()
