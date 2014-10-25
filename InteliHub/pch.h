@@ -26,6 +26,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _SCL_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 //#define _SECURE_SCL 0
 
 #define _WIN32_WINNT 0x0500

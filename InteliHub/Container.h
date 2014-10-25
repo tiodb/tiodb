@@ -600,6 +600,13 @@ namespace tio
 				throw std::invalid_argument("out of bounds");
 
 			index = size - index;
+
+			//
+			// If it's a negative index that goes beyond containers limits, we
+			// will push it to the first index.
+			//
+			if(index < 0)
+				index = 0;
 		}
 		else
 		{
@@ -607,7 +614,7 @@ namespace tio
 				throw std::invalid_argument("out of bounds");
 		}
 
-		ASSERT(index >=0);
+		ASSERT(index >= 0);
 
 		return static_cast<unsigned int>(index);
 	}

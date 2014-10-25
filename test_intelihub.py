@@ -505,10 +505,12 @@ class ContainerTests(InteliHubTestCase):
         self.hub.ReceivePendingAnswers()
         
 if __name__ == '__main__':
-    '''
-    suite = unittest.TestSuite()
-    suite.addTest(ContainerTests('test_batch'))
-    unittest.TextTestRunner().run(suite)
-    '''
-    
-    unittest.main()
+    debugging = 'pywin' in globals()
+
+    if debugging:
+        suite = unittest.TestSuite()
+        suite.addTest(ContainerTests("test_slice_subscribe"))
+        runner = unittest.TextTestRunner()
+        runner.run(suite)
+    else:
+        unittest.main()
