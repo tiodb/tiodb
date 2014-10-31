@@ -2140,7 +2140,8 @@ void tio_finish_network_batch(struct TIO_CONNECTION* connection)
 	{
 		result = tio_receive_until_not_event(connection, &response);
 
-		pr1_message_delete(response);
+		if(result > 0)
+			pr1_message_delete(response);
 	}
 
 	connection->pending_event_count = 0;
