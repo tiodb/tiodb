@@ -159,6 +159,11 @@ namespace tio
 
 	}
 
+	bool TioTcpSession::UsesBinaryProtocol() const
+	{
+		return binaryProtocol_;
+	}
+
 	tcp::socket& TioTcpSession::GetSocket()
 	{
 		return socket_;
