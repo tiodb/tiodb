@@ -15,122 +15,16 @@ import datetime
 import pywintypes
 import os.path
 
-adEmpty	            = 0
-adSmallInt	        = 2
-adInteger	        = 3
-adSingle	        = 4
-adDouble	        = 5
-adCurrency	        = 6
-adDate	            = 7
-adBSTR	            = 8
-adIDispatch	        = 9
-adError	            = 10
-adBoolean	        = 11
-adVariant	        = 12
-adIUnknown	        = 13
-adDecimal	        = 14
-adTinyInt	        = 16
-adUnsignedTinyInt	= 17
-adUnsignedSmallInt	= 18
-adUnsignedInt       = 19
-adBigInt	        = 20
-adUnsignedBigInt	= 21
+if sys.platform == 'win32':
+    import msvcrt
+    def get_key():
+        if msvcrt.kbhit():
+            return msvcrt.getch()
+        else:
+            return ''
+else:
+    def get_key(): return ''
 
-adFileTime	        = 64
-adGUID	            = 72
-
-adBinary	        = 128
-adChar	            = 129
-adWChar	            = 130
-adNumeric	        = 131
-adUserDefined	    = 132
-adDBDate	        = 133
-adDBTime	        = 134
-adDBTimeStamp	    = 135
-adChapter	        = 136
-adDBFileTime	    = 137
-adPropVariant	    = 138
-adVarNumeric	    = 139
-
-adVarchar	        = 200
-adVarChar           = 200
-adLongVarChar	    = 201
-adVarWChar	        = 202
-adLongVarWChar	    = 203
-adVarBinary	        = 204
-adLongVarBinary	    = 205
-
-
-#
-# Connection State Constants
-#
-adStateClosed	    = 0
-adStateOpen	        = 1
-adStateConnecting	= 2
-adStateExecuting	= 4
-adStateFetching	    = 8
-
-#
-# CursorType constants
-#
-adOpenUnspecified   = -1
-adOpenForwardOnly   = 0
-adOpenKeyset        = 1
-adOpenDynamic       = 2
-adOpenStatic        = 3
-
-#
-# LockType constants
-#
-adLockUnspecified   = -1
-adLockReadOnly      = 1
-adLockPessimistic   = 2
-adLockOptimistic    = 3
-adLockBatchOptimistic = 4
-
-#
-# ExecuteOption constants
-#
-adOptionUnspecified = -1
-adAsyncExecute      = 16
-adAsyncFetch        = 32
-adAsyncFetchNonBlocking = 64
-adExecuteNoRecords  = 128
-
-#
-# CursorLocation constants
-#
-adUseNone           = 1
-adUseServer         = 2
-adUseClient         = 3
-adUseClientBatch    = 3
-
-#
-# ParameterDirection constants
-#
-adParamUnknown      = 0
-adParamInput        = 1
-adParamOutput       = 2
-adParamInputOutput  = 3
-adParamReturnValue  = 4
-
-#
-# ParameterAttributes constants
-#
-adParamSigned       = 16
-adParamNullable     = 64
-adParamLong         = 128
-
-#
-# CommandType constants
-#
-adCmdUnspecified    = -1
-adCmdText           = 1
-adCmdTable          = 2
-adCmdStoredProc     = 4
-adCmdUnknown        = 8
-adCmdFile           = 256
-adCmdTableDirect    = 512
 
 class LogEntry(object):
   def __init__(self, line):
@@ -190,51 +84,14 @@ class NullSink(object):
   def on_log_entry(self, log_entry):
     pass
 
-class StatsLogTimeSink(object):
-  def __init__(self, speed, log_each = 1000):
+class StatsLogger(object):
+  def __init__(self):
     self.container_count = 0
     self.message_count = 0
+    self.last_log_message_count = 0
     self.total_data = 0
-    self.speed = speed
-    self.total_changes = 0
-    self.log_each = log_each
-    self.time_t = ''
-    
-  def on_log_entry(self, log_entry):
-    self.message_count += 1
-    self.total_data += len(log_entry.line)
-    self.time_t = log_entry.time_t
-
-    if log_entry.command == 'create':
-      if not must_ignore_this_container(log_entry.key):
-        self.container_count += 1
-    else:
-      self.total_changes += 1
-      
-
-    log = False
-    if self.speed == 0:
-      if self.message_count % self.log_each == 0:
-        log = True
-    elif self.message_count % self.speed == 0:
-      log = True
-
-    if log:
-      the_date = datetime.datetime.fromtimestamp(float(self.time_t))
-      print_time = the_date.strftime('%y-%m-%d %H:%M')
-      print print_time, self.message_count, self.container_count, 'containers,', \
-        self.total_changes, 'changes,' , (self.total_data / 1024), 'kb so far'
-
-
-class StatsLogSink(object):
-  def __init__(self, speed, log_step):
-    self.container_count = 0
-    self.message_count = 0
-    self.total_data = 0
-    self.speed = speed
     self.total_changes = 0
     self.last_log = time.time()
-    self.log_step = log_step
     
   def on_log_entry(self, log_entry):
     self.message_count += 1
@@ -246,20 +103,15 @@ class StatsLogSink(object):
     else:
       self.total_changes += 1
 
-    log = False
-    if self.speed == 0:
-      if self.message_count % self.log_step == 0:
-        log = True
-    elif self.message_count % self.speed == 0:
-      log = True
 
-    if log:
+  def log(self):
       delta = time.time() - self.last_log
-      msg_count = max(self.log_step, self.speed)
+      msg_count = self.message_count - self.last_log_message_count
       persec = msg_count / delta
       print '%d %d containers, %d changes, %dkb so far, %0.2f msgs/s ' % \
         (self.message_count, self.container_count, self.total_changes, (self.total_data / 1024), persec)
       self.last_log = time.time()
+      self.last_log_message_count = self.message_count
 
 class InteliHubLoadToMemorySink(object):
   def __init__(self):
@@ -457,17 +309,41 @@ class InteliHubLogResumeParser(object):
         self.last_read_line = current_line
         last_read_file.seek(0)
         last_read_file.write(str(self.last_read_line))
+
+
+def change_speed_via_keyboard(current_speed):
+    c = get_key()
+
+    if not c: return current_speed        
+        
+    if c == '+':
+        current_speed += 10
+    elif c == '-' and current_speed > 1:
+        current_speed -= 10
+    elif c == '*':
+        current_speed = 0
+    elif c == '/' and current_speed > 11:
+        current_speed = 1
+    elif ord('9') >= ord(c) >= ord('0'):
+        multiplier = int(c)
+        if multiplier == 0:
+            current_speed = 1
+        else:
+            current_speed *= multiplier
+
+    print 'speed changed to ', current_speed
+    return current_speed
         
         
 class InteliHubLogParser(object):
-  def __init__(self, sink):
+  def __init__(self, sink, keyboard_control = False):
     self.speed = 10
     self.sink = sink
+    self.keyboard_control = keyboard_control
+    self.logger = StatsLogger()
 
   def play_log_line(self, line):
-
     return 
-    
 
   def wait_for_line(self, f):
     sleep_time = 0.5
@@ -487,7 +363,7 @@ class InteliHubLogParser(object):
         print '%d seconds waiting for file to grow...' % slept_time
     
   
-  def replay(self, file_path, speed, delay_seconds=0, follow=False, pause=False):
+  def replay(self, file_path, delay_seconds, speed, follow=False, pause=False):
     self.speed = speed
 
     if file_path.endswith('bz2'):
@@ -498,7 +374,15 @@ class InteliHubLogParser(object):
     if pause:
       hub.server_pause()
 
+    send_count = 0
+
+    last_timestamp = time.time()
+
     while 1:
+      # it's an option because it slows down the execution (27k/s vs 17k/s)
+      if self.keyboard_control:
+        speed = change_speed_via_keyboard(speed)
+
       line = f.readline()
 
       if not line:
@@ -518,33 +402,49 @@ class InteliHubLogParser(object):
             print 'sleep for %s seconds to apply a %s seconds delay' % (delta, delay_seconds)
           time.sleep(delta)
 
-      self.sink.on_log_entry(LogEntry(line))
+      log_line = LogEntry(line)
+      self.sink.on_log_entry(log_line)
+      self.logger.on_log_entry(log_line)
+
+      send_count += 1
+
+      if speed == 0:
+          if send_count % 10000 == 0:
+              self.logger.log()
+      else:
+         if send_count % speed == 0:
+          delta = time.time() - last_timestamp
+          
+          if delta < 1:
+            time.sleep(1-delta)
+
+          last_timestamp = time.time()
+
+          self.logger.log()
+
         
         
 def main():
   argparser = argparse.ArgumentParser('Replay InteliHub logs')
   argparser.add_argument('hub')
   argparser.add_argument('file_path')
-  argparser.add_argument('--speed', default=0, type=int)
-  argparser.add_argument('--log-step', default=1000, type=int)
-  argparser.add_argument('--delay', default=0, type=int)
+  argparser.add_argument('--speed', default=0, type=int, help='speed that messages will be send to hub. 0 = as fast as possible')
+  argparser.add_argument('--keyboard-control', action='store_true', help='allow speed to be controlled via keyboard')
+  argparser.add_argument('--log-step', default=10000, type=int, help='message interval that will be used to log progress on terminal')
+  argparser.add_argument('--delay', default=0, type=int, help='Message delay relative to original message time. ' +
+    'We will wait if necessary to make sure the message will be replicated XX second after the time message was written to log')
   argparser.add_argument('--follow', action='store_true')
   argparser.add_argument('--pause', action='store_true', help='Pauses the server while loading. **This will disconnect all client during load time**')
 
   params = argparser.parse_args()
 
-  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec, %d seconds delay %s, %s' % \
+  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec, %s, %s' % \
     (params.file_path, params.hub, params.speed,
-     params.delay, '(follow file)' if params.follow else '', ' (pause server while loading)' if params.pause else '')
+     '(follow file)' if params.follow else '', ' (pause server while loading)' if params.pause else '')
 
-  multisink = MultiSinkSink()
-
-  hub_sink = InteliHubReplaySink(params.hub, batch_size = params.log_step)
-  multisink.sinks.append(hub_sink)
-
-  multisink.sinks.append(StatsLogSink(params.speed, params.log_step))
-
-  parser = InteliHubLogParser(multisink)
+  parser = InteliHubLogParser(
+      InteliHubReplaySink(params.hub, batch_size = params.log_step),
+      keyboard_control = params.keyboard_control)
 
   if params.pause:
     hub_sink.hub.pause()
@@ -552,6 +452,7 @@ def main():
   try:
     parser.replay(
       params.file_path,
+      params.delay,
       params.speed,
       params.delay,
       params.follow)

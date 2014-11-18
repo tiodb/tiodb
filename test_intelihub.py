@@ -34,10 +34,12 @@ class ListMirror(object):
         
     def on_event(self, container, event_name, k, v, m):
         if event_name == 'push_back':
-            self.test_case.assertEqual(k, len(self.l))
+            # it's not true when we are subscribing to a slice
+            # self.test_case.assertEqual(k, len(self.l))
             self.l.append(v)
         elif event_name == 'push_front':
-            self.test_case.assertEqual(k, 0)
+            # it's not true when we are subscribing to a slice
+            # self.test_case.assertEqual(k, 0)
             self.l.insert(0, v)
         elif event_name == 'insert':
             self.l.insert(k, v)
@@ -575,7 +577,42 @@ class ContainerTests(InteliHubTestCase):
 
         self.assertEqual(mirror.containers[c4_name].l, c4_contents)
 
-        
+    def test_group_subscribe_slice(self):
+        group_name = self.get_me_a_random_container_name()	
+        c1_name = self.get_me_a_random_container_name()
+        c2_name = self.get_me_a_random_container_name()
+
+        mirror = HubMirror(self)
+
+        c1 = self.hub.create(c1_name)
+
+        c1_contents = [str(x) for x in range(10)]
+        c2_contents = [str(x) for x in range(20)]
+
+        start_offset = -5
+
+        #
+        # scenario 1
+        #
+        c1.extend(c1_contents)
+        self.hub.group_add(group_name, c1_name)
+
+        self.hub.group_subscribe(group_name, mirror.on_event, start_offset)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c1_name].l, c1_contents[start_offset:])
+
+        #
+        # scenario 2: container created after subscription, added to group before adding items
+        #
+        c2 = self.hub.create(c2_name)
+        c2.extend(c2_contents)
+        self.hub.group_add(group_name, c2_name)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c2_name].l, c2_contents[start_offset:])
 
 
     def test_batch(self):
@@ -598,7 +635,7 @@ if __name__ == '__main__':
 
     if debugging:
         suite = unittest.TestSuite()
-        suite.addTest(ContainerTests("test_group_subscribe_new_container_after_subscription"))
+        suite.addTest(ContainerTests("test_group_subscribe_slice"))
         runner = unittest.TextTestRunner()
         runner.run(suite)
     else:
