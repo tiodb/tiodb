@@ -511,6 +511,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void ReadCommand();
 
 		unsigned int id();
+		bool UsesBinaryProtocol() const;
 
 		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 

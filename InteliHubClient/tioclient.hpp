@@ -109,14 +109,11 @@ namespace tio
 			return *this;
 		}
 
-		// move
-#if defined(_MSC_VER)
 		TioDataConverter(const TioDataConverter&& rhv)
 		{
 			tiodata_ = rhv.tiodata_;
 			rhv.tiodata_.data_type = TIO_DATA_TYPE_NONE;
 		}
-#endif
 
 		TioDataConverter()
 		{
@@ -310,7 +307,7 @@ namespace tio
 		}
 
 	public:
-		Connection() : connection_(NULL), port_(0)
+		Connection() : connection_(nullptr), port_(0)
 		{
 			tio_initialize();
 		}
@@ -340,7 +337,7 @@ namespace tio
 		void Disconnect()
 		{
 			tio_disconnect(connection_);
-			connection_ = NULL;
+			connection_ = nullptr;
 		}
 
 		void WaitAndDispatchPendingEvents(unsigned int eventCount)
@@ -459,11 +456,11 @@ namespace tio
 			}
 
 		public:
-			TioContainerImpl() : 
-			    container_(NULL), 
-				containerManager_(NULL),
-				eventCallback_(NULL),
-				waitAndPopNextCallback_(NULL)
+			TioContainerImpl() :
+				container_(nullptr),
+				containerManager_(nullptr),
+				eventCallback_(nullptr),
+				waitAndPopNextCallback_(nullptr)
 			{
 			}
 
@@ -490,7 +487,7 @@ namespace tio
 
 				containerManager_ = cn->container_manager();
 
-				result = container_manager()->open(name.c_str(), NULL, &container_);
+				result = container_manager()->open(name.c_str(), nullptr, &container_);
 
 				ThrowOnTioClientError(result);
 
@@ -558,7 +555,7 @@ namespace tio
 				// When calling the callback, our state must be cleared. Reentrant stuff...
 				//
 				EventCallbackT cb = me->waitAndPopNextCallback_;
-				me->waitAndPopNextCallback_ = NULL;
+				me->waitAndPopNextCallback_ = nullptr;
 				
 				cb("wnp_next", container_name, typedKey, typedValue);
 			}
@@ -596,7 +593,7 @@ namespace tio
 
 				result = container_manager()->container_subscribe(
 					container_,
-					NULL,
+					nullptr,
 					&this_type::EventCallback,
 					this);
 			}
@@ -651,12 +648,12 @@ namespace tio
 					container_, 
 					TioDataConverter<key_type>(key).inptr(),
 					TioDataConverter<value_type>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
 
-			void set(const key_type& key, const value_type& value, const std::string* metadata = NULL)
+			void set(const key_type& key, const value_type& value, const std::string* metadata = nullptr)
 			{
 				int result;
 
@@ -664,7 +661,7 @@ namespace tio
 					container_, 
 					TioDataConverter<key_type>(key).inptr(),
 					TioDataConverter<value_type>(value).inptr(),
-					metadata ? TioDataConverter<std::string>(*metadata).inptr() : NULL);
+					metadata ? TioDataConverter<std::string>(*metadata).inptr() : nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -677,9 +674,9 @@ namespace tio
 				result = container_manager()->container_get(
 					container_, 
 					TioDataConverter<key_type>(index).inptr(),
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 
@@ -694,9 +691,9 @@ namespace tio
 				result = container_manager()->container_get(
 					container_, 
 					TioDataConverter<key_type>(index).inptr(),
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				if(result != 0)
 					return defaultValue;
@@ -749,13 +746,12 @@ namespace tio
 		};
 	
 		template<typename TValue, typename TMetadata=std::string>
-		class list : public TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >
+		class list : public TioContainerImpl<int, TValue, TMetadata, list<TValue, TMetadata> >
 		{
 		public:
 			typedef list<TValue, TMetadata> this_type;
-			typedef typename TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
-
-	
+			typedef typename TioContainerImpl<int, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
+		
 		public:
 			void push_back(const value_type& value)
 			{
@@ -763,9 +759,9 @@ namespace tio
 
 				result = this->container_manager()->container_push_back(
 					this->container_, 
-					NULL,
+					nullptr,
 					TioDataConverter<TValue>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -776,9 +772,9 @@ namespace tio
 
 				result = this->container_manager()->container_push_front(
 					this->container_, 
-					NULL,
+					nullptr,
 					TioDataConverter<TValue>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -790,9 +786,9 @@ namespace tio
 
 				result = this->container_manager()->container_pop_back(
 					this->container_, 
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 
@@ -806,9 +802,9 @@ namespace tio
 
 				result = this->container_manager()->container_pop_front(
 					this->container_, 
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 

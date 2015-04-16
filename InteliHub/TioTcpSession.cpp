@@ -159,6 +159,11 @@ namespace tio
 
 	}
 
+	bool TioTcpSession::UsesBinaryProtocol() const
+	{
+		return binaryProtocol_;
+	}
+
 	tcp::socket& TioTcpSession::GetSocket()
 	{
 		return socket_;
@@ -1089,9 +1094,6 @@ namespace tio
 			else
 				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
 
-			subscriptionInfo->eventFilterStart = numericStart;
-			subscriptionInfo->eventFilterEnd = filterEnd;
-
 			pendingSnapshots_[handle] = subscriptionInfo;
 			
 			subscriptions_[handle] = subscriptionInfo;
@@ -1110,7 +1112,13 @@ namespace tio
 
 		}
 
+		int numericStart = 0;
 		
+		boost::conversion::try_lexical_convert<int>(start, numericStart);
+
+		subscriptionInfo->eventFilterStart = numericStart;
+		subscriptionInfo->eventFilterEnd = filterEnd;
+
 		subscriptions_[handle] = subscriptionInfo;
 
 		try

@@ -43,16 +43,16 @@ namespace tio
 
 	class GroupManager : boost::noncopyable
 	{
-		struct ContainerInfo
+		struct SubscriberInfo
 		{
-			string name;
-			shared_ptr<ITioContainer> container;
+			weak_ptr<TioTcpSession> session;
+			string start;
 
-			ContainerInfo(){}
+			SubscriberInfo(){}
 
-			ContainerInfo(string name, shared_ptr<ITioContainer> container)
-				: container(container)
-				, name(name)
+			SubscriberInfo(shared_ptr<TioTcpSession> session, string start)
+				: session(session)
+				, start(start)
 			{
 			}
 		};
@@ -62,9 +62,52 @@ namespace tio
 			string groupName_;
 			string containerListName_;
 			shared_ptr<ITioContainer> containerListContainer_;
-			typedef map<string, ContainerInfo> ContainersMap;
+			typedef map<string, shared_ptr<ITioContainer>> ContainersMap;
 			ContainersMap containers_;
 			bool valid_; // we're using member functions as callback
+
+			map<unsigned, SubscriberInfo> subscribers_;
+
+			void SendNewContainerToSubscriber(const shared_ptr<ITioContainer> container, const shared_ptr<TioTcpSession>& session, const string& start)
+			{
+				if(!session->IsValid())
+					return;
+
+				string containerName = container->GetName();
+				unsigned handle = session->RegisterContainer(containerName, container);
+
+				if(session->UsesBinaryProtocol())
+				{
+					unsigned handle = session->RegisterContainer(containerName, container);
+
+					auto answer = Pr1CreateMessage();
+
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_NEW_GROUP_CONTAINER);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_GROUP_NAME, groupName_);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_NAME, containerName);
+					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_TYPE, container->GetType());
+
+					session->SendBinaryMessage(answer);
+
+					session->BinarySubscribe(handle, start, false);
+				}
+				else
+				{
+					string answer = "group_container ";
+					answer += groupName_;
+					answer += " ";
+					answer += containerName;
+					answer += " ";
+					answer += container->GetType();
+					answer += " ";
+					answer += lexical_cast<string>(handle);
+					answer += "\r\n";
+
+					session->SendAnswer(answer);
+					session->Subscribe(handle, start, -1, false);
+				}
+			}
 
 		public:
 
@@ -88,47 +131,54 @@ namespace tio
 				std::swap(containerListName_, rhv.containerListName_);
 				std::swap(containerListContainer_, rhv.containerListContainer_);
 				std::swap(containers_, rhv.containers_);
+				std::swap(subscribers_, rhv.subscribers_);
 			}
 
-			void AddContainer(const string& containerName, shared_ptr<ITioContainer> container)
+			void AddContainer(shared_ptr<ITioContainer> container)
 			{
-				//
-				// TODO: check if already exists
-				//
-				containers_[containerName] = ContainerInfo(containerName, container);
-				containerListContainer_->Set(containerName, groupName_);
+				if(containers_.find(container->GetName()) != containers_.end())
+					return;
+
+				containers_[container->GetName()] = container;
+				containerListContainer_->Set(container->GetName(), groupName_);
+
+				for(auto& p: subscribers_)
+				{
+					SubscriberInfo& subscriberInfo = p.second;
+					auto session = subscriberInfo.session.lock();
+					
+					if(!session || ! session->IsValid())
+						continue;
+
+					//
+					// TODO: respect start parameter, we need to save this with session ptr
+					//
+					SendNewContainerToSubscriber(container, session, subscriberInfo.start);
+				}
 			}
 
 			void Subscribe(const shared_ptr<TioTcpSession>& session, const string& start)
 			{
 				session->RegisterContainer(containerListName_, containerListContainer_);
 
-				session->SendAnswer("answer ok\r\n");
-				
+				if(session->UsesBinaryProtocol())
+				{
+					session->SendBinaryAnswer();
+				}
+				else
+				{
+					session->SendAnswer("answer ok\r\n");
+				}
+
 				for(auto i = containers_.begin() ; i != containers_.end() ; ++i)
 				{
-					const ContainerInfo& containerInfo = i->second;
-
-					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
-
-					string answer = "group_container ";
-					answer += groupName_;
-					answer += " ";
-					answer += containerInfo.name;
-					answer += " ";
-					answer += containerInfo.container->GetType();
-					answer += " ";
-					answer += lexical_cast<string>(handle);
-					answer += "\r\n";
-
-					session->SendAnswer(answer);
-
-					session->Subscribe(handle, start, 0, false);
-
-					//session->GetID()
+					SendNewContainerToSubscriber(i->second, session, start);
 				}
+
+				subscribers_[session->id()] = SubscriberInfo(session, start);
 			}
 
+			/*
 			void DoPendingSubscriptions(const shared_ptr<TioTcpSession>& session, ContainersMap::const_iterator i, const string& start)
 			{
 				if(i == containers_.begin())
@@ -140,30 +190,8 @@ namespace tio
 
 				for( ; i != containers_.end() ; ++i)
 				{
-					const ContainerInfo& containerInfo = i->second;
-
-					if(!session->IsValid())
-						break;
-
-					unsigned handle = session->RegisterContainer(containerInfo.name, containerInfo.container);
-
-					auto answer = Pr1CreateMessage();
-					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_NEW_GROUP_CONTAINER);
-					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
-					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_GROUP_NAME, groupName_);
-					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_NAME, containerInfo.name);
-					Pr1MessageAddField(answer.get(), MESSAGE_FIELD_ID_CONTAINER_TYPE, containerInfo.container->GetType());
-
-					session->SendBinaryMessage(answer);
-
-					session->BinarySubscribe(handle, start, false);
-
+					SendNewContainerToSubscriber(i->second, session, start);
 					howMany++;
-
-					//
-					// This is causing problems if user subscribe to more than one groups, 
-					// because 
-					// 
 
 					if(session->IsPendingSendSizeTooBig())
 					{
@@ -187,30 +215,27 @@ namespace tio
 
 				std::cout << howMany << " snapshots, " << elapsedInSeconds << " seconds, " << persec << " snapshots per second" << std::endl;
 			}
-
-			void BinarySubscribe(const shared_ptr<TioTcpSession>& session, const string& start)
-			{
-				session->RegisterContainer(containerListName_, containerListContainer_);
-
-				session->SendBinaryAnswer();
-
-				DoPendingSubscriptions(session, containers_.begin(), start);
-			}
+			*/
 		};
 
-		map<string, GroupInfo> groups_;
+		typedef map<string, GroupInfo> GroupMap;
 
-	public:
-		void AddContainer(ContainerManager* containerManager, const string& groupName, const string& containerName, shared_ptr<ITioContainer> container)
+		GroupMap groups_;
+
+		GroupInfo* GetGroup(ContainerManager* containerManager, const string& groupName)
 		{
 			auto i = groups_.find(groupName);
 
 			if(i == groups_.end())
-			{
 				i = groups_.insert(std::move(pair<string, GroupInfo>(groupName, GroupInfo(containerManager, groupName)))).first;
-			}
+			
+			return &i->second;
+		}
 
-			i->second.AddContainer(containerName, container);
+	public:
+		void AddContainer(ContainerManager* containerManager, const string& groupName, shared_ptr<ITioContainer> container)
+		{
+			GetGroup(containerManager, groupName)->AddContainer(container);
 		}
 
 		bool RemoveContainer(const string& groupName, const string& containerName)
@@ -218,28 +243,9 @@ namespace tio
 			return false;
 		}
 		
-		bool SubscribeGroup(const string& groupName, const shared_ptr<TioTcpSession>& session, const string& start)
+		bool SubscribeGroup(ContainerManager* containerManager, const string& groupName, const shared_ptr<TioTcpSession>& session, const string& start)
 		{
-			auto igroup = groups_.find(groupName);
-
-			if(igroup == groups_.end())
-				return false;
-
-			igroup->second.Subscribe(session, start);
-
-			return true;
-		}
-
-
-		bool BinarySubscribeGroup(const string& groupName, const shared_ptr<TioTcpSession>& session, const string& start)
-		{
-			auto igroup = groups_.find(groupName);
-
-			if(igroup == groups_.end())
-				return false;
-
-			igroup->second.BinarySubscribe(session, start);
-
+			GetGroup(containerManager, groupName)->Subscribe(session, start);
 			return true;
 		}
 	};

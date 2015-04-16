@@ -580,7 +580,7 @@ namespace tio
 
 						container = containerManager_.OpenContainer("", containerName);
 
-						groupManager_.AddContainer(&containerManager_, groupName, containerName, container);
+						groupManager_.AddContainer(&containerManager_, groupName, container);
 
 						session->SendBinaryAnswer();
 
@@ -603,7 +603,7 @@ namespace tio
 
 						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start);
 
-						b = groupManager_.BinarySubscribeGroup(groupName, session, start);
+						b = groupManager_.SubscribeGroup(&containerManager_, groupName, session, start);
 
 						if(!b)
 						{
@@ -1038,7 +1038,7 @@ namespace tio
 
 			container = containerManager_.OpenContainer("", containerName);
 
-			groupManager_.AddContainer(&containerManager_, groupName, containerName, container);
+			groupManager_.AddContainer(&containerManager_, groupName, container);
 
 			MakeAnswer(success, answer, "");
 		}
@@ -1073,7 +1073,7 @@ namespace tio
 
 		try
 		{
-			groupManager_.SubscribeGroup(groupName, session, start);
+			groupManager_.SubscribeGroup(&containerManager_, groupName, session, start);
 		}
 		catch (std::exception& ex)
 		{

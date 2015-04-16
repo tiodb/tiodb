@@ -332,12 +332,16 @@ class TioServerConnection(object):
         self.ReceiveAnswer(False)
 
 
-    def RunLoop(self, timeout=None):
-        while 1:
-            self.DispatchPendingEvents()
-            if self.stop:
-                break
-            self.ReceiveAnswer(False)
+    def RunLoop(self, timeout, max_events=1000000):
+        self.s.settimeout(timeout)
+        for x in xrange(max_events):
+            try:
+                self.DispatchPendingEvents()
+                if self.stop:
+                    break
+                self.ReceiveAnswer(False)
+            except socket.timeout:
+                return
 
     def __ReceiveData(self, size):
         while len(self.receiveBuffer) < size:

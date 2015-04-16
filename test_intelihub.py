@@ -4,6 +4,7 @@ import unittest
 import datetime
 import uuid
 import sys
+import collections
 
 class ListReceiveCounter(object):
     def __init__(self, test_case):
@@ -20,17 +21,25 @@ class ListReceiveCounter(object):
 class ListMirror(object):
     def __init__(self, test_case):
         self.l = []
-        self.test_case = test_case
+        if test_case == None:
+            class TestCaseTabajara(object):
+                def assertEqual(self, a, b):
+                    assert a == b
+            self.test_case = TestCaseTabajara()
+        else:
+            self.test_case = test_case
 
     def clear(self):
         self.l = []
         
     def on_event(self, container, event_name, k, v, m):
         if event_name == 'push_back':
-            self.test_case.assertEqual(k, len(self.l))
+            # it's not true when we are subscribing to a slice
+            # self.test_case.assertEqual(k, len(self.l))
             self.l.append(v)
         elif event_name == 'push_front':
-            self.test_case.assertEqual(k, 0)
+            # it's not true when we are subscribing to a slice
+            # self.test_case.assertEqual(k, 0)
             self.l.insert(0, v)
         elif event_name == 'insert':
             self.l.insert(k, v)
@@ -44,6 +53,20 @@ class ListMirror(object):
             self.l = []
         elif event_name == 'set':
             self.l[k] = v
+
+class HubMirror(object):
+    def __init__(self, test_case):
+        self.test_case = test_case
+        self.clear()
+
+    def build_mirror(self):
+        return ListMirror(self.test_case)
+
+    def clear(self):
+        self.containers = collections.defaultdict(self.build_mirror)
+
+    def on_event(self, container, event_name, k, v, m):
+        self.containers[container.name].on_event(container, event_name, k, v, m)
 
 class InteliHubTestCase(unittest.TestCase):
     def setUp(self):
@@ -489,6 +512,109 @@ class ContainerTests(InteliHubTestCase):
 
         self.hub.DispatchPendingEvents()
 
+    def test_group_subscribe_new_container_after_subscription(self):
+        group_name = self.get_me_a_random_container_name()
+        group_name_2 = self.get_me_a_random_container_name()
+        c1_name = self.get_me_a_random_container_name()
+        c2_name = self.get_me_a_random_container_name()
+        c3_name = self.get_me_a_random_container_name()
+        c4_name = self.get_me_a_random_container_name()
+
+        mirror = HubMirror(self)
+
+        c1 = self.hub.create(c1_name)
+
+        c1_contents = [str(x) for x in range(10)]
+        c2_contents = [str(x) for x in range(20)]
+        c3_contents = [str(x) for x in range(30)]
+        c4_contents = [str(x) for x in range(40)]
+
+        #
+        # scenario 1: container created before subscription
+        #
+        c1.extend(c1_contents)
+
+        self.hub.group_add(group_name, c1_name)
+
+        self.hub.group_subscribe(group_name, mirror.on_event, 0)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c1_name].l, c1_contents)
+
+        #
+        # scenario 2: container created after subscription, added to group before adding items
+        #
+        c2 = self.hub.create(c2_name)
+        self.hub.group_add(group_name, c2_name)
+        c2.extend(c2_contents)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c2_name].l, c2_contents)
+
+        #
+        # scenario 3: container created after subscription, adding items
+        # before adding to group
+        #
+        c3 = self.hub.create(c3_name)
+        c3.extend(c3_contents)
+        self.hub.group_add(group_name, c3_name)
+        
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c3_name].l, c3_contents)
+
+        #
+        # scenario 4: subscribe to group before adding containers
+        #
+        self.hub.group_subscribe(group_name_2, mirror.on_event, 0)
+        c4 = self.hub.create(c4_name)
+        c4.extend(c4_contents)
+        self.hub.group_add(group_name_2, c4_name)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c4_name].l, c4_contents)
+
+    def test_group_subscribe_slice(self):
+        group_name = self.get_me_a_random_container_name()	
+        c1_name = self.get_me_a_random_container_name()
+        c2_name = self.get_me_a_random_container_name()
+
+        mirror = HubMirror(self)
+
+        c1 = self.hub.create(c1_name)
+
+        c1_contents = [str(x) for x in range(10)]
+        c2_contents = [str(x) for x in range(20)]
+
+        start_offset = -5
+
+        #
+        # scenario 1
+        #
+        c1.extend(c1_contents)
+        self.hub.group_add(group_name, c1_name)
+
+        self.hub.group_subscribe(group_name, mirror.on_event, start_offset)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c1_name].l, c1_contents[start_offset:])
+
+        #
+        # scenario 2: container created after subscription, added to group before adding items
+        #
+        c2 = self.hub.create(c2_name)
+        c2.extend(c2_contents)
+        self.hub.group_add(group_name, c2_name)
+
+        self.hub.RunLoop(1)
+
+        self.assertEqual(mirror.containers[c2_name].l, c2_contents[start_offset:])
+
+
     def test_batch(self):
         container_count = 100
         item_count = 50
@@ -505,10 +631,12 @@ class ContainerTests(InteliHubTestCase):
         self.hub.ReceivePendingAnswers()
         
 if __name__ == '__main__':
-    '''
-    suite = unittest.TestSuite()
-    suite.addTest(ContainerTests('test_batch'))
-    unittest.TextTestRunner().run(suite)
-    '''
-    
-    unittest.main()
+    debugging = 'pywin' in globals()
+
+    if debugging:
+        suite = unittest.TestSuite()
+        suite.addTest(ContainerTests("test_group_subscribe_slice"))
+        runner = unittest.TextTestRunner()
+        runner.run(suite)
+    else:
+        unittest.main()
