@@ -1436,7 +1436,9 @@ namespace tio
 		pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
 		pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_ERROR_DESC, description.c_str());
 
+#ifdef _DEBUG
 		logstream_ << "ERROR: " << errorCode << ": " << description << endl;
+#endif
 
 		SendBinaryMessage(answer);
 	}
