@@ -106,6 +106,7 @@ struct TIO_CONTAINER;
 void tiodata_init(struct TIO_DATA* tiodata);
 unsigned int tiodata_get_type(struct TIO_DATA* tiodata);
 void tiodata_set_as_none(struct TIO_DATA* tiodata);
+void tiodata_free(struct TIO_DATA* tiodata);
 
 //
 // It works the same way MFC (argh) string. You ask for the buffer to

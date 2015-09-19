@@ -769,6 +769,12 @@ void tiodata_set_as_none(struct TIO_DATA* tiodata)
 	tiodata->data_type = TIO_DATA_TYPE_NONE;
 }
 
+void tiodata_free(struct TIO_DATA* tiodata)
+{
+	tiodata_set_as_none(tiodata);
+}
+
+
 
 char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 {

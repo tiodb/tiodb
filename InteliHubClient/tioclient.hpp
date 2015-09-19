@@ -204,6 +204,7 @@ namespace tio
 		string host_;
 		short port_;
 
+	
 	protected:
 
 		virtual int create(const char* name, const char* type, void** handle)
@@ -310,6 +311,12 @@ namespace tio
 		Connection() : connection_(nullptr), port_(0)
 		{
 			tio_initialize();
+		}
+
+		Connection(const string& host, short port = 2605) : connection_(nullptr), port_(0)
+		{
+			tio_initialize();
+			Connect(host, port);
 		}
 
 		virtual IContainerManager* container_manager()
