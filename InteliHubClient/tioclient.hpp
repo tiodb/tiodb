@@ -528,7 +528,9 @@ namespace tio
 				name_.clear();
 			}
 
-			static void EventCallback(void* cookie, const char* /*group_name*/, const char* container_name, unsigned int /*handle*/, unsigned int /*event_code*/, 
+
+			static void EventCallback(int result, void* handle, void* cookie, unsigned int event_code, 
+				const char* group_name, const char* container_name, 
 				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
