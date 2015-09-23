@@ -9,6 +9,7 @@
 	#include <stdio.h>
 	#include <tchar.h>
 	#include <assert.h>
+	#include <time.h>
 	#include <WinSock.h>
 	#pragma comment(lib ,"ws2_32.lib")
 #else
@@ -16,6 +17,7 @@
 	#include <stdlib.h>
 	#include <assert.h>
 	#include <stdio.h>
+	#include <time.h>
 	#include <string.h>
 	#include <sys/types.h> 
 	#include <sys/socket.h>
@@ -42,6 +44,7 @@ extern "C" {
 #define TIO_ERROR_PROTOCOL      		  -3
 #define TIO_ERROR_MISSING_PARAMETER       -4
 #define TIO_ERROR_NO_SUCH_OBJECT	      -5
+#define TIO_ERROR_TIMEOUT			      -6
 
 #define TIO_COMMAND_PING				0x10
 #define TIO_COMMAND_OPEN				0x11
@@ -143,7 +146,7 @@ int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* 
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_close(struct TIO_CONTAINER* container);
 
-int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events);
+int tio_receive_next_pending_event(struct TIO_CONNECTION* connection, const unsigned* timeout_in_seconds);
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events);
 
 

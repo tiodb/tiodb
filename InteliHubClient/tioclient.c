@@ -147,6 +147,34 @@ void pr1_set_last_error_description(const char* description)
 	g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
 }
 
+
+int socket_pending_bytes(SOCKET socket, unsigned* count)
+{
+	int ret;
+#ifdef _WIN32
+	u_long pending_bytes = 0;
+
+	ret = ioctlsocket(socket, FIONREAD, &pending_bytes);
+	if(ret == SOCKET_ERROR)
+		return ret;
+
+	*count = (unsigned) pending_bytes;
+
+	return 0;
+#else
+	int pending_bytes = 0;
+
+	ret = ioctl(socket, FIONREAD, &pending_bytes);
+	if(ret == -1)
+		return ret;
+
+	*count = (unsigned)pending_bytes;
+
+	return 0;
+	
+#endif
+}
+
 int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 {
 	int ret = send(socket, (const char*)buffer, len, 0);
@@ -157,18 +185,67 @@ int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 	return ret;
 }
 
-int socket_receive(SOCKET socket, void* buffer, int len)
+//
+// Contract: 
+//		if no timeout, it will hang until all bytes are returned
+//		if timeout is set, we can return less bytes than requested
+//
+int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout_in_seconds)
 {
 	int ret = 0;
 	char* char_buffer = (char*)buffer;
 	int received = 0;
+	unsigned pending_bytes = 0;
+	time_t start;
+	int time_left;
+
+#if _WIN32
+	FD_SET recvset;
+	struct timeval tv;
+#endif
+
 
 #ifdef _DEBUG
 	memset(char_buffer, 0xFF, len);
 #endif
 
+	if(timeout_in_seconds)
+		start = time(NULL);
+
 	while(received < len)
 	{
+		if(timeout_in_seconds)
+		{
+			time_left = *timeout_in_seconds - (int)(time(NULL) - start);
+
+			if(time_left < 0)
+			{
+				return TIO_ERROR_TIMEOUT;
+			}
+
+			tv.tv_sec = *timeout_in_seconds;
+			tv.tv_usec = 0;
+
+			FD_ZERO(&recvset);
+			FD_SET(socket, &recvset);
+
+			ret = select(0, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
+
+			if(ret == SOCKET_ERROR)
+			{
+				pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
+				return TIO_ERROR_NETWORK;
+			}
+
+			if(ret == 0)
+			{
+				return TIO_ERROR_TIMEOUT;
+			}
+
+			assert(ret == 1);
+		}
+		
+
 		//
 		// Windows supports MSG_WAITALL only on Windows Server 2008 or superior... :-(
 		// So I need to emulate it here
@@ -183,12 +260,11 @@ int socket_receive(SOCKET socket, void* buffer, int len)
 
 		received += ret;
 	}
-
-	assert(ret < 0 || received == len);
 		
-	return ret;
+	return received;
 }
 
+/*
 int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 {
 	int ret;
@@ -202,7 +278,7 @@ int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 	if(pending_bytes < len)
 		return 0;
 
-	return socket_receive(socket, buffer, len); 
+	return socket_receive(socket, buffer, len, NULL); 
 #else
 	ret = recv(socket, (char*)buffer, len, MSG_DONTWAIT);
 
@@ -213,6 +289,7 @@ int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 	return ret;
 #endif
 }
+*/
 
 
 
@@ -635,23 +712,45 @@ struct PR1_MESSAGE* pr1_message_new_get_buffer_for_receive(struct PR1_MESSAGE_HE
 	return pr1_message;
 }
 
-int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
+int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message, 
+	const unsigned* message_header_timeout_in_seconds, const unsigned* message_payload_timeout_in_seconds)
 {
 	int result;
 	struct PR1_MESSAGE_HEADER pr1_message_header;
 	void* receive_buffer;
 	
-	result = socket_receive(socket, &pr1_message_header, sizeof(struct PR1_MESSAGE_HEADER));
+	result = socket_receive(socket, &pr1_message_header, sizeof(struct PR1_MESSAGE_HEADER), message_header_timeout_in_seconds);
 
 	if(TIO_FAILED(result))
 		return result;
+
+	if(result < sizeof(struct PR1_MESSAGE_HEADER))
+	{
+		//
+		// The header fragmented. Since it's very small (12 bytes now), if it fragments
+		// we will consider it to be an error and the connection in invalid state from now on
+		//
+		return TIO_ERROR_NETWORK;
+	}
 
 	*pr1_message = pr1_message_new_get_buffer_for_receive(&pr1_message_header, &receive_buffer);
 
 	result = socket_receive(
 		socket, 
 		receive_buffer,
-		pr1_message_header.message_size);
+		pr1_message_header.message_size,
+		message_payload_timeout_in_seconds);
+
+	if((unsigned)result < pr1_message_header.message_size)
+	{
+		//
+		// We didn't receive the payload before the timeout.
+		// We will consider it to be an error and the connection in invalid state from now on
+		//
+		pr1_message_delete(*pr1_message);
+		*pr1_message = NULL;
+		return TIO_ERROR_NETWORK;
+	}
 
 	if(TIO_FAILED(result))
 	{
@@ -667,7 +766,7 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 	return result;
 }
 
-
+/*
 int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 {
 	int result;
@@ -687,7 +786,8 @@ int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_mes
 	result = socket_receive(
 		socket, 
 		receive_buffer,
-		pr1_message_header.message_size);
+		pr1_message_header.message_size,
+		NULL);
 
 	if(TIO_FAILED(result))
 	{
@@ -700,6 +800,7 @@ int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_mes
 
 	return result;
 }
+*/
 
 
 
@@ -895,10 +996,7 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 }
 
 
-
-
-
-void thread_check(struct TIO_CONNECTION* connection)
+void check_correct_thread(struct TIO_CONNECTION* connection)
 {
 #ifdef _WIN32
 	unsigned int current_thread_id = GetCurrentThreadId();
@@ -915,7 +1013,7 @@ void thread_check(struct TIO_CONNECTION* connection)
 	assert(connection->thread_id == current_thread_id);
 }
 
-void not_on_network_batch_check(struct TIO_CONNECTION* connection)
+void check_not_on_network_batch(struct TIO_CONNECTION* connection)
 {
 	assert(connection->wait_for_answer == TRUE);
 }
@@ -966,7 +1064,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 		return result;
 	}
 
-	result = socket_receive(sockfd, buffer, sizeof(buffer));
+	result = socket_receive(sockfd, buffer, sizeof(buffer), NULL);
 	if(TIO_FAILED(result)) 
 	{
 		pr1_set_last_error_description("Error receiving data to server during protocol negotiation");
@@ -1117,7 +1215,7 @@ int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int com
 	struct PR1_MESSAGE* pr1_message = 
 		tio_generate_data_message(command_id, container->handle, key, value, metadata);
 
-	thread_check(container->connection);
+	check_correct_thread(container->connection);
 
 	result = pr1_message_send_and_delete(socket, pr1_message);
 
@@ -1240,10 +1338,10 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 
 	struct PR1_MESSAGE* pr1_message;
 
-	thread_check(connection);
-	not_on_network_batch_check(connection);
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
 
-	result = pr1_message_receive(socket, &pr1_message);
+	result = pr1_message_receive(socket, &pr1_message, NULL, NULL);
 
 	connection->total_messages_received++;
 	
@@ -1373,55 +1471,57 @@ clean_up_and_return:
 	return ret;
 }
 
-int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
+//
+// return the number of dispatched events
+//
+int tio_receive_next_pending_event(struct TIO_CONNECTION* connection, const unsigned* timeout_in_seconds)
 {
 	int result = 0;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
 	int command;
 
-	thread_check(connection);
-	not_on_network_batch_check(connection);
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
 
-	for(; min_events != 0; min_events--)
+	//
+	// In some weird situation (like server sending just the message headed and hanging right
+	// after that) we can wait for twice the timeout value. I don't think it's an issue...
+	//
+	result = pr1_message_receive(connection->socket, &received_message, timeout_in_seconds, timeout_in_seconds);
+
+	if(TIO_FAILED(result))
+		return result;
+
+	connection->total_messages_received++;
+
+	command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
+
+	if(!command_field) 
 	{
-		result = pr1_message_receive(connection->socket, &received_message);
-
-		if(TIO_FAILED(result))
-			return result;
-
-		connection->total_messages_received++;
-
-		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
-
-		if(!command_field) {
-			pr1_message_delete(received_message);
-			result = TIO_ERROR_PROTOCOL;
-			break;
-		}
-
-		command = pr1_message_field_get_int(command_field);
-
-		if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
-		{
-			on_group_new_container(connection, received_message);
-			pr1_message_delete(received_message);
-			min_events++;
-			continue;
-		}
-		
-		// MUST be an event
-		if(command != TIO_COMMAND_EVENT)
-		{
-			pr1_message_delete(received_message);
-			result = TIO_ERROR_PROTOCOL;
-			break;
-		}
-
-		on_event_receive(connection, received_message);
+		pr1_message_delete(received_message);
+		return TIO_ERROR_PROTOCOL;
 	}
 
-	return result;
+	command = pr1_message_field_get_int(command_field);
+
+	if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
+	{
+		on_group_new_container(connection, received_message);
+		pr1_message_delete(received_message);
+		return 0;
+	}
+		
+	// MUST be an event
+	if(command != TIO_COMMAND_EVENT)
+	{
+		pr1_message_delete(received_message);
+		return TIO_ERROR_PROTOCOL;
+	}
+
+	on_event_receive(connection, received_message);
+
+	return 1;
 }
 
 
@@ -1432,13 +1532,13 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
 
-	thread_check(connection);
-	not_on_network_batch_check(connection);
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
 
 	// we'll loop until we receive a response (anything that is not an event)
 	for(;;)
 	{
-		result = pr1_message_receive(connection->socket, &received_message);
+		result = pr1_message_receive(connection->socket, &received_message, NULL, NULL);
 		
 		if(TIO_FAILED(result))
 			return result;
@@ -1641,7 +1741,7 @@ unsigned long get_n_readable_bytes(SOCKET sock)
 
 /*
 	tio_dispatch_pending_events
-	returns: number of still pending events
+	returns: number of dispatched events
 */
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
 {
@@ -1654,16 +1754,10 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	int handle, event_code;
 	void* cookie;
 	event_callback_t event_callback;
-	
 
 	tiodata_init(&key);
 	tiodata_init(&value);
 	tiodata_init(&metadata);
-
-	/*if(event_list_is_empty(connection) && get_n_readable_bytes(connection->socket))
-	{
-		tio_receive_pending_events(connection, 1);
-	}*/
 
 	for(a = 0 ; a < max_events ; a++)
 	{
@@ -1720,7 +1814,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 	tiodata_set_as_none(&value);
 	tiodata_set_as_none(&metadata);
 
-	return connection->pending_event_count;
+	return a;
 }
 
 
@@ -2095,7 +2189,7 @@ int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_nam
 	struct PR1_MESSAGE* request = NULL;
 	struct PR1_MESSAGE* response = NULL;
 
-	thread_check(connection);
+	check_correct_thread(connection);
 
 	request = pr1_message_new();
 
