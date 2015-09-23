@@ -9,6 +9,7 @@ using std::thread;
 using std::function;
 using std::vector;
 using std::string;
+using std::pair;
 using std::to_string;
 using std::unique_ptr;
 using std::make_unique;
@@ -146,6 +147,108 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	return ret;
 }
 
+class InteliHubTesterSubscriber
+{
+	vector<pair<string, string>> container_names_;
+	string host_name_;
+	thread thread_;
+	bool should_stop_;
+
+public:
+
+	InteliHubTesterSubscriber(const string& host_name)
+		: host_name_(host_name)
+		, should_stop_(false)
+	{
+	}
+
+	InteliHubTesterSubscriber(const InteliHubTesterSubscriber&) = delete;
+	InteliHubTesterSubscriber& operator = (const InteliHubTesterSubscriber&) = delete;
+	InteliHubTesterSubscriber(InteliHubTesterSubscriber&& rhv) = delete;
+
+	~InteliHubTesterSubscriber()
+	{
+		assert(!thread_.joinable());
+	}
+
+	InteliHubTesterSubscriber(const string& host_name,
+		const string& container_name,
+		const string& container_type)
+		: host_name_(host_name)
+		, should_stop_(false)
+	{
+		add_container(container_name, container_type);
+	}
+
+
+	void add_container(const string& name, const string& type)
+	{
+		container_names_.push_back(decltype(container_names_)::value_type(name, type));
+	}
+
+	void set_containers(decltype(container_names_)& values)
+	{
+		container_names_ = values;
+	}
+
+	void start()
+	{
+		should_stop_ = false;
+
+		thread_ = std::move(
+			thread([&]()
+		{
+			tio::Connection connection(host_name_);
+			vector<tio::containers::list<string>> containers(container_names_.size());
+
+			size_t count = container_names_.size();
+			for(size_t i = 0; i < count; i++)
+			{
+				containers[i].create(
+					&connection,
+					container_names_[i].first,
+					container_names_[i].second);
+
+				containers[i].subscribe(std::bind([](){}));
+			}
+
+			while(!should_stop_)
+			{
+				connection.WaitForNextEventAndDispatch(1);
+			}
+
+			connection.Disconnect();
+
+		}));
+	}
+
+	void clear()
+	{
+		thread_.swap(thread());
+		container_names_.clear();
+	}
+
+	void stop()
+	{
+		if(!thread_.joinable())
+			return;
+
+		should_stop_ = true;
+	}
+
+	void join()
+	{
+		if(!thread_.joinable())
+			return;
+
+		should_stop_ = true;
+
+		thread_.join();
+
+	}
+
+};
+
 
 class InteliHubStressTest
 {
@@ -201,27 +304,21 @@ int main()
 #ifdef _DEBUG
 	unsigned VOLATILE_TEST_COUNT = 5 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
+	unsigned MAX_CLIENTS = 1024;
+	unsigned MAX_SUBSCRIBERS = 64;
+
 #else
 	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 10 * 1000;
-
+	unsigned MAX_CLIENTS = 512;
+	unsigned MAX_SUBSCRIBERS = 64;
 #endif
 
+
+	const string hostname("localhost");
 	InteliHubTestRunner runner;
 
-	{
-		vector<unique_ptr<tio::Connection>> connections;
-		unsigned client_count = 10 * 1000;
-		unsigned log_step = 100;
-
-		for(int a = 0 ; a < client_count ; a++)
-		{
-			connections.push_back(make_unique<tio::Connection>("localhost"));
-
-			if(a % log_step == 0)
-				cout << a << "  connections" << endl;
-		}
-	}
+	int baseline = 0;
 
 
 	{
@@ -230,7 +327,7 @@ int main()
 
 		runner.add_test(
 			InteliHubStressTest(
-			"localhost",
+			hostname,
 			generate_container_name(),
 			"volatile_list",
 			&vector_perf_test_c,
@@ -239,42 +336,73 @@ int main()
 
 		runner.run();
 		
+		baseline = persec;
+		
 		cout << test_description << ": " << persec << " ops/sec" << endl;
 	}
 
 
-	for(int client_count = 1; client_count <= 1024; client_count*= 2)
+	for(unsigned client_count = 1; client_count <= MAX_CLIENTS; client_count *= 2)
 	{
-		string test_description = "single volatile list, client count=" + to_string(client_count);
-
-		vector<unsigned> persec(client_count);
-		string container_name = generate_container_name();
-
-		for(int a = 0; a < client_count; a++)
+		for(unsigned subscriber_count = 1; subscriber_count <= MAX_SUBSCRIBERS; subscriber_count *= 2)
 		{
-			runner.add_test(
-				InteliHubStressTest(
-				"localhost",
-				container_name,
-				"volatile_list",
-				&vector_perf_test_c,
-				VOLATILE_TEST_COUNT / client_count * 2,
-				&persec[a]));
-		}
+			string test_description = "single volatile list, clients=" + to_string(client_count) + 
+				", subscribers=" + to_string(subscriber_count);
+			vector<unique_ptr<InteliHubTesterSubscriber>> subscribers;
 
-		runner.run();
-
-		cout << test_description << ": ";
-
-		unsigned total = 0;
-
-		for(unsigned p : persec)
-		{
-			cout << p << ", ";
-			total += p;
-		}
+			vector<unsigned> persec(client_count);
 			
-		cout << "total " << total << " ops/sec" << endl;
+			string container_name = generate_container_name();
+			string container_type = "volatile_list";
+
+			for(unsigned a = 0; a < client_count; a++)
+			{
+				runner.add_test(
+					InteliHubStressTest(
+					hostname,
+					container_name,
+					container_type,
+					&vector_perf_test_c,
+					VOLATILE_TEST_COUNT / client_count * 2,
+					&persec[a]));
+			}
+
+			for(unsigned a = 0; a < subscriber_count; a++)
+			{
+				subscribers.emplace_back(new InteliHubTesterSubscriber(hostname, container_name, container_type));
+					
+
+				(*subscribers.rbegin())->start();
+			}
+
+			runner.run();
+
+			for(auto& subscriber : subscribers)
+			{
+				subscriber->stop();
+			}
+
+			for(auto& subscriber : subscribers)
+			{
+				subscriber->join();
+			}
+
+			cout << test_description << ": ";
+
+			int total = 0;
+
+			for(unsigned p : persec)
+			{
+				cout << p << ", ";
+				total += p;
+			}
+
+			float vs_baseline = ((float)total / baseline) * 100.0f;
+			float slower = 100.0f - vs_baseline;
+
+			cout << "total " << total << " ops/sec"
+				 << ", perf vs baseline=" << vs_baseline << "%, " << slower << "% slower" << endl;
+		}
 	}
 
 
@@ -309,6 +437,23 @@ int main()
 		}
 
 		cout << "total " << total << " ops/sec" << endl;
+	}
+
+
+	//
+	// CONNECTIONS TEST
+	//
+	{
+		vector<unique_ptr<tio::Connection>> connections;
+		unsigned log_step = 100;
+
+		for(unsigned a = 0; a < MAX_CLIENTS; a++)
+		{
+			connections.push_back(make_unique<tio::Connection>(hostname));
+
+			if(a % log_step == 0)
+				cout << a << "  connections" << endl;
+		}
 	}
 
 
