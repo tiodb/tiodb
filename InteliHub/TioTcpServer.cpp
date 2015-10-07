@@ -30,7 +30,7 @@ namespace tio
 	using boost::split;
 	using boost::is_any_of;
 
-	using boost::tuple;
+	using std::tuple;
 
 	using std::setfill;
 	using std::setw;
@@ -206,11 +206,13 @@ namespace tio
 
 	unsigned int TioTcpServer::GenerateSessionId()
 	{
+		// TODO: sync
 		return ++lastSessionID_;
 	}
 
 	unsigned int TioTcpServer::GenerateDiffId()
 	{
+		// TODO: sync
 		return ++lastDiffID_;
 	}
 	
@@ -679,7 +681,6 @@ namespace tio
 		} 
 		catch(std::exception& ex)
 		{
-			ex;
 			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL, ex.what());
 		}
 	}
@@ -687,16 +688,10 @@ namespace tio
 
 	void TioTcpServer::OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		if(cmd.GetCommand() == "stop_the_car")
-		{
-			io_service_.stop();
-			return;
-		}
 		CommandFunctionMap::iterator i = dispatchMap_.find(cmd.GetCommand());
 
 		if(i != dispatchMap_.end())
 		{
-
 			CommandCallbackFunction& f = i->second;
 
 			try

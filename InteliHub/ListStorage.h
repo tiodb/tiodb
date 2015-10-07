@@ -25,6 +25,7 @@ namespace MemoryStorage
 	using std::vector;
 	using std::map;
 	using std::list;
+	using std::make_tuple;
 
 
 typedef list<ValueAndMetadata> ListType;
@@ -268,8 +269,15 @@ public:
 				end = GetOffset(endOffset);	
 		}
 
+		VectorResultSet::ContainerT resultSetItems;
+
+		resultSetItems.reserve(endOffset - startOffset);
+
+		for(int key = startOffset; begin != end; ++begin, ++key)
+			resultSetItems.push_back(make_tuple(TioData(key), begin->value, begin->metadata));
+
 		return shared_ptr<ITioResultSet>(
-			new StlContainerResultSet<ListType>(TIONULL, startOffset, begin, end));
+			new VectorResultSet(std::move(resultSetItems), TIONULL));
 	}
 
 	virtual unsigned int Subscribe(EventSink sink, const string& start)

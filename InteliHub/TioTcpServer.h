@@ -665,8 +665,6 @@ namespace tio
 
 		Auth& GetAuth();
 		unsigned CreateNewQueryId();
-
-
 	};
 
 	void StartServer();
