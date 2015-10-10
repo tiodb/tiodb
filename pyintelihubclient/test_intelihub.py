@@ -21,6 +21,7 @@ class ListReceiveCounter(object):
 class ListMirror(object):
     def __init__(self, test_case):
         self.l = []
+        self.events = []
         if test_case == None:
             class TestCaseTabajara(object):
                 def assertEqual(self, a, b):
@@ -29,10 +30,17 @@ class ListMirror(object):
         else:
             self.test_case = test_case
 
+    def __str__(self):
+        return self.__repr__()
+    
+    def __repr__(self):
+        return '<ListMirror content=%s event_count=%s last_events=%s>' % (self.l, len(self.events), self.events[-10:])
+
     def clear(self):
         self.l = []
         
     def on_event(self, container, event_name, k, v, m):
+        self.events.append((event_name, k, v, m))
         if event_name == 'push_back':
             # it's not true when we are subscribing to a slice
             # self.test_case.assertEqual(k, len(self.l))
@@ -319,7 +327,7 @@ class ContainerTests(InteliHubTestCase):
 
         def check_mirror(expected_list_state):
             container.dispatch_pending_events()
-            self.assertEqual(mirror.l, expected_list_state)
+            self.assertEqual(mirror.l, expected_list_state, msg=locals())
 
         #
         # test 1: slice [0:0]
