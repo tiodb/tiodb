@@ -20,7 +20,7 @@ EXPORTS
 	tio_close
 
 	
-	tio_receive_pending_events
+	tio_receive_next_pending_event
 	tio_dispatch_pending_events
 	
 

@@ -292,10 +292,10 @@ namespace InteliHubExplorer
         {
             if( e.Control && e.KeyCode == Keys.C )
             {
-                StringBuilder toClipboard;
+                StringBuilder toClipboard = new StringBuilder();
                 foreach (var item in containersListView.SelectedItems)
-                    toClipboard += item.ToString();
-                Clipboard.SetText(toClipboard);
+                    toClipboard.Append(item.ToString());
+                Clipboard.SetText(toClipboard.ToString());
             }
         }
     }
