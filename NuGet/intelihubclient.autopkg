@@ -1,0 +1,42 @@
+//
+// CoApp use this file to generate the NuGet package. http://coapp.org
+// PS: Write-NuGetPackage .\intelihubclient.autopkg
+//
+
+configurations {
+		Toolset {
+			key : "PlatformToolset";
+			choices: { v140, v120 };
+		}
+    }
+	
+nuget{
+ nuspec {
+        id = InteliHubClient;
+        version : 1.0.0.0;
+        title: InteliHub Client;
+        authors: {Intelitrader};
+        owners: {Instelitrader};
+        licenseUrl: "http://www.apache.org/licenses/LICENSE-2.0";
+        projectUrl: "https://www.intelitrader.com.br/";
+        iconUrl: "https://www.intelitrader.com.br/favicon.ico"";
+        requireLicenseAcceptance:false;
+        summary: InteliHubClient ;
+
+        description: InteliHubClient;
+        releaseNotes: "First Nuget Packet";
+        copyright: Copyright 2015;
+        tags: { Intelitrader, InteliHub, native, coapp };
+    };
+	files {
+		include: { ..\InteliHubClient\tioclient.h, ..\InteliHubClient\tioclient.hpp }; 
+		 
+		 [x86,v140,dynamic] { 
+            lib: { ..\..\..\bin\Release\InteliHubClientDll.lib };
+            bin: { ..\..\..\bin\Release\InteliHubClientDll.dll };
+			symbol: { ..\..\..\bin\Release\InteliHubClientDll.pdb };
+        }
+	
+	
+	}
+}
