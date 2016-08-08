@@ -21,6 +21,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio {
 	namespace LogDbStorage
 	{
+		using std::make_tuple;
+
 		bool TioDataToLdbData(const TioData& tioData, logdb::LdbData* ldbData)
 		{
 			if(!tioData || !ldbData)
@@ -340,8 +342,19 @@ namespace tio {
 
 				NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
 
+				VectorResultSet::ContainerT resultSetItems;
+
+				resultSetItems.reserve(endOffset - startOffset);
+
+				for(int index = startOffset; index != endOffset; ++index)
+				{
+					TioData key, value, metadata;
+					GetRecord(TioData(index), &key, &value, &metadata);
+					resultSetItems.push_back(make_tuple(key, value, metadata));
+				}
+
 				return shared_ptr<ITioResultSet>(
-					new GenericResultSet<ITioStorage>(query, shared_from_this(), startOffset, endOffset)); 
+					new VectorResultSet(std::move(resultSetItems), TIONULL));
 			}
 
 			virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)

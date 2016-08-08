@@ -21,6 +21,7 @@ namespace tio {
 namespace MemoryStorage
 {
 using boost::bad_lexical_cast;
+using std::distance;
 
 class MapStorage : 
 	boost::noncopyable,
@@ -215,15 +216,22 @@ public:
 			  }
 		  }
 
+
+		  //
+		  // We will copy all items to a new container to support multithread.
+		  // It can be slow, but it will lock the thread of the client who is
+		  // asking for the snapshot, not the whole server.
+		  // But yes, we should find a way to make it better
+		  //
+		  VectorResultSet::ContainerT resultSetItems;
+
+		  resultSetItems.reserve(distance(start, end));
+
+		  for(; start != end; ++start)
+			  resultSetItems.push_back(make_tuple(start->first, start->second.value, start->second.metadata));
+
 		  return shared_ptr<ITioResultSet>(
-			new StlContainerResultSet<DataMap>(
-				TIONULL,
-				startOffset,
-				start, 
-				end, 
-				data_.size(),
-				&MapContainerGetter<DataMap>
-				));
+			  new VectorResultSet(std::move(resultSetItems), TIONULL));
 	  }
 
 	  virtual unsigned int Subscribe(EventSink sink, const string& start)

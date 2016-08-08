@@ -204,6 +204,7 @@ namespace tio
 		string host_;
 		short port_;
 
+	
 	protected:
 
 		virtual int create(const char* name, const char* type, void** handle)
@@ -312,6 +313,17 @@ namespace tio
 			tio_initialize();
 		}
 
+		Connection(const string& host, short port = 2605) : connection_(nullptr), port_(0)
+		{
+			tio_initialize();
+			Connect(host, port);
+		}
+
+		~Connection()
+		{
+			Disconnect();
+		}
+
 		virtual IContainerManager* container_manager()
 		{
 			return this;
@@ -340,26 +352,26 @@ namespace tio
 			connection_ = nullptr;
 		}
 
-		void WaitAndDispatchPendingEvents(unsigned int eventCount)
+		int WaitForNextEventAndDispatch(unsigned int timeOutInSeconds)
 		{
-			int stillPendingEvents;
 			int ret;
 
-			stillPendingEvents = tio_dispatch_pending_events(connection_, eventCount);
+			tio_dispatch_pending_events(connection_, 0xFFFFFFFF);
 
-			//
-			// If we call tio_receive_pending_events with events in local queue
-			// we can hang waiting for something from network while there are events
-			// on the local queue waiting to be processed
-			//
-			if(stillPendingEvents)
-				return;
+			ret = tio_receive_next_pending_event(connection_, &timeOutInSeconds);
 
-			ret = tio_receive_pending_events(connection_, eventCount);
-			ThrowOnTioClientError(ret);
+			if(ret == TIO_ERROR_TIMEOUT)
+			{
+				return 0;
+			}
+			else
+			{
+				ThrowOnTioClientError(ret);
+			}
 
-			ret = tio_dispatch_pending_events(connection_, eventCount);
-			ThrowOnTioClientError(ret);
+			tio_dispatch_pending_events(connection_, 0xFFFFFFFF);
+
+			return ret;
 		}
 
 		bool connected()
@@ -521,7 +533,9 @@ namespace tio
 				name_.clear();
 			}
 
-			static void EventCallback(void* cookie, const char* /*group_name*/, const char* container_name, unsigned int /*handle*/, unsigned int /*event_code*/, 
+
+			static void EventCallback(int result, void* handle, void* cookie, unsigned int event_code, 
+				const char* group_name, const char* container_name, 
 				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;

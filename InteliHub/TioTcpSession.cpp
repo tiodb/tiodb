@@ -35,7 +35,7 @@ namespace tio
 	using boost::split;
 	using boost::is_any_of;
 
-	using boost::tuple;
+	using std::tuple;
 
 	using std::make_pair;
 	using std::string;
@@ -962,7 +962,7 @@ namespace tio
 			//
 			if(IsValid())
 			{
-				logstream_ << "error on connection " << id_ << ": " << err.message() << endl;
+				//logstream_ << "error on connection " << id_ << ": " << err.message() << endl;
 			}
 
 			InvalidateConnection(err);
@@ -1436,7 +1436,9 @@ namespace tio
 		pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
 		pr1_message_add_field_string(answer.get(), MESSAGE_FIELD_ID_ERROR_DESC, description.c_str());
 
+#ifdef _DEBUG
 		logstream_ << "ERROR: " << errorCode << ": " << description << endl;
+#endif
 
 		SendBinaryMessage(answer);
 	}

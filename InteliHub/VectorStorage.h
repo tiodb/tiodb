@@ -18,8 +18,11 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 
 namespace tio {
-namespace MemoryStorage
+	namespace MemoryStorage
 {
+
+	using std::make_tuple;
+
 	class VectorStorage : 
 		boost::noncopyable,
 		public std::enable_shared_from_this<VectorStorage>,
@@ -27,7 +30,8 @@ namespace MemoryStorage
 	{
 	private:
 
-		vector<ValueAndMetadata> data_;
+		typedef vector<ValueAndMetadata> DataContainerT;
+		DataContainerT data_;
 		string name_, type_;
 		EventDispatcher dispatcher_;
 
@@ -214,12 +218,36 @@ namespace MemoryStorage
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
 			if(!query.IsNull())
-				throw std::runtime_error("this container doesn't support query strings");
+				throw std::runtime_error("query type not supported by this container");
 
-			NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
+			DataContainerT::const_iterator begin, end;
+
+			//
+			// if client is asking for a negative index that's bigger than the container,
+			// will start from beginning. Ex: if container size is 3 and start = -5, will start from 0
+			//
+			if(GetRecordCount() == 0)
+			{
+				begin = end = data_.end();
+				startOffset = 0;
+			}
+			else
+			{
+				int recordCount = GetRecordCount();
+
+				NormalizeQueryLimits(&startOffset, &endOffset, recordCount);
+
+			}
+
+			VectorResultSet::ContainerT resultSetItems;
+
+			resultSetItems.reserve(endOffset - startOffset);
+
+			for(int key = startOffset; key != endOffset ; ++key)
+				resultSetItems.push_back(make_tuple(TioData(key), data_[key].value, data_[key].metadata));
 
 			return shared_ptr<ITioResultSet>(
-				new GenericResultSet<ITioStorage>(query, shared_from_this(), startOffset, endOffset)); 
+				new VectorResultSet(std::move(resultSetItems), TIONULL));
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)

@@ -158,7 +158,8 @@ int pr1_message_send_and_delete(SOCKET socket, struct PR1_MESSAGE* pr1_message);
 
 struct PR1_MESSAGE* pr1_message_new_get_buffer_for_receive(struct PR1_MESSAGE_HEADER* message_header, void** buffer);
 
-int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message);
+int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message,
+	const unsigned* message_header_timeout_in_seconds, const unsigned* message_payload_timeout_in_seconds);
 
 //
 // TODO: move to internal implementation file
