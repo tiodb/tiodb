@@ -1,0 +1,21 @@
+message MathOperationRequest { 
+	enum Operation {
+		ADDITION = 0;
+		SUBTRACTION = 1;
+		MULTIPLICATION = 2;
+		DIVISION = 3;
+	}
+	optional Operation operation = 1;
+	
+	repeated int32 numbers = 2;
+}
+
+message MathOperationResponse { 
+	optional int64 result = 1;
+}
+
+option cc_generic_services = true;
+
+service MathEngine {
+  rpc MathOperation (MathOperationRequest) returns (MathOperationResponse);
+}
