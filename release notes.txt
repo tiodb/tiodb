@@ -1,0 +1,2 @@
+03/08/2014
+Essa versão corrige o erro de assinatura de trades fora de horário de pregão.
