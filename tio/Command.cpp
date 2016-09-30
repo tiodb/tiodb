@@ -21,7 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using std::endl;
 
 	template<typename T>

@@ -23,6 +23,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 namespace tio
 {
+	using std::endl;
 
 	inline TioData Pr1MessageToCppTioData(const PR1_MESSAGE_FIELD_HEADER* field)
 	{
@@ -180,8 +181,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	}
 
 	
-	using boost::shared_ptr;
-	using boost::weak_ptr;
+	using std::shared_ptr;
+	using std::weak_ptr;
 	using boost::system::error_code;
 	using std::stringstream;
 
@@ -281,6 +282,34 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	};
 #endif
 
+	struct EXTRA_EVENT
+	{
+		EXTRA_EVENT(int index, const shared_ptr<ITioContainer>& container, const string& eventName, bool readRecord)
+		{
+			Fill(index, container, eventName, readRecord);
+		}
+
+		EXTRA_EVENT(){}
+
+		TioData key, value, metadata;
+		string eventName;
+
+		void Fill(int index, 
+			const shared_ptr<ITioContainer>& container, 
+			const string& eventName,
+			bool readRecord)
+		{
+			ASSERT((size_t)index <= container->GetRecordCount());
+
+			this->eventName = eventName;
+			this->key.Set(index);
+			
+			if(readRecord)
+				container->GetRecord(index, &key, &value, &metadata);
+		}
+
+	};
+
 	/*
 	class Pr1Message : public boost::noncopyable
 	{
@@ -308,7 +337,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	*/
 
 	class TioTcpSession : 
-		public boost::enable_shared_from_this<TioTcpSession>,
+		public std::enable_shared_from_this<TioTcpSession>,
 		public boost::noncopyable
 	{
 	private:
@@ -332,14 +361,21 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		DiffMap diffs_;
 
 		unsigned int lastHandle_;
-        unsigned int pendingSendSize_;
+		int sentBytes_;
+        int pendingSendSize_;
+		int maxPendingSendingSize_;
 
 		bool binaryProtocol_;
 
+		static std::ostream& logstream_;
+
+		std::queue<std::function<void (shared_ptr<TioTcpSession>)>> lowPendingBytesThresholdCallbacks_;
+
         std::queue<std::string> pendingSendData_;
 		
-		std::vector< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
+		std::list< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 		std::vector< asio::const_buffer > beingSendData_;
+		shared_ptr<char> binarySendBuffer_;
 
 		struct SUBSCRIPTION_INFO
 		{
@@ -349,7 +385,12 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 				cookie = 0;
 				nextRecord = 0;
 				binaryProtocol = false;
+				eventFilterStart = 0;
+				eventFilterEnd = -1;
 			}
+
+			int eventFilterStart;
+			int eventFilterEnd;
 
 			unsigned int handle;
 			unsigned int cookie;
@@ -360,7 +401,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			shared_ptr<ITioResultSet> resultSet;
 		};
 
-		//                  handle
+		//               handle
 		typedef std::map<unsigned int, shared_ptr<SUBSCRIPTION_INFO> > SubscriptionMap;
 		SubscriptionMap subscriptions_;
 		SubscriptionMap pendingSnapshots_;
@@ -370,6 +411,11 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		vector<string> tokens_;
 
+		bool valid_;
+
+		static int PENDING_SEND_SIZE_BIG_THRESHOLD;
+		static int PENDING_SEND_SIZE_SMALL_THRESHOLD;
+
 		void SendString(const string& str);
 		void SendStringNow(const string& str);
 		
@@ -377,8 +423,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendPendingSnapshots();
 
-		void SendResultSetItem(unsigned int queryID, 
-			const TioData& key, const TioData& value, const TioData& metadata);
+		
 				
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
@@ -388,77 +433,43 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 	public:
 
-		void SendBinaryErrorAnswer(int errorCode)
+		void SendResultSetItem(unsigned int queryID, 
+			const TioData& key, const TioData& value, const TioData& metadata);
+
+		void SendBinaryErrorAnswer(int errorCode, const string& description);
+
+		void SendPendingBinaryData();
+
+		void OnBinaryMessageSent(const error_code& err, size_t sent);
+
+		void IncreasePendingSendSize(int size)
 		{
-			shared_ptr<PR1_MESSAGE> answer = Pr1CreateMessage();
+			pendingSendSize_ += size;
 
-			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
-			pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_ERROR_CODE, errorCode);
-
-			SendBinaryMessage(answer);
+			if(pendingSendSize_ > maxPendingSendingSize_)
+				maxPendingSendingSize_ = pendingSendSize_;
 		}
 
-		void SendPendingBinaryData()
+
+		void RegisterLowPendingBytesCallback(std::function<void (shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback);
+
+		void DecreasePendingSendSize(int size);
+
+		int pendingSendSize()
 		{
-			if(!beingSendData_.empty())
-				return;
-
-			if(pendingBinarySendData_.empty())
-				return;
-
-			for(vector< shared_ptr<PR1_MESSAGE> >::const_iterator i = pendingBinarySendData_.begin() ; 
-				i != pendingBinarySendData_.end() ; 
-				++i)
-			{
-				void* buffer;
-				unsigned int bufferSize;
-
-				pr1_message_get_buffer((*i).get(), &buffer, &bufferSize);
-
-				beingSendData_.push_back(asio::buffer(buffer, bufferSize));
-			}
-
-			asio::async_write(
-				socket_,
-				beingSendData_,
-				boost::bind(&TioTcpSession::OnBinaryMessageSent, shared_from_this(), asio::placeholders::error, asio::placeholders::bytes_transferred));
+			return pendingSendSize_;
 		}
 
-		void OnBinaryMessageSent(const error_code& err, size_t sent)
+		bool IsPendingSendSizeTooBig()
 		{
-			if(CheckError(err))
-			{
-				std::cerr << "ERROR sending binary data: " << err << std::endl;
-				return;
-			}
-			
-			//
-			// remove sent data from pending vector
-			//
-			pendingBinarySendData_.erase(pendingBinarySendData_.begin(), pendingBinarySendData_.begin() + beingSendData_.size());
-
-			beingSendData_.clear();
-
-			SendPendingSnapshots();
-
-			SendPendingBinaryData();
+			return pendingSendSize_ > PENDING_SEND_SIZE_BIG_THRESHOLD;
 		}
 
-		void SendBinaryMessage(shared_ptr<PR1_MESSAGE> message)
-		{
-			pendingBinarySendData_.push_back(message);
-			SendPendingBinaryData();
-		}
+		void SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message);
 
-		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata)
-		{
-			SendBinaryMessage(Pr1CreateAnswerMessage(key, value, metadata));
-		}
+		void SendBinaryAnswer(TioData* key, TioData* value, TioData* metadata);
 
-		void SendBinaryAnswer()
-		{
-			SendBinaryMessage(Pr1CreateAnswerMessage(NULL, NULL, NULL));
-		}
+		void SendBinaryAnswer();
 
 
 		/*
@@ -499,9 +510,15 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnAccept();
 		void ReadCommand();
 
-		unsigned int GetID();
+		unsigned int id();
+		bool UsesBinaryProtocol() const;
 
 		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
+
+		void SendResultSetStart(unsigned int queryID);
+		void SendResultSetEnd(unsigned int queryID);
+
+		bool IsValid();
 
 		void OnReadCommand(const error_code& err, size_t read);
 		void OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t read);
@@ -518,10 +535,11 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 		void OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void SendEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
+		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
+		void SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void Subscribe(unsigned int handle, const string& start);
-		void BinarySubscribe(unsigned int handle, const string& start);
+		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer=true);
+		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer);
 		void Unsubscribe(unsigned int handle);
 
 		const vector<string>& GetTokens();
@@ -531,6 +549,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SetupDiffContainer(unsigned int handle, shared_ptr<ITioContainer> destinationContainer);
 		void StopDiffs();
 
+		
 		void SetCommandRunning()
 		{
 			commandRunning_ = true;
@@ -540,8 +559,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			commandRunning_ = false;
 		}
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
-		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
+		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction, unsigned maxRecords);
 		void BinaryWaitAndPopNext(unsigned int handle);
+		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
 		bool commandRunning_;
+
+
+		void InvalidateConnection(const error_code& err);
+		
 	};		
 }

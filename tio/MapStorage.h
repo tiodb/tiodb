@@ -21,6 +21,7 @@ namespace tio {
 namespace MemoryStorage
 {
 using boost::bad_lexical_cast;
+using std::distance;
 
 class MapStorage : 
 	boost::noncopyable,
@@ -35,7 +36,7 @@ private:
 	string name_, type_;
 	EventDispatcher dispatcher_;
 
-	inline pair<string, ValueAndMetadata> GetInternalRecord(const TioData& key)
+	inline pair<const string, ValueAndMetadata> GetInternalRecord(const TioData& key)
 	{
 		if(key.GetDataType() == TioData::Int)
 		{
@@ -215,25 +216,35 @@ public:
 			  }
 		  }
 
+
+		  //
+		  // We will copy all items to a new container to support multithread.
+		  // It can be slow, but it will lock the thread of the client who is
+		  // asking for the snapshot, not the whole server.
+		  // But yes, we should find a way to make it better
+		  //
+		  VectorResultSet::ContainerT resultSetItems;
+
+		  resultSetItems.reserve(distance(start, end));
+
+		  for(; start != end; ++start)
+			  resultSetItems.push_back(make_tuple(start->first, start->second.value, start->second.metadata));
+
 		  return shared_ptr<ITioResultSet>(
-			new StlContainerResultSet<DataMap>(
-				TIONULL,
-				startOffset,
-				start, 
-				end, 
-				data_.size(),
-				&MapContainerGetter<DataMap>
-				));
+			  new VectorResultSet(std::move(resultSetItems), TIONULL));
 	  }
 
 	  virtual unsigned int Subscribe(EventSink sink, const string& start)
 	  {
 		  //
-		  // map behavior is the opposite of vector
-		  // send all record on subscription is the default option
+		  // No start, we will just send the updates. Must send start=0
+		  // if client wants current data as well
 		  //
-		  if(start == "__none__")
+		  if(start == "")
+		  {
+			  sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 			  return dispatcher_.Subscribe(sink);
+		  }
 
 		  //
 		  // we will accept 0 as start index to stay compatible
@@ -241,7 +252,10 @@ public:
 		  //
 		  DataMap::const_iterator startIterator = data_.begin();
 
-		  if(!start.empty())
+		  //
+		  // start == 0 is a very common case, so we can skip all the math
+		  //
+		  if(!start.empty() && start != "0")
 		  {
 			  int index = 0;
 			  bool isNumeric = false;
@@ -277,6 +291,8 @@ public:
 		  {
 			  sink("set", i->first.c_str(), i->second.value, i->second.metadata);
 		  }
+
+		  sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 
 		  return dispatcher_.Subscribe(sink);
 	  }

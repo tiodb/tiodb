@@ -21,6 +21,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio {
 	namespace LogDbStorage
 	{
+		using std::make_tuple;
+
 		bool TioDataToLdbData(const TioData& tioData, logdb::LdbData* ldbData)
 		{
 			if(!tioData || !ldbData)
@@ -83,7 +85,7 @@ namespace tio {
 
 		class LogDbVectorStorage : 
 			boost::noncopyable,
-			public boost::enable_shared_from_this<LogDbVectorStorage>,
+			public std::enable_shared_from_this<LogDbVectorStorage>,
 			public ITioStorage,
 			public ITioPropertyMap
 		{
@@ -161,7 +163,7 @@ namespace tio {
 				ConverterHelper converter(key, value, metadata);
 
 				ldb_.InsertByIndex(tableInfo_,0, NULL, converter.GetLdbValue(), converter.GetLdbMetadata());
-				dispatcher_.RaiseEvent("push_front", key, value, metadata);
+				dispatcher_.RaiseEvent("push_front", 0, value, metadata);
 			}
 
 		private:
@@ -218,7 +220,7 @@ namespace tio {
 				_Pop(0, key, value, metadata);
 
 				dispatcher_.RaiseEvent("pop_front", 
-					key ? *key : TIONULL, 
+					0, 
 					value ? *value : TIONULL,
 					metadata ? *metadata : TIONULL);
 			}
@@ -340,8 +342,19 @@ namespace tio {
 
 				NormalizeQueryLimits(&startOffset, &endOffset, GetRecordCount());
 
+				VectorResultSet::ContainerT resultSetItems;
+
+				resultSetItems.reserve(endOffset - startOffset);
+
+				for(int index = startOffset; index != endOffset; ++index)
+				{
+					TioData key, value, metadata;
+					GetRecord(TioData(index), &key, &value, &metadata);
+					resultSetItems.push_back(make_tuple(key, value, metadata));
+				}
+
 				return shared_ptr<ITioResultSet>(
-					new GenericResultSet<ITioStorage>(query, shared_from_this(), startOffset, endOffset)); 
+					new VectorResultSet(std::move(resultSetItems), TIONULL));
 			}
 
 			virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
@@ -401,47 +414,23 @@ namespace tio {
 			{
 				size_t startIndex = 0;
 
-				if(accessType_ == RecordNumber)
+				if(start.empty())
 				{
-					if(start.empty())
-					{
-						return dispatcher_.Subscribe(sink);
-					}
-
-					try
-					{
-						startIndex = lexical_cast<int>(start);
-					}
-					catch(std::exception&)
-					{
-						throw std::invalid_argument("invalid start index");
-					}
-
+					sink("snapshot_end", TIONULL, TIONULL, TIONULL);
+					return dispatcher_.Subscribe(sink);
 				}
-				else if(accessType_ == Map)
-				{
-					//
-					// map behavior is the opposite of vector
-					// send all records on subscription by default
-					//
-					if(start == "__none__")
-					{
-						return dispatcher_.Subscribe(sink);
-					}
 
-					//
-					// we will accept 0 as start index to stay compatible
-					// with vector
-					//
-					if(!start.empty() && start != "0")
+				try
+				{
+					startIndex = lexical_cast<int>(start);
+				}
+				catch(std::exception&)
+				{
+					throw std::invalid_argument("invalid start index");
+				}
+
+				if(accessType_ == Map && startIndex != 0)
 						throw std::invalid_argument("invalid start");
-
-					startIndex = 0;
-				}
-				else
-				{
-					BOOST_ASSERT(false && "invalid type");
-				}
 
 				size_t size = ldb_.GetRecordCount(tableInfo_);
 
@@ -465,6 +454,7 @@ namespace tio {
 					}			
 				}
 
+				sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 				return dispatcher_.Subscribe(sink);
 			}
 			virtual void Unsubscribe(unsigned int cookie)
@@ -607,6 +597,7 @@ namespace tio {
 			virtual pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> > 
 				CreateOrOpenStorage(const string& type, const string& name, bool create)
 			{
+				typedef pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap>> ReturnType;
 				CheckType(type);
 
 				if(name.empty())
@@ -622,7 +613,7 @@ namespace tio {
 				// exists, here it goes
 				//
 				if(i != containers_.end() && !i->second.first.expired() && !i->second.second.expired())
-					return i->second;
+					return ReturnType(i->second.first.lock(), i->second.second.lock());
 
 				LogDbVectorStorage::AccessType accessType;
 
@@ -674,7 +665,7 @@ namespace tio {
 				p.first = container;
 				p.second = propertyMap;
 
-				return p;
+				return ReturnType(p.first.lock(), p.second.lock());
 			}
 
 			virtual vector<StorageInfo> GetStorageList()

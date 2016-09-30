@@ -20,12 +20,13 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 // Python plugin support. Need Python and Boost Python
 //
 #ifndef TIO_PYTHON_PLUGIN_SUPPORT
-#define TIO_PYTHON_PLUGIN_SUPPORT 1
+#define TIO_PYTHON_PLUGIN_SUPPORT 0
 #endif
 
 
 #define _CRT_SECURE_NO_DEPRECATE
 #define _SCL_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 //#define _SECURE_SCL 0
 
 #define _WIN32_WINNT 0x0500
@@ -59,9 +60,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 //  #include <google/profiler.h>
 #endif
 
-#include <boost/bind.hpp>
 #include <boost/asio.hpp>
-#include <boost/function.hpp>
+#include <boost/bind.hpp>
 #include <boost/array.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/shared_array.hpp>
@@ -82,6 +82,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #include <boost/typeof/std/utility.hpp>
 #include <boost/typeof/std/vector.hpp>
+
+#include <boost/regex.hpp>
 
 #if TIO_PYTHON_PLUGIN_SUPPORT
 #include <boost/python.hpp>
@@ -150,3 +152,5 @@ namespace tio
 		};
 	};
 }
+
+

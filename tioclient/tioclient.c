@@ -1,5 +1,179 @@
 #include "tioclient_internals.h"
-#include "tioclient.h"
+//#include "tioclient.h"
+
+#define MAX_ERROR_DESCRIPTION_SIZE 255
+
+#ifndef TRUE
+#define TRUE 1
+#endif
+
+#ifndef FALSE
+#define FALSE 0
+#endif
+
+int g_initialized = FALSE;
+volatile int g_dump_protocol_messages = FALSE;
+
+char g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE];
+
+unsigned strlen32(const char* str)
+{
+	size_t size = strlen(str);
+	assert(size < 0xFFFFFFFF);
+	return (unsigned)size;
+}
+
+char* to_lower(char* p)
+{
+	for(; *p; ++p)
+	{
+		*p = (char)tolower(*p);
+	}
+	return p;
+}
+
+char* duplicate_string(const char* src)
+{
+	char* buf;
+
+	if(!src)
+		return NULL;
+
+	buf = (char*)malloc(strlen32(src) + 1);
+
+	strcpy(buf, src);
+	return buf;
+}
+
+void x1_free(struct X1_FIELD* fields)
+{
+	struct X1_FIELD* field;
+
+	if(!fields)
+		return;
+
+	for(field = fields; field->value != NULL; field++)
+		free(field->value);
+
+	free(fields);
+}
+
+
+struct X1_FIELD* x1_decode(const char* buffer, unsigned int size)
+{
+	struct X1_FIELD* ret = NULL;
+	struct X1_FIELD* field = NULL;
+	unsigned offset;
+	unsigned a;
+	unsigned ret_buffer_size;
+	char* bufferCopy;
+	unsigned fieldCount;
+	// header + fields + space before data
+	unsigned fieldSpecStartOffset = 7;
+	char* currentData;
+	unsigned fieldSpecOffset;
+	unsigned fieldDataSize;
+
+	if(memcmp(buffer, "X1", 2) != 0)
+		return NULL;
+
+	// copy the buffer so we can add the \0s that will make our lives easier
+	bufferCopy = (char*)malloc(size);
+	memcpy(bufferCopy, buffer, size);
+
+
+	offset = 2 + 4;
+	if(offset > size)
+		goto clean_up_and_return;
+
+	bufferCopy[offset] = '\0';
+
+	// + 2: skip "X1"
+	//
+	// going to use sscanf instead of atoi because atoi doesn't support hex
+	//	
+	sscanf(bufferCopy + 2, "%X", &fieldCount);
+
+	offset = fieldSpecStartOffset + (5 * fieldCount) + 1;
+	if(offset > size)
+		goto clean_up_and_return;
+
+	currentData = &bufferCopy[offset];
+
+	ret_buffer_size = (fieldCount + 1) * sizeof(struct X1_FIELD);
+	ret = (struct X1_FIELD*) malloc(ret_buffer_size);
+	memset(ret, 0, ret_buffer_size);
+
+	for(a = 0; a < fieldCount; a++)
+	{
+		fieldSpecOffset = fieldSpecStartOffset + (5 * a);
+
+		if(fieldSpecOffset + 4 > size)
+			goto clean_up_and_return;
+
+		ret[a].data_type = bufferCopy[fieldSpecOffset + 4];
+
+		bufferCopy[fieldSpecOffset + 4] = '\0';
+
+		sscanf(&bufferCopy[fieldSpecOffset], "%X", &fieldDataSize);
+
+		currentData[fieldDataSize] = '\0';
+
+		ret[a].value = (char*)malloc(strlen32(currentData) + 1);
+		strcpy(ret[a].value, currentData);
+
+		currentData += fieldDataSize + 1;
+	}
+
+	return ret;
+
+clean_up_and_return:
+	if(ret)
+	for(field = ret; field->value != NULL; field++)
+		free(field->value);
+
+	free(ret);
+	return NULL;
+}
+
+const char* pr1_get_last_error_description()
+{
+	return g_last_error_description;
+}
+
+void pr1_set_last_error_description(const char* description)
+{
+	strncpy(g_last_error_description, description, MAX_ERROR_DESCRIPTION_SIZE);
+	g_last_error_description[MAX_ERROR_DESCRIPTION_SIZE-1] = '\0';
+}
+
+
+int socket_pending_bytes(SOCKET socket, unsigned* count)
+{
+	int ret;
+#ifdef _WIN32
+	u_long pending_bytes = 0;
+
+	ret = ioctlsocket(socket, FIONREAD, &pending_bytes);
+	if(ret == SOCKET_ERROR)
+		return ret;
+
+	*count = (unsigned) pending_bytes;
+
+	return 0;
+#else
+	int pending_bytes = 0;
+
+	ret = ioctl(socket, FIONREAD, &pending_bytes);
+	if(ret == -1)
+		return ret;
+
+	*count = (unsigned)pending_bytes;
+
+	return 0;
+	
+#endif
+}
 
 int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 {
@@ -11,18 +185,66 @@ int socket_send(SOCKET socket, const void* buffer, unsigned int len)
 	return ret;
 }
 
-int socket_receive(SOCKET socket, void* buffer, int len)
+//
+// Contract: 
+//		if no timeout, it will hang until all bytes are returned
+//		if timeout is set, we can return less bytes than requested
+//
+int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout_in_seconds)
 {
 	int ret = 0;
 	char* char_buffer = (char*)buffer;
 	int received = 0;
+	time_t start;
+	int time_left;
+
+#if _WIN32
+	FD_SET recvset;
+	struct timeval tv;
+#endif
+
 
 #ifdef _DEBUG
 	memset(char_buffer, 0xFF, len);
 #endif
 
+	if(timeout_in_seconds)
+		start = time(NULL);
+
 	while(received < len)
 	{
+		if(timeout_in_seconds)
+		{
+			time_left = *timeout_in_seconds - (int)(time(NULL) - start);
+
+			if(time_left < 0)
+			{
+				return TIO_ERROR_TIMEOUT;
+			}
+
+			tv.tv_sec = *timeout_in_seconds;
+			tv.tv_usec = 0;
+
+			FD_ZERO(&recvset);
+			FD_SET(socket, &recvset);
+
+			ret = select(0, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
+
+			if(ret == SOCKET_ERROR)
+			{
+				pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
+				return TIO_ERROR_NETWORK;
+			}
+
+			if(ret == 0)
+			{
+				return TIO_ERROR_TIMEOUT;
+			}
+
+			assert(ret == 1);
+		}
+		
+
 		//
 		// Windows supports MSG_WAITALL only on Windows Server 2008 or superior... :-(
 		// So I need to emulate it here
@@ -30,16 +252,18 @@ int socket_receive(SOCKET socket, void* buffer, int len)
 		ret = recv(socket, char_buffer + received, len - received, 0);
 
 		if(ret <= 0)
+		{
+			pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
 			return TIO_ERROR_NETWORK;
+		}
 
 		received += ret;
 	}
-
-	assert(ret < 0 || received == len);
 		
-	return ret;
+	return received;
 }
 
+/*
 int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 {
 	int ret;
@@ -53,7 +277,7 @@ int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 	if(pending_bytes < len)
 		return 0;
 
-	return socket_receive(socket, buffer, len); 
+	return socket_receive(socket, buffer, len, NULL); 
 #else
 	ret = recv(socket, (char*)buffer, len, MSG_DONTWAIT);
 
@@ -64,6 +288,7 @@ int socket_receive_if_available(SOCKET socket, void* buffer, unsigned int len)
 	return ret;
 #endif
 }
+*/
 
 
 
@@ -81,12 +306,12 @@ struct STREAM_BUFFER* stream_buffer_new()
 
 unsigned int stream_buffer_space_used(struct STREAM_BUFFER* stream_buffer)
 {
-	return stream_buffer->current - stream_buffer->buffer;
+	return (unsigned)(stream_buffer->current - stream_buffer->buffer);
 }
 
 unsigned int stream_buffer_space_left(struct STREAM_BUFFER* stream_buffer)
 {
-	return stream_buffer->buffer_size - stream_buffer_space_used(stream_buffer);
+	return (unsigned)(stream_buffer->buffer_size - stream_buffer_space_used(stream_buffer));
 }
 
 void stream_buffer_ensure_space_left(struct STREAM_BUFFER* stream_buffer, unsigned int size)
@@ -178,19 +403,6 @@ void stream_buffer_delete(struct STREAM_BUFFER* message_buffer)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 struct PR1_MESSAGE* pr1_message_new()
 {
 	struct PR1_MESSAGE_HEADER* header;
@@ -250,7 +462,7 @@ void pr1_message_add_field_double(struct PR1_MESSAGE* pr1_message, unsigned shor
 
 void pr1_message_add_field_string(struct PR1_MESSAGE* pr1_message, unsigned short field_id, const char* value)
 {
-	pr1_message_add_field(pr1_message, field_id, MESSAGE_FIELD_TYPE_STRING, value, strlen(value));
+	pr1_message_add_field(pr1_message, field_id, MESSAGE_FIELD_TYPE_STRING, value, strlen32(value));
 }
 
 int pr1_message_field_get_int(const struct PR1_MESSAGE_FIELD_HEADER* field)
@@ -273,26 +485,158 @@ const void* pr1_message_field_get_buffer(const struct PR1_MESSAGE_FIELD_HEADER* 
 	return field;
 }
 
-void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char** buffer, unsigned int buffer_size)
+
+void pr1_message_field_get_string(const struct PR1_MESSAGE_FIELD_HEADER* field, char* buffer, unsigned int buffer_size)
 {
-	if(buffer_size > field->data_size + 1)
-		buffer_size = field->data_size;
+	unsigned int copy_size = buffer_size < field->data_size ? buffer_size : field->data_size;
 
 	field++;
 
-	memcpy(buffer, field, buffer_size);
+	memcpy(buffer, field, copy_size);
 
-	buffer[buffer_size] = '\0';
+	//
+	// If there's some space left, we will use the \0 just in case
+	//
+	if(buffer_size > copy_size)
+		buffer[copy_size] = '\0';
 }
 
-void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)
+void pr1_message_field_get_string_malloc(const struct PR1_MESSAGE_FIELD_HEADER* field, char** buffer)
+{
+	char* internal_buffer;
+	int size;
+	
+	size = field->data_size + 1;
+
+	internal_buffer = malloc(size);
+
+	pr1_message_field_get_string(field, internal_buffer, size);
+
+	*buffer = internal_buffer;
+}
+
+
+int pr1_message_get_data_size(struct PR1_MESSAGE* pr1_message)
+{
+	return stream_buffer_space_used(pr1_message->stream_buffer);
+}
+
+
+void pr1_message_fill_header_info(struct PR1_MESSAGE* pr1_message)
 {
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
 	header->message_size = stream_buffer_space_used(pr1_message->stream_buffer) - sizeof(struct PR1_MESSAGE_HEADER);
 	header->field_count = pr1_message->field_count;
+}
+
+void pr1_message_get_buffer(struct PR1_MESSAGE* pr1_message, void** buffer, unsigned int* size)
+{
+	pr1_message_fill_header_info(pr1_message);
 
 	*buffer = pr1_message->stream_buffer->buffer;
 	*size = stream_buffer_space_used(pr1_message->stream_buffer);
+}
+
+const char* message_field_id_to_string(int i)
+{
+	if(i == MESSAGE_FIELD_ID_COMMAND) return "MESSAGE_FIELD_ID_COMMAND";
+	if(i == MESSAGE_FIELD_ID_HANDLE) return "MESSAGE_FIELD_ID_HANDLE";
+	if(i == MESSAGE_FIELD_ID_KEY) return "MESSAGE_FIELD_ID_KEY";
+	if(i == MESSAGE_FIELD_ID_VALUE) return "MESSAGE_FIELD_ID_VALUE";
+	if(i == MESSAGE_FIELD_ID_METADATA) return "MESSAGE_FIELD_ID_METADATA";
+	if(i == MESSAGE_FIELD_ID_NAME) return "MESSAGE_FIELD_ID_NAME";
+	if(i == MESSAGE_FIELD_ID_TYPE) return "MESSAGE_FIELD_ID_TYPE";
+	if(i == MESSAGE_FIELD_ID_ERROR_CODE) return "MESSAGE_FIELD_ID_ERROR_CODE";
+	if(i == MESSAGE_FIELD_ID_ERROR_DESC) return "MESSAGE_FIELD_ID_ERROR_DESC";
+	if(i == MESSAGE_FIELD_ID_EVENT) return "MESSAGE_FIELD_ID_EVENT";
+	if(i == MESSAGE_FIELD_ID_START_RECORD) return "MESSAGE_FIELD_ID_START_RECORD";
+	if(i == MESSAGE_FIELD_ID_END) return "MESSAGE_FIELD_ID_END";
+	if(i == MESSAGE_FIELD_ID_QUERY_ID) return "MESSAGE_FIELD_ID_QUERY_ID";
+
+	return "*UNKNOWN*";
+}
+
+const char* tio_command_to_string(int i)
+{
+	if(i == TIO_COMMAND_ANSWER) return "TIO_COMMAND_ANSWER";
+	if(i == TIO_COMMAND_EVENT) return "TIO_COMMAND_EVENT";				
+	if(i == TIO_COMMAND_QUERY_ITEM) return "TIO_COMMAND_QUERY_ITEM";
+	if(i == TIO_COMMAND_PING) return "TIO_COMMAND_PING";
+	if(i == TIO_COMMAND_OPEN) return "TIO_COMMAND_OPEN";
+	if(i == TIO_COMMAND_CREATE) return "TIO_COMMAND_CREATE";
+	if(i == TIO_COMMAND_CLOSE) return "TIO_COMMAND_CLOSE";
+	if(i == TIO_COMMAND_SET) return "TIO_COMMAND_SET";
+	if(i == TIO_COMMAND_INSERT) return "TIO_COMMAND_INSERT";
+	if(i == TIO_COMMAND_DELETE) return "TIO_COMMAND_DELETE";
+	if(i == TIO_COMMAND_PUSH_BACK) return "TIO_COMMAND_PUSH_BACK";
+	if(i == TIO_COMMAND_PUSH_FRONT) return "TIO_COMMAND_PUSH_FRONT";
+	if(i == TIO_COMMAND_POP_BACK) return "TIO_COMMAND_POP_BACK";
+	if(i == TIO_COMMAND_POP_FRONT) return "TIO_COMMAND_POP_FRONT";
+	if(i == TIO_COMMAND_CLEAR) return "TIO_COMMAND_CLEAR";
+	if(i == TIO_COMMAND_COUNT) return "TIO_COMMAND_COUNT";
+	if(i == TIO_COMMAND_GET) return "TIO_COMMAND_GET";
+	if(i == TIO_COMMAND_SUBSCRIBE) return "TIO_COMMAND_SUBSCRIBE";
+	if(i == TIO_COMMAND_UNSUBSCRIBE) return "TIO_COMMAND_UNSUBSCRIBE";
+	if(i == TIO_COMMAND_QUERY) return "TIO_COMMAND_QUERY";
+	if(i == TIO_COMMAND_WAIT_AND_POP_NEXT) return "TIO_COMMAND_WAIT_AND_POP_NEXT";
+	if(i == TIO_COMMAND_WAIT_AND_POP_KEY) return "TIO_COMMAND_WAIT_AND_POP_KEY";
+	if(i == TIO_COMMAND_PROPGET ) return "TIO_COMMAND_PROPGET ";
+	if(i == TIO_COMMAND_PROPSET ) return "TIO_COMMAND_PROPSET ";
+
+	return "*UNKNOWN*";
+}
+
+void dump_pr1_message(const char* prefix, struct PR1_MESSAGE* pr1_message)
+{
+	unsigned int a;
+	char buffer[255];
+	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
+	struct PR1_MESSAGE_FIELD_HEADER* field_header;
+
+	if(!g_dump_protocol_messages)
+		return;
+
+	pr1_message_parse(pr1_message);
+
+
+	printf("%s pr1_message: message_size=%d, field_count=%d, reserved=%d\r\n", 
+		prefix,
+		header->message_size,
+		header->field_count,
+		header->reserved);
+
+	for(a = 0 ; a < pr1_message->field_count ; a++)
+	{
+		field_header = pr1_message->field_array[a];
+
+		printf("  field_id=%d (%s), data_type=%d, data_size=%d, value=",
+			field_header->field_id,
+			message_field_id_to_string(field_header->field_id),
+			field_header->data_type,
+			field_header->data_size);
+		
+		switch(field_header->data_type)
+		{
+		case MESSAGE_FIELD_TYPE_NONE:
+			printf("(NONE)");
+			break;
+		case MESSAGE_FIELD_TYPE_STRING:
+			pr1_message_field_get_string(field_header, buffer, sizeof(buffer));
+			printf("\"%s\"", buffer);
+			break;
+		case MESSAGE_FIELD_TYPE_INT:
+			printf("%d", pr1_message_field_get_int(field_header));
+			break;
+		default:
+			printf("(UNKNOWN TYPE)");
+			break;
+		}
+
+		if(field_header->field_id == MESSAGE_FIELD_ID_COMMAND)
+			printf(", command=%s", tio_command_to_string(pr1_message_field_get_int(field_header)));
+
+		printf("\r\n");
+	}
 }
 
 void pr1_message_parse(struct PR1_MESSAGE* pr1_message)
@@ -300,6 +644,8 @@ void pr1_message_parse(struct PR1_MESSAGE* pr1_message)
 	unsigned int a;
 	struct PR1_MESSAGE_HEADER* header = (struct PR1_MESSAGE_HEADER*)pr1_message->stream_buffer->buffer;
 	char* current = (char*)&header[1];
+
+	assert(header->message_size != 0xFFFFFFFF);
 
 	pr1_message->field_count = header->field_count;
 
@@ -334,6 +680,8 @@ int pr1_message_send(SOCKET socket, struct PR1_MESSAGE* pr1_message)
 
 	pr1_message_get_buffer(pr1_message, &buffer, &size);
 
+	dump_pr1_message("SEND", pr1_message);
+
 	return socket_send(socket, buffer, size);
 }
 
@@ -363,23 +711,45 @@ struct PR1_MESSAGE* pr1_message_new_get_buffer_for_receive(struct PR1_MESSAGE_HE
 	return pr1_message;
 }
 
-int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
+int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message, 
+	const unsigned* message_header_timeout_in_seconds, const unsigned* message_payload_timeout_in_seconds)
 {
 	int result;
 	struct PR1_MESSAGE_HEADER pr1_message_header;
 	void* receive_buffer;
 	
-	result = socket_receive(socket, &pr1_message_header, sizeof(struct PR1_MESSAGE_HEADER));
+	result = socket_receive(socket, &pr1_message_header, sizeof(struct PR1_MESSAGE_HEADER), message_header_timeout_in_seconds);
 
 	if(TIO_FAILED(result))
 		return result;
+
+	if(result < sizeof(struct PR1_MESSAGE_HEADER))
+	{
+		//
+		// The header fragmented. Since it's very small (12 bytes now), if it fragments
+		// we will consider it to be an error and the connection in invalid state from now on
+		//
+		return TIO_ERROR_NETWORK;
+	}
 
 	*pr1_message = pr1_message_new_get_buffer_for_receive(&pr1_message_header, &receive_buffer);
 
 	result = socket_receive(
 		socket, 
 		receive_buffer,
-		pr1_message_header.message_size);
+		pr1_message_header.message_size,
+		message_payload_timeout_in_seconds);
+
+	if((unsigned)result < pr1_message_header.message_size)
+	{
+		//
+		// We didn't receive the payload before the timeout.
+		// We will consider it to be an error and the connection in invalid state from now on
+		//
+		pr1_message_delete(*pr1_message);
+		*pr1_message = NULL;
+		return TIO_ERROR_NETWORK;
+	}
 
 	if(TIO_FAILED(result))
 	{
@@ -390,10 +760,12 @@ int pr1_message_receive(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 
 	pr1_message_parse(*pr1_message);
 
+	dump_pr1_message("RCEV", *pr1_message);
+
 	return result;
 }
 
-
+/*
 int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_message)
 {
 	int result;
@@ -413,7 +785,8 @@ int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_mes
 	result = socket_receive(
 		socket, 
 		receive_buffer,
-		pr1_message_header.message_size);
+		pr1_message_header.message_size,
+		NULL);
 
 	if(TIO_FAILED(result))
 	{
@@ -426,6 +799,7 @@ int pr1_message_receive_if_available(SOCKET socket, struct PR1_MESSAGE** pr1_mes
 
 	return result;
 }
+*/
 
 
 
@@ -495,6 +869,12 @@ void tiodata_set_as_none(struct TIO_DATA* tiodata)
 	tiodata->data_type = TIO_DATA_TYPE_NONE;
 }
 
+void tiodata_free(struct TIO_DATA* tiodata)
+{
+	tiodata_set_as_none(tiodata);
+}
+
+
 
 char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 {
@@ -503,12 +883,13 @@ char* tiodata_string_get_buffer(struct TIO_DATA* tiodata, unsigned int min_size)
 
 	tiodata_set_as_none(tiodata);
 	tiodata->data_type = TIO_DATA_TYPE_STRING;
-	tiodata->string_size_ = min_size + 1;
-	tiodata->string_ = (char*)malloc(tiodata->string_size_);
+	tiodata->string_size_ = min_size;
+	tiodata->string_ = (char*)malloc(tiodata->string_size_ + 1); // leave room for a \0 just in case
 
 	return tiodata->string_;
 }
 
+/*
 void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
 {
 	unsigned int a;
@@ -525,6 +906,7 @@ void tiodata_string_release_buffer(struct TIO_DATA* tiodata)
 		}
 	}
 }
+*/
 
 
 /*void tiodata_set_string(struct TIO_DATA* tiodata, const char* value)
@@ -609,35 +991,57 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata)
 
 	buffer[sizeof(buffer)-1] = '\0';
 
-	tiodata_set_string_and_size(tiodata, buffer, strlen(buffer));
+	tiodata_set_string_and_size(tiodata, buffer, strlen32(buffer));
 }
 
 
+void check_correct_thread(struct TIO_CONNECTION* connection)
+{
+#ifdef _WIN32
+	unsigned int current_thread_id = GetCurrentThreadId();
+#else
+	unsigned int current_thread_id = pthread_self();
+#endif
 
+	if(connection->thread_id == 0)
+	{
+		connection->thread_id = current_thread_id;
+		return;
+	}
 
+	assert(connection->thread_id == current_thread_id);
+}
 
-
-
-
-
-
+void check_not_on_network_batch(struct TIO_CONNECTION* connection)
+{
+	assert(connection->wait_for_answer == TRUE);
+}
 
 
 int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection)
 {
 	SOCKET sockfd;
 	struct sockaddr_in serv_addr;
-	struct hostent *server;
+	struct hostent *server = NULL;
 	int result;
 	char buffer[sizeof("going binary") -1];
 
+	if(!g_initialized)
+		tio_initialize();
+
+	*connection = NULL;
+
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) 
+	if (sockfd < 0)
+	{
+		pr1_set_last_error_description("Can't create socket");
 		return TIO_ERROR_NETWORK;
+	}
 
 	server = gethostbyname(host);
 
 	if (server == NULL) {
+		pr1_set_last_error_description("Can't resolve server name.");
 		return TIO_ERROR_NETWORK;
 	}
 
@@ -646,18 +1050,23 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	serv_addr.sin_port = htons(port);
 
 	if (connect(sockfd,(struct sockaddr *) &serv_addr,sizeof(serv_addr)) < 0)
+	{
+		pr1_set_last_error_description("Error while trying to connect to server");
 		return TIO_ERROR_NETWORK;
+	}
 
 	result = socket_send(sockfd, "protocol binary\r\n", sizeof("protocol binary\r\n") -1);
 	if(TIO_FAILED(result)) 
 	{
+		pr1_set_last_error_description("Error sending data to server during protocol negotiation");
 		closesocket(sockfd);
 		return result;
 	}
 
-	result = socket_receive(sockfd, buffer, sizeof(buffer));
+	result = socket_receive(sockfd, buffer, sizeof(buffer), NULL);
 	if(TIO_FAILED(result)) 
 	{
+		pr1_set_last_error_description("Error receiving data to server during protocol negotiation");
 		closesocket(sockfd);
 		return result;
 	}
@@ -665,6 +1074,7 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 	// invalid answer
 	if(memcmp(buffer, "going binary", sizeof("going binary")-1) !=0)
 	{
+		pr1_set_last_error_description("Invalid answer from server during protocol negotiation");
 		closesocket(sockfd);
 		return TIO_ERROR_PROTOCOL;
 	}
@@ -676,12 +1086,23 @@ int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection
 
 	*connection = (struct TIO_CONNECTION*)malloc(sizeof(struct TIO_CONNECTION));
 	(*connection)->socket = sockfd;
-	(*connection)->serv_addr = serv_addr;
+	(*connection)->host = duplicate_string(host);
+	(*connection)->port = port;
 	(*connection)->event_list_queue_end = NULL;
-	(*connection)->containers_count = 1;
+	(*connection)->containers_count = 64; // initial buffer size
 	(*connection)->containers = malloc(sizeof(void*) * (*connection)->containers_count);
+	memset((*connection)->containers, 0, sizeof(void*) * (*connection)->containers_count);
 	(*connection)->pending_event_count = 0;
-	(*connection)->dispatch_events_on_receive = 1;
+	(*connection)->dispatch_events_on_receive = 0;
+	(*connection)->thread_id = 0;
+	(*connection)->total_messages_received = 0;
+	(*connection)->group_event_callback = NULL;
+	(*connection)->group_event_cookie = NULL;
+	(*connection)->wait_for_answer = TRUE;
+	(*connection)->pending_event_count = 0;
+	(*connection)->max_pending_event_count = 0;
+	(*connection)->pending_answer_count = 0;
+	(*connection)->debug_flags = 0;
 
 	return TIO_SUCCESS;
 }
@@ -768,17 +1189,12 @@ void pr1_message_field_get_as_tio_data(const struct PR1_MESSAGE* pr1_message, un
 	return;
 }
 
-
-
-int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+struct PR1_MESSAGE* tio_generate_data_message(unsigned int command_id, int handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
-	SOCKET socket = container->connection->socket;
-	int result;
-
 	struct PR1_MESSAGE* pr1_message = pr1_message_new();
 
 	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_COMMAND, command_id);
-	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_HANDLE, container->handle);
+	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_HANDLE, handle);
 
 	if(key)
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_KEY, key);
@@ -786,6 +1202,19 @@ int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int com
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_VALUE, value);
 	if(metadata)
 		tio_data_add_to_pr1_message(pr1_message, MESSAGE_FIELD_ID_METADATA, metadata);
+
+	return pr1_message;
+}
+
+int tio_container_send_command(struct TIO_CONTAINER* container, unsigned int command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
+{
+	SOCKET socket = container->connection->socket;
+	int result;
+
+	struct PR1_MESSAGE* pr1_message = 
+		tio_generate_data_message(command_id, container->handle, key, value, metadata);
+
+	check_correct_thread(container->connection);
 
 	result = pr1_message_send_and_delete(socket, pr1_message);
 
@@ -817,6 +1246,13 @@ void events_list_push(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* mes
 	}
 
 	connection->event_list_queue_end = node;
+
+	connection->pending_event_count++;
+}
+
+int event_list_is_empty(struct TIO_CONNECTION* connection)
+{
+	return connection->event_list_queue_end == NULL;
 }
 
 struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
@@ -825,7 +1261,7 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 	struct PR1_MESSAGE* pr1_message;
 
 	// empty queue
-	if(connection->event_list_queue_end == NULL)
+	if(event_list_is_empty(connection))
 		return NULL;
 
 	first = connection->event_list_queue_end->next;
@@ -840,18 +1276,29 @@ struct PR1_MESSAGE* events_list_pop(struct TIO_CONNECTION* connection)
 
 	free(first);
 
+	connection->pending_event_count--;
+
 	return pr1_message;
 }
-
 
 int pr1_message_get_error_code(struct PR1_MESSAGE* msg)
 {
 	struct PR1_MESSAGE_FIELD_HEADER* error_code;
+	struct PR1_MESSAGE_FIELD_HEADER* error_description;
 
 	error_code = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_CODE);
 
 	if(!error_code)
 		return TIO_SUCCESS;
+
+	error_description = pr1_message_field_find_by_id(msg, MESSAGE_FIELD_ID_ERROR_DESC);
+
+	if(error_description)
+	{
+		pr1_message_field_get_string(error_description, g_last_error_description, MAX_ERROR_DESCRIPTION_SIZE);
+	}
+	else
+		*g_last_error_description = '\0';
 
 	return pr1_message_field_get_int(error_code);
 }
@@ -864,14 +1311,22 @@ void tio_disconnect(struct TIO_CONNECTION* connection)
 		return;
 
 	closesocket(connection->socket);
+
 	connection->socket = 0;
 
-	while( (pending_event = events_list_pop(connection)) )
+	for(pending_event = events_list_pop(connection) ; pending_event != NULL ; pending_event = events_list_pop(connection))
+	{
 		pr1_message_delete(pending_event);
+	}
 
 	free(connection->containers);
+	free(connection->host);
 }
 
+const char* tio_get_last_error_description()
+{
+	return pr1_get_last_error_description();
+}
 
 int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command_id, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata)
 {
@@ -882,7 +1337,12 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 
 	struct PR1_MESSAGE* pr1_message;
 
-	result = pr1_message_receive(socket, &pr1_message);
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
+
+	result = pr1_message_receive(socket, &pr1_message, NULL, NULL);
+
+	connection->total_messages_received++;
 	
 	if(TIO_FAILED(result))
 		return result;
@@ -913,60 +1373,176 @@ int tio_receive_message(struct TIO_CONNECTION* connection, unsigned int* command
 void on_event_receive(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* event_message)
 {
 	events_list_push(connection, event_message);
-	connection->pending_event_count++;
 
-	if(connection->dispatch_events_on_receive)
-		tio_dispatch_pending_events(connection, 1);
+	if(connection->pending_event_count >= connection->max_pending_event_count)
+		tio_dispatch_pending_events(connection, 0xFFFFFFFF);
 }
 
-int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events)
+int register_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* message, const char* name, const char* group_name, struct TIO_CONTAINER** container)
+{
+	struct TIO_CONTAINER* new_container;
+	int name_len;
+	int group_name_len;
+
+	char* name_copy;
+	char* group_name_copy;
+	
+	int handle;
+	struct PR1_MESSAGE_FIELD_HEADER* handle_field;
+
+	handle_field = pr1_message_field_find_by_id(message, MESSAGE_FIELD_ID_HANDLE);
+
+	if(handle_field == NULL)
+		return TIO_ERROR_MISSING_PARAMETER;
+
+	handle = pr1_message_field_get_int(handle_field);
+
+	name_len = strlen32(name) + 1;
+	group_name_len = group_name ? strlen32(group_name) + 1 : 0;
+
+	new_container = (struct TIO_CONTAINER*)malloc(sizeof(struct TIO_CONTAINER) + name_len + group_name_len);
+
+	name_copy = (char*) &new_container[1];
+	memcpy(name_copy, name, name_len);
+
+	if(group_name_len)
+	{
+		group_name_copy = name_copy + name_len;
+		memcpy(group_name_copy, group_name, group_name_len);
+	}
+	else
+		group_name_copy = NULL;
+
+	new_container->connection = connection;
+	new_container->handle = handle;
+	new_container->event_callback = NULL;
+	new_container->wait_and_pop_next_callback = NULL;
+	new_container->wait_and_pop_next_cookie = 0;
+	new_container->subscription_cookie = NULL;
+	new_container->group_name = group_name_copy;
+	new_container->name = name_copy;
+
+	if(handle >= connection->containers_count)
+	{
+		connection->containers_count = handle * 2;
+		connection->containers = realloc(connection->containers, sizeof(void*) * connection->containers_count);
+		memset(&connection->containers[handle], 0, (connection->containers_count - handle) * sizeof(void*));
+	}
+
+	connection->containers[handle] = new_container;
+
+	if(container)
+		*container = new_container;
+
+	return TIO_SUCCESS;
+}
+
+int on_group_new_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* message)
+{
+	int ret = TIO_SUCCESS;
+	struct PR1_MESSAGE_FIELD_HEADER* name_field;
+	struct PR1_MESSAGE_FIELD_HEADER* group_name_field;
+	char* container_name = NULL;
+	char* group_name = NULL;
+
+	name_field = pr1_message_field_find_by_id(message, MESSAGE_FIELD_ID_CONTAINER_NAME);
+	group_name_field = pr1_message_field_find_by_id(message, MESSAGE_FIELD_ID_GROUP_NAME);
+
+	if(name_field == NULL || group_name_field ==  NULL)
+	{
+		ret = TIO_ERROR_MISSING_PARAMETER;
+		goto clean_up_and_return;
+	}
+
+	pr1_message_field_get_string_malloc(name_field, &container_name);
+	pr1_message_field_get_string_malloc(group_name_field, &group_name);
+	
+	
+	register_container(connection, message, container_name, group_name, NULL);
+
+clean_up_and_return:
+	if(container_name)
+		free(container_name);
+
+	if(group_name)
+		free(group_name);
+
+	return ret;
+}
+
+//
+// return the number of dispatched events
+//
+int tio_receive_next_pending_event(struct TIO_CONNECTION* connection, const unsigned* timeout_in_seconds)
 {
 	int result = 0;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
+	int command;
 
-	for(; min_events != 0; min_events--)
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
+
+	//
+	// In some weird situation (like server sending just the message headed and hanging right
+	// after that) we can wait for twice the timeout value. I don't think it's an issue...
+	//
+	result = pr1_message_receive(connection->socket, &received_message, timeout_in_seconds, timeout_in_seconds);
+
+	if(TIO_FAILED(result))
+		return result;
+
+	connection->total_messages_received++;
+
+	command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
+
+	if(!command_field) 
 	{
-		result = pr1_message_receive(connection->socket, &received_message);
-
-		if(TIO_FAILED(result))
-			return result;
-
-		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
-
-		if(!command_field) {
-			pr1_message_delete(received_message);
-			result = TIO_ERROR_PROTOCOL;
-			break;
-		}
-
-		// MUST be an event
-		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
-		{
-			pr1_message_delete(received_message);
-			result = TIO_ERROR_PROTOCOL;
-			break;
-		}
-
-		on_event_receive(connection, received_message);
+		pr1_message_delete(received_message);
+		return TIO_ERROR_PROTOCOL;
 	}
 
-	return result;
+	command = pr1_message_field_get_int(command_field);
+
+	if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
+	{
+		on_group_new_container(connection, received_message);
+		pr1_message_delete(received_message);
+		return 0;
+	}
+		
+	// MUST be an event
+	if(command != TIO_COMMAND_EVENT)
+	{
+		pr1_message_delete(received_message);
+		return TIO_ERROR_PROTOCOL;
+	}
+
+	on_event_receive(connection, received_message);
+
+	return 1;
 }
 
 
 int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_MESSAGE** response)
 {
 	int result;
+	int command;
 	struct PR1_MESSAGE_FIELD_HEADER* command_field;
 	struct PR1_MESSAGE* received_message;
+
+	check_correct_thread(connection);
+	check_not_on_network_batch(connection);
 
 	// we'll loop until we receive a response (anything that is not an event)
 	for(;;)
 	{
-		result = pr1_message_receive(connection->socket, &received_message);
+		result = pr1_message_receive(connection->socket, &received_message, NULL, NULL);
+		
 		if(TIO_FAILED(result))
 			return result;
+
+		connection->total_messages_received++;
 
 		command_field = pr1_message_field_find_by_id(received_message, MESSAGE_FIELD_ID_COMMAND);
 
@@ -974,16 +1550,26 @@ int tio_receive_until_not_event(struct TIO_CONNECTION* connection, struct PR1_ME
 			*response = NULL;
 			pr1_message_delete(received_message);
 			*response = NULL;
+			pr1_set_last_error_description("Missing field MESSAGE_FIELD_ID_COMMAND on the received packet");
 			return TIO_ERROR_PROTOCOL;
 		}
 
-		if(pr1_message_field_get_int(command_field) != TIO_COMMAND_EVENT)
+		command = pr1_message_field_get_int(command_field);
+
+		if(command == TIO_COMMAND_EVENT)
+		{
+			on_event_receive(connection, received_message);
+		}
+		else if(command == TIO_COMMAND_NEW_GROUP_CONTAINER)
+		{
+			on_group_new_container(connection, received_message);
+			pr1_message_delete(received_message);
+		}
+		else
 		{
 			*response = received_message;
 			break;
 		}
-
-		on_event_receive(connection, received_message);
 	}
 
 	return result;
@@ -1047,27 +1633,30 @@ clean_up_and_return:
 	return result;
 }
 
-
-
-
-int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, const char* type, struct TIO_CONTAINER** container)
+struct PR1_MESSAGE* tio_generate_create_or_open_msg(unsigned int command_id, const char* name, const char* type)
 {
-	struct PR1_MESSAGE* pr1_message = NULL;
-	struct PR1_MESSAGE* response = NULL;
-	struct PR1_MESSAGE_FIELD_HEADER* handle_field = NULL;
-	int result;
-	int handle;
-	SOCKET socket = connection->socket;
-
-	*container = NULL;
-
-	pr1_message = pr1_message_new();
+	struct PR1_MESSAGE* pr1_message = pr1_message_new();
 
 	pr1_message_add_field_int(pr1_message, MESSAGE_FIELD_ID_COMMAND, command_id);
 	pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_NAME, name);
 
 	if(type)
 		pr1_message_add_field_string(pr1_message, MESSAGE_FIELD_ID_TYPE, type);
+
+	return pr1_message;
+}
+
+
+int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_id, const char* name, const char* type, struct TIO_CONTAINER** container)
+{
+	struct PR1_MESSAGE* pr1_message = NULL;
+	struct PR1_MESSAGE* response = NULL;
+	int result;
+	SOCKET socket = connection->socket;
+
+	*container = NULL;
+
+	pr1_message = tio_generate_create_or_open_msg(command_id, name, type);
 
 	pr1_message_send_and_delete(socket, pr1_message);
 
@@ -1080,34 +1669,7 @@ int tio_create_or_open(struct TIO_CONNECTION* connection, unsigned int command_i
 	if(TIO_FAILED(result)) 
 		goto clean_up_and_return;
 
-	handle_field = pr1_message_field_find_by_id(response, MESSAGE_FIELD_ID_HANDLE);
-	if(!handle_field) {
-		result = TIO_ERROR_PROTOCOL;
-		goto clean_up_and_return;
-	}
-
-	*container = (struct TIO_CONTAINER*)malloc(sizeof(struct TIO_CONTAINER));
-
-	handle = pr1_message_field_get_int(handle_field);
-
-	(*container)->connection = connection;
-	(*container)->handle = handle;
-	(*container)->event_callback = NULL;
-	(*container)->wait_and_pop_next_callback = NULL;
-	(*container)->subscription_cookie = NULL;
-
-	//
-	// TODO: I'm indexing by handle because I really don't want to
-	// create another hash map implementation now. This array will grow really
-	// big if the user open and close lots of containers
-	//
-	if(handle >= connection->containers_count)
-	{
-		connection->containers_count = handle * 2;
-		connection->containers = realloc(connection->containers, sizeof(void*) * connection->containers_count);
-	}
-	
-	connection->containers[handle] = *container;
+	register_container(connection, response, name, NULL, container);
 
 clean_up_and_return:
 	pr1_message_delete(response);
@@ -1117,6 +1679,11 @@ clean_up_and_return:
 int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container)
 {
 	return tio_create_or_open(connection, TIO_COMMAND_CREATE, name, type, container);
+}
+
+void tio_set_debug_flags(int flags)
+{
+	g_dump_protocol_messages = flags;
 }
 
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container)
@@ -1160,9 +1727,25 @@ clean_up_and_return:
 	return result;
 }
 
+unsigned long get_n_readable_bytes(SOCKET sock) 
+{
+	unsigned long n = (unsigned long)(-1);
+	if (ioctlsocket(sock, FIONREAD, &n) < 0) 
+	{
+		/* look in WSAGetLastError() for the error code */
+		return 0;
+	}
+	return n;
+}
+
+/*
+	tio_dispatch_pending_events
+	returns: number of dispatched events
+*/
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events)
 {
 	unsigned int a;
+	struct TIO_CONTAINER* container;
 	struct PR1_MESSAGE* event_message;
 	struct PR1_MESSAGE_FIELD_HEADER* handle_field;
 	struct PR1_MESSAGE_FIELD_HEADER* event_code_field;
@@ -1182,8 +1765,6 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 		if(!event_message)
 			break;
 
-		connection->pending_event_count--;
-
 		handle_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_HANDLE);
 		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT);
 
@@ -1199,19 +1780,30 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_VALUE), &value);
 			pr1_message_field_to_tio_data(pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_METADATA), &metadata);
 
+			container = connection->containers[handle];
+			event_callback = NULL;
+
 			if(event_code == TIO_COMMAND_WAIT_AND_POP_NEXT)
 			{
-				event_callback = connection->containers[handle]->wait_and_pop_next_callback;
-				cookie = connection->containers[handle]->wait_and_pop_next_cookie;
+				event_callback = container->wait_and_pop_next_callback;
+				cookie = container->wait_and_pop_next_cookie;
 			}
 			else
 			{
-				event_callback = connection->containers[handle]->event_callback;
-				cookie = connection->containers[handle]->subscription_cookie;
+				if(container->group_name == NULL)
+				{
+					event_callback = container->event_callback;
+					cookie = container->subscription_cookie;
+				}
+				else
+				{
+					event_callback = connection->group_event_callback;
+					cookie = connection->group_event_cookie;
+				}
 			}
 
 			if(event_callback)
-				event_callback(cookie, handle, event_code, &key, &value, &metadata);
+				event_callback(TIO_SUCCESS, container, cookie, event_code, container->group_name, container->name, &key, &value, &metadata);
 		}
 
 		pr1_message_delete(event_message);
@@ -1234,7 +1826,7 @@ int tio_ping(struct TIO_CONNECTION* connection, char* payload)
 	unsigned int payload_len;
 	SOCKET socket = connection->socket;
 
-	payload_len = strlen(payload);
+	payload_len = strlen32(payload);
 
 	pr1_message = pr1_message_new();
 
@@ -1273,22 +1865,40 @@ clean_up_and_return:
 
 }
 
+
+const char* tio_container_name(struct TIO_CONTAINER* container)
+{
+	return container->name;
+}
+
 int tio_container_input_command(struct TIO_CONTAINER* container, unsigned short command_id, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)
 {
 	struct PR1_MESSAGE* response = NULL;
 	int result;
 
-	result = tio_container_send_command_and_get_response(container, command_id, key, value, metadata, &response);
+	if(container->connection->wait_for_answer)
+	{
+		result = tio_container_send_command_and_get_response(container, command_id, key, value, metadata, &response);
 
-	if(TIO_FAILED(result)) 
-		goto clean_up_and_return;
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
 
-	result = pr1_message_get_error_code(response);
+		result = pr1_message_get_error_code(response);
 
-	if(TIO_FAILED(result)) 
-		goto clean_up_and_return;
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
 
-	result = TIO_SUCCESS;
+		result = TIO_SUCCESS;
+	}
+	else
+	{
+		result = tio_container_send_command(container, command_id, key, value, metadata);
+
+		if(TIO_FAILED(result)) 
+			goto clean_up_and_return;
+
+		container->connection->pending_event_count++;
+	}
 
 clean_up_and_return:
 	pr1_message_delete(response);
@@ -1395,7 +2005,10 @@ int tio_container_get_count(struct TIO_CONTAINER* container, int* count)
 	assert(count_value.data_type == TIO_DATA_TYPE_INT);
 
 	if(count_value.data_type != TIO_DATA_TYPE_INT)
+	{
+		pr1_set_last_error_description("Expected count_value.data_type to be INT. It is not.");
 		return TIO_ERROR_GENERIC;
+	}
 
 	*count = count_value.int_;
 
@@ -1407,7 +2020,9 @@ clean_up_and_return:
 }
 
 
-int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie)
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, 
+						const char* regex,
+						query_callback_t query_callback, void* cookie)
 {
 	int result;
 	struct PR1_MESSAGE* request = pr1_message_new();
@@ -1420,8 +2035,11 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_HANDLE, container->handle);
-	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START, start);
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_START_RECORD, start);
 	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_END, end);
+
+	if(regex)
+		pr1_message_add_field_string(request, MESSAGE_FIELD_ID_QUERY_EXPRESSION, regex);
 
 
 	result = pr1_message_send_and_delete(container->connection->socket, request);
@@ -1473,7 +2091,7 @@ int tio_container_query(struct TIO_CONTAINER* container, int start, int end, que
 		if(key.data_type == TIO_DATA_TYPE_NONE)
 			break;
 
-		query_callback(cookie, query_id, &key, &value, &metadata);
+		query_callback(TIO_SUCCESS, container, cookie, query_id, container->name, &key, &value, &metadata);
 	}
 
 
@@ -1525,6 +2143,111 @@ int tio_container_unsubscribe(struct TIO_CONTAINER* container)
 	return TIO_SUCCESS;
 }
 
+int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name)
+{
+	int result;
+	struct PR1_MESSAGE* request = pr1_message_new();
+	struct PR1_MESSAGE* response = NULL;
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_GROUP_ADD);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_GROUP_NAME, group_name);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_CONTAINER_NAME, container_name);
+
+
+	result = pr1_message_send_and_delete(connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = TIO_SUCCESS;
+	
+clean_up_and_return:
+	pr1_message_delete(response);
+
+	return result;
+}
+
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback, void* cookie)
+{
+	connection->group_event_callback = callback;
+	connection->group_event_cookie = cookie;
+	return 0;
+}
+
+
+int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start)
+{
+	int result;
+	struct PR1_MESSAGE* request = NULL;
+	struct PR1_MESSAGE* response = NULL;
+
+	check_correct_thread(connection);
+
+	request = pr1_message_new();
+
+	pr1_message_add_field_int(request, MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_GROUP_SUBSCRIBE);
+	pr1_message_add_field_string(request, MESSAGE_FIELD_ID_GROUP_NAME, group_name);
+
+	if(start)
+		pr1_message_add_field_string(request, MESSAGE_FIELD_ID_START_RECORD, start);
+
+	result = pr1_message_send_and_delete(connection->socket, request);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = tio_receive_until_not_event(connection, &response);
+	if(TIO_FAILED(result))
+		goto clean_up_and_return;
+
+	result = pr1_message_get_error_code(response);
+	if(TIO_FAILED(result)) 
+		goto clean_up_and_return;
+
+	result = TIO_SUCCESS;
+
+clean_up_and_return:
+	pr1_message_delete(response);
+
+	return result;
+}
+
+
+void tio_begin_network_batch(struct TIO_CONNECTION* connection)
+{
+	assert(connection->pending_event_count == 0);
+	assert(connection->wait_for_answer == TRUE);
+
+	connection->wait_for_answer = FALSE;
+}
+
+void tio_finish_network_batch(struct TIO_CONNECTION* connection)
+{
+	struct PR1_MESSAGE* response;
+	int result, a;
+	assert(connection->wait_for_answer == FALSE);
+
+	connection->wait_for_answer = TRUE;
+
+	for(a = 0 ; a < connection->pending_event_count ; a++)
+	{
+		result = tio_receive_until_not_event(connection, &response);
+
+		if(result > 0)
+			pr1_message_delete(response);
+	}
+
+	connection->pending_event_count = 0;
+	
+}
+
+
 
 void tio_initialize()
 {
@@ -1532,6 +2255,8 @@ void tio_initialize()
 	WSADATA wsadata;
 	WSAStartup(MAKEWORD(2,2), &wsadata);
 #endif
+
+	g_initialized = TRUE;
 }
 
 

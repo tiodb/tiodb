@@ -26,9 +26,11 @@ namespace tio
 	using std::map;
 	using std::string;
 	using std::vector;
+	using std::tuple;
+	using std::tie;
 	using std::pair;
-	using boost::function;
-	using boost::shared_ptr;
+	using std::function;
+	using std::shared_ptr;
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -70,6 +72,69 @@ namespace tio
 		return __PairAssignDetail__<T1, T2>(t1, t2);
 	}
 
+#ifdef _WIN32
+
+	__declspec(selectany) LARGE_INTEGER g_PerformanceFrequency;
+	static BOOL xpto123 = QueryPerformanceFrequency(&g_PerformanceFrequency);
+
+	class Timer
+	{
+		LARGE_INTEGER _start, _stop;
+	public:
+		enum StartNow
+		{
+			startNow,
+			dontStartNow
+		};
+
+		Timer(StartNow start = dontStartNow)
+		{
+			if(start == startNow)
+				Start();
+		}
+
+		void Start()
+		{
+			QueryPerformanceCounter(&_start);
+			_stop.QuadPart = 0;
+		}
+
+		void Stop()
+		{
+			QueryPerformanceCounter(&_stop);
+		}
+
+		inline __int64 ElapsedInNanoseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000 * 1000 * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline __int64 ElapsedInMicroseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000 * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline __int64 ElapsedInMiliseconds()
+		{
+			if(_stop.QuadPart == 0)
+				Stop();
+
+			return ((_stop.QuadPart - _start.QuadPart) * 1000) / g_PerformanceFrequency.QuadPart;
+		}
+
+		inline unsigned int Elapsed()
+		{
+			return static_cast<unsigned int>(ElapsedInMiliseconds());
+		}
+	};
+
+#else
 	class Timer
 	{
 		clock_t start;
@@ -90,20 +155,21 @@ namespace tio
 			return ((clock() - start) * 1000) / CLOCKS_PER_SEC;
 		}
 	};
+#endif
 
 }
 
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 
 	class TioData
 	{
 	public:
 		enum Type
 		{
-			Int, Double, String, None, Invalid
+			None = 0, Int, Double, String, Invalid
 		};
 	private:
 		Type type_;
@@ -119,8 +185,8 @@ namespace tio
 	public:
 
 		TioData()
+			: type_(None)
 		{
-			type_ = None;
 		}
 
 		TioData(int i)
@@ -163,6 +229,18 @@ namespace tio
 		{
 			Free();
 		}
+
+		/*TioData(TioData&& data)
+		{
+			type_ = data.type_;
+
+			if(data.type_ == None)
+				return;
+			
+			data.type_ = None;
+
+			double_ = data.double_;
+		}*/
 
 		TioData(const TioData& data)
 		{
@@ -236,7 +314,7 @@ namespace tio
 			size_t needSize = GetSerializedSize();
 
 			if(needSize > bufferSize)
-				throw std::invalid_argument("buffer to small");
+				throw std::invalid_argument("buffer too small");
 
 			unsigned int* data = (unsigned int*)buffer;
 
@@ -513,6 +591,9 @@ namespace tio
 	//
 	inline unsigned int NormalizeIndex(int index, int size, bool checkBounds = true)
 	{	
+		if(index == 0)
+			return 0;
+
 		if(index < 0)
 		{
 			index = abs(index);
@@ -521,6 +602,13 @@ namespace tio
 				throw std::invalid_argument("out of bounds");
 
 			index = size - index;
+
+			//
+			// If it's a negative index that goes beyond containers limits, we
+			// will push it to the first index.
+			//
+			if(index < 0)
+				index = 0;
 		}
 		else
 		{
@@ -528,7 +616,7 @@ namespace tio
 				throw std::invalid_argument("out of bounds");
 		}
 
-		ASSERT(index >=0);
+		ASSERT(index >= 0);
 
 		return static_cast<unsigned int>(index);
 	}
@@ -559,7 +647,7 @@ namespace tio
 			*start = *end;
 	}
 
-	typedef boost::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
+	typedef std::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
 
 	static const TioData TIONULL = TioData();
 
@@ -1077,69 +1165,42 @@ namespace tio
 		return true;
 	}
 
-	template<class ContainerT>
-	class StlContainerResultSet : public ITioResultSet
+	class VectorResultSet : public ITioResultSet
 	{
-		typedef function<bool (size_t, typename ContainerT::const_iterator, TioData*, TioData*, TioData*)> ItemGetFunction;
+	public:
+		typedef vector<tuple<TioData, TioData, TioData>> ContainerT;
 
-		ItemGetFunction itemGetFunction_;
-		TioData source_;
-
-		typename ContainerT::const_iterator begin_, current_, end_;
-
-		size_t currentIndex_;
-		size_t recordCount_;
-		bool invalidated_;
-
+	private:
+		const ContainerT items_;
+		const TioData source_;
+		ContainerT::const_iterator current_;
 	public:
 
-		StlContainerResultSet(
-			const TioData& source,
-			unsigned int beginIndex, 
-			typename ContainerT::const_iterator begin, 
-			typename ContainerT::const_iterator end,
-			typename ContainerT::size_type recordCount = numeric_limits<typename ContainerT::size_type>::max(),
-			ItemGetFunction itemGetFunction = &NumericIndexBasedContainerGetter<ContainerT>
-			)
-
-			: source_(source), current_(begin), begin_(begin), end_(end), 
-			currentIndex_(beginIndex), itemGetFunction_(itemGetFunction), recordCount_(recordCount)
+		VectorResultSet(ContainerT&& items, const TioData& source)
+			: items_(std::move(items))
+			, current_(begin(items_))
+			, source_(source)
 		{
-			invalidated_ = false;
-		}
-
-		void Invalidate()
-		{
-			invalidated_ = true;
-		}
-
-		void CheckInvalidated()
-		{
-			if(invalidated_)
-				throw runtime_error("invalidated query");
 		}
 
 		virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata)
 		{
-			CheckInvalidated();
-
-			if(current_ == end_)
+			if(current_ == end(items_))
 				return false;
 
-			return itemGetFunction_(currentIndex_, current_, key, value, metadata);
+			std::tie(*key, *value, *metadata) = *current_;
+
+			return true;
 		}
 
 		virtual bool MoveNext()
 		{
-			CheckInvalidated();
-
-			if(current_ == end_)
+			if(current_ == end(items_))
 				return false;
 
 			++current_;
-			++currentIndex_;
 
-			if(current_ == end_)
+			if(current_ == end(items_))
 				return false;
 
 			return true;
@@ -1147,169 +1208,35 @@ namespace tio
 
 		virtual bool MovePrevious()
 		{
-			CheckInvalidated();
-
-			if(current_ == begin_)
+			if(current_ == begin(items_))
 				return false;
 
 			--current_;
-			--currentIndex_;
-
+			
 			return true;
 		}
 
 		virtual bool AtBegin()
 		{
-			CheckInvalidated();
-
-			return current_ == begin_;
+			return current_ == begin(items_);
 		}
 
 		virtual bool AtEnd()
 		{
-			CheckInvalidated();
-
-			return current_ == end_;
+			return current_ == end(items_);
 		}
 
 		virtual TioData Source()
 		{
-			CheckInvalidated();
-
 			return source_;
 		}
 
 		virtual unsigned RecordCount()
 		{
-			CheckInvalidated();
-
-			return recordCount_;
+			return items_.size();
 		}
 	};
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	template<class ContainerT>
-	class GenericResultSet : public ITioResultSet
-	{
-		TioData source_;
-		shared_ptr<ContainerT> container_;
-
-		unsigned int currentIndex_, beginIndex_, endIndex_;
-		unsigned int recordCount_;
-		bool invalidated_;
-
-	public:
-		GenericResultSet(
-			const TioData& source, 
-			shared_ptr<ContainerT> container,
-			unsigned int beginIndex,
-			unsigned int endIndex
-			)
-			: source_(source), currentIndex_(beginIndex), beginIndex_(beginIndex), endIndex_(endIndex), 
-			  recordCount_(endIndex - beginIndex),
-			  container_(container)
-		{
-			invalidated_ = false;
-		}
-
-		void Invalidate()
-		{
-			invalidated_ = true;
-		}
-
-		void CheckInvalidated()
-		{
-			if(invalidated_)
-				throw runtime_error("invalidated query");
-		}
-
-		virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata)
-		{
-			CheckInvalidated();
-
-			if(currentIndex_ == endIndex_)
-				return false;
-
-			container_->GetRecord((int)currentIndex_, key, value, metadata);
-
-			return true;
-		}
-
-		virtual bool MoveNext()
-		{
-			CheckInvalidated();
-
-			if(currentIndex_ == endIndex_)
-				return false;
-
-			++currentIndex_;
-
-			if(currentIndex_ == endIndex_)
-				return false;
-
-			return true;
-		}
-
-		virtual bool MovePrevious()
-		{
-			CheckInvalidated();
-
-			if(currentIndex_ == beginIndex_)
-				return false;
-
-			--currentIndex_;
-
-			return true;
-		}
-
-		virtual bool AtBegin()
-		{
-			CheckInvalidated();
-
-			return currentIndex_ == beginIndex_;
-		}
-
-		virtual bool AtEnd()
-		{
-			CheckInvalidated();
-
-			return currentIndex_ == endIndex_;
-		}
-
-		virtual TioData Source()
-		{
-			CheckInvalidated();
-
-			return source_;
-		}
-
-		virtual unsigned int RecordCount()
-		{
-			CheckInvalidated();
-
-			return recordCount_;
-		}
-	};
 
 	inline bool IsListContainer(shared_ptr<ITioContainer> container)
 	{
@@ -1325,3 +1252,4 @@ namespace tio
 	}
 
 }
+

@@ -25,6 +25,7 @@ namespace MemoryStorage
 	using std::vector;
 	using std::map;
 	using std::list;
+	using std::make_tuple;
 
 
 typedef list<ValueAndMetadata> ListType;
@@ -80,7 +81,7 @@ public:
 		  CheckValue(value);
 		  data_.push_front(ValueAndMetadata(value, metadata));
 
-		  dispatcher_.RaiseEvent("push_front", key, value, metadata);
+		  dispatcher_.RaiseEvent("push_front", 0, value, metadata);
 	  }
 
 	virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
@@ -90,8 +91,10 @@ public:
 
 		ValueAndMetadata& data = data_.back();
 
+		int index = static_cast<int>(data_.size() - 1);
+
 		if(key)
-			*key = static_cast<int>(data_.size() - 1);
+			*key = index;
 
 		if(value)
 			*value = data.value;
@@ -102,7 +105,7 @@ public:
 		data_.pop_back();
 
 		dispatcher_.RaiseEvent("pop_back",
-			key ? *key : TIONULL, 
+			index, 
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
 	}
@@ -126,7 +129,7 @@ public:
 		data_.pop_front();
 
 		dispatcher_.RaiseEvent("pop_front", 
-			key ? *key : TIONULL, 
+			0,
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
 	}
@@ -150,7 +153,11 @@ public:
 		// advance a list iterator is expensive. If it's near the end, will
 		// walk backwards
 		//
-		if(index <= static_cast<int>(data_.size() / 2))
+		if (data_.empty())
+		{
+			i = data_.end();
+		}
+		else if(index <= static_cast<int>(data_.size() / 2))
 		{
 			i = data_.begin();
 			for(int x = 0  ; x < index ; ++x, ++i)
@@ -208,11 +215,14 @@ public:
 
 		ListType::iterator i = GetOffset(key, &realIndex);
 		
-		realKey.Set(static_cast<int>(realIndex));
+		if (i != data_.end())
+		{
+			realKey.Set(static_cast<int>(realIndex));
 
-		data_.erase(i);
+			data_.erase(i);
 
-		dispatcher_.RaiseEvent("delete", realKey, value, metadata); 
+			dispatcher_.RaiseEvent("delete", realKey, value, metadata);
+		}
 	}
 
 	virtual void Clear()
@@ -259,8 +269,15 @@ public:
 				end = GetOffset(endOffset);	
 		}
 
+		VectorResultSet::ContainerT resultSetItems;
+
+		resultSetItems.reserve(endOffset - startOffset);
+
+		for(int key = startOffset; begin != end; ++begin, ++key)
+			resultSetItems.push_back(make_tuple(TioData(key), begin->value, begin->metadata));
+
 		return shared_ptr<ITioResultSet>(
-			new StlContainerResultSet<ListType>(TIONULL, startOffset, begin, end));
+			new VectorResultSet(std::move(resultSetItems), TIONULL));
 	}
 
 	virtual unsigned int Subscribe(EventSink sink, const string& start)
@@ -281,21 +298,52 @@ public:
 			}
 		}
 
-		if(start.empty() || startIndex == 0 && data_.size() == 0)
+		if(start.empty() || (startIndex == 0 && data_.size() == 0))
+		{
+			sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 			return dispatcher_.Subscribe(sink);
+		}
 
-		i =  GetOffset(startIndex);
+		size_t realIndex;
+		try
+		{
+			i = GetOffset(startIndex, &realIndex);
+		}
+		catch(std::invalid_argument&)
+		{
+			//
+			// if it happens, the index is out of bonds. It's not really an error, we
+			// just don't have records to send
+			//
+
+			//
+			// if the index is before beginning, we're going to send
+			// from beginning. If it's after the end, we have nothing to send
+			//
+			if(startIndex > 0)
+			{
+				i = data_.end();
+				realIndex = data_.size();
+			}
+			else
+			{
+				i = data_.begin();
+				realIndex = 0;
+			}
+		}
 
 		cookie = dispatcher_.Subscribe(sink);
 
 		//
 		// key is the start index to send
 		//
-		for( ; i != data_.end() ; ++i)
+		for( ; i != data_.end() ; ++i, ++realIndex)
 		{
 			const ValueAndMetadata& data = *i;
-			sink("push_back", TIONULL, data.value, data.metadata);
+			sink("push_back", TioData((int)realIndex), data.value, data.metadata);
 		}
+
+		sink("snapshot_end", TIONULL, TIONULL, TIONULL);
 
 		return cookie;
 
@@ -307,10 +355,11 @@ public:
 
 	virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 	{
-		ListType::iterator i = GetOffset(searchKey);
+		size_t realIndex = 0;
+		ListType::iterator i = GetOffset(searchKey, &realIndex);
 
 		if(key)
-			*key = searchKey;
+			*key = static_cast<int>(realIndex);
 
 		if(value)
 			*value = i->value;

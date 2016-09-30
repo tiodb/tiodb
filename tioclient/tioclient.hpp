@@ -2,14 +2,7 @@
 #include "tioclient.h"
 #include <string>
 #include <sstream>
-
-#ifndef TIO_CLIENT_BOOST_SUPPORT
-#define TIO_CLIENT_BOOST_SUPPORT 1
-#endif
-
-#ifdef TIO_CLIENT_BOOST_SUPPORT
-	#include <boost/function.hpp>
-#endif
+#include <functional>
 
 
 namespace tio
@@ -17,6 +10,22 @@ namespace tio
 	using std::string;
 	using std::stringstream;
 	using std::runtime_error;
+
+	class tio_exception : public std::runtime_error
+	{
+		int errorCode_;
+	public:
+
+		explicit tio_exception(int errorCode, const string& message)
+			: std::runtime_error(message)
+			, errorCode_(errorCode)
+		{}
+
+		int code()
+		{
+			return errorCode_;
+		}
+	};
 
 	inline void ToTioData(int v, TIO_DATA* tiodata)
 	{
@@ -49,7 +58,7 @@ namespace tio
 	}
 
 	//
-	// TODO: maybe not correct...
+	// TODO: cast maybe not correct...
 	//
 	inline void FromTioData(const TIO_DATA* tiodata, unsigned int* value)
 	{
@@ -75,8 +84,8 @@ namespace tio
 		if(result < 0)
 		{
 			stringstream str;
-			str << "client error " << result;
-			throw std::runtime_error(str.str());
+			str << "client error " << result << ": \"" << tio_get_last_error_description() << "\"" ;
+			throw tio_exception(result, str.str());
 		}
 	}
 
@@ -86,9 +95,34 @@ namespace tio
 		TIO_DATA tiodata_;
 	public:
 
+		TioDataConverter(const TioDataConverter& rhv)
+		{
+			tiodata_init(&tiodata_);
+			
+			*this = rhv;
+		}
+
+		TioDataConverter& operator=(const TioDataConverter& rhv)
+		{
+			tiodata_set_as_none(&tiodata_);
+			tiodata_copy(&rhv.tiodata_, &tiodata_);
+			return *this;
+		}
+
+		TioDataConverter(const TioDataConverter&& rhv)
+		{
+			tiodata_ = rhv.tiodata_;
+			rhv.tiodata_.data_type = TIO_DATA_TYPE_NONE;
+		}
+
 		TioDataConverter()
 		{
 			tiodata_init(&tiodata_);
+		}
+		
+		~TioDataConverter()
+		{
+			tiodata_set_as_none(&tiodata_);
 		}
 
 		explicit TioDataConverter(const TValue& v)
@@ -97,7 +131,18 @@ namespace tio
 			ToTioData(v, &tiodata_);
 		}
 
-		const TIO_DATA* inptr()
+		explicit TioDataConverter(const TValue* v)
+		{
+			tiodata_init(&tiodata_);
+			
+			//
+			// Type will be TIO_DATA_TYPE_NONE if the pointer is null
+			//
+			if(v)
+				ToTioData(*v, &tiodata_);
+		}
+
+		const TIO_DATA* inptr() const
 		{
 			return &tiodata_;
 		}
@@ -108,7 +153,7 @@ namespace tio
 			return &tiodata_;
 		}
 
-		TValue value()
+		TValue value() const
 		{
 			TValue v;
 			
@@ -127,6 +172,8 @@ namespace tio
 		virtual int create(const char* name, const char* type, void** handle)=0;
 		virtual int open(const char* name, const char* type, void** handle)=0;
 		virtual int close(void* handle)=0;
+
+		virtual int group_add(const char* group_name, const char* container_name)=0;
 
 		virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)=0;
 		virtual int container_push_back(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA* metadata)=0;
@@ -154,7 +201,10 @@ namespace tio
 	class Connection : private IContainerManager
 	{
 		TIO_CONNECTION* connection_;
+		string host_;
+		short port_;
 
+	
 	protected:
 
 		virtual int create(const char* name, const char* type, void** handle)
@@ -165,6 +215,11 @@ namespace tio
 		virtual int open(const char* name, const char* type, void** handle)
 		{
 			return tio_open(connection_, name, type, (TIO_CONTAINER**)handle);
+		}
+
+		virtual int group_add(const char* group_name, const char* container_name)
+		{
+			return tio_group_add(connection_, group_name, container_name);
 		}
 
 		virtual int close(void* handle)
@@ -234,7 +289,7 @@ namespace tio
 
 		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)
 		{
-			return tio_container_query((TIO_CONTAINER*)handle, start, end, query_callback, cookie);
+			return tio_container_query((TIO_CONTAINER*)handle, start, end, nullptr, query_callback, cookie);
 		}
 
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
@@ -253,9 +308,20 @@ namespace tio
 		}
 
 	public:
-		Connection() : connection_(NULL)
+		Connection() : connection_(nullptr), port_(0)
 		{
 			tio_initialize();
+		}
+
+		Connection(const string& host, short port = 2605) : connection_(nullptr), port_(0)
+		{
+			tio_initialize();
+			Connect(host, port);
+		}
+
+		~Connection()
+		{
+			Disconnect();
 		}
 
 		virtual IContainerManager* container_manager()
@@ -263,7 +329,10 @@ namespace tio
 			return this;
 		}
 
-		void Connect(const string& host, short port)
+		string host() { return host_;}
+		short port() { return port_;}
+
+		void Connect(const string& host, short port = 2605)
 		{
 			int result;
 
@@ -272,18 +341,37 @@ namespace tio
 			result = tio_connect(host.c_str(), port, &connection_);
 
 			ThrowOnTioClientError(result);
+
+			host_ = host;
+			port_ = port;
 		}
 
 		void Disconnect()
 		{
 			tio_disconnect(connection_);
-			connection_ = NULL;
+			connection_ = nullptr;
 		}
 
-		void WaitAndDispatchPendingEvents(unsigned int eventCount)
+		int WaitForNextEventAndDispatch(unsigned int timeOutInSeconds)
 		{
-			tio_receive_pending_events(connection_, eventCount);
-			tio_dispatch_pending_events(connection_, eventCount);
+			int ret;
+
+			tio_dispatch_pending_events(connection_, 0xFFFFFFFF);
+
+			ret = tio_receive_next_pending_event(connection_, &timeOutInSeconds);
+
+			if(ret == TIO_ERROR_TIMEOUT)
+			{
+				return 0;
+			}
+			else
+			{
+				ThrowOnTioClientError(ret);
+			}
+
+			tio_dispatch_pending_events(connection_, 0xFFFFFFFF);
+
+			return ret;
 		}
 
 		bool connected()
@@ -297,6 +385,12 @@ namespace tio
 			return connection_;
 		}
 
+		void AddToGroup(const string& groupName, const string& containerName)
+		{
+			int ret = tio_group_add(connection_, groupName.c_str(), containerName.c_str());
+
+			ThrowOnTioClientError(ret);
+		}
 	};
 
 	template<typename TContainer, typename TKey, typename TValue>
@@ -356,11 +450,7 @@ namespace tio
 			typedef TValue value_type;
 			typedef TMetadata metadata_type;
 			typedef ServerValue<SelfT, TKey, TValue> server_value_type;
-#if TIO_CLIENT_BOOST_SUPPORT
-			typedef boost::function<void (const string&, const TKey&, const TValue&)> EventCallbackT;
-#else
-			typedef void (*EventCallbackT)(const string& /*eventName */, const TKey&, const TValue&);
-#endif
+			typedef std::function<void (const string& /*containerName*/, const string& /*eventName*/, const TKey&, const TValue&)> EventCallbackT;
 
 		protected:
 			void* container_;
@@ -378,11 +468,11 @@ namespace tio
 			}
 
 		public:
-			TioContainerImpl() : 
-			    container_(NULL), 
-				containerManager_(NULL),
-				eventCallback_(NULL),
-				waitAndPopNextCallback_(NULL)
+			TioContainerImpl() :
+				container_(nullptr),
+				containerManager_(nullptr),
+				eventCallback_(nullptr),
+				waitAndPopNextCallback_(nullptr)
 			{
 			}
 
@@ -409,15 +499,16 @@ namespace tio
 
 				containerManager_ = cn->container_manager();
 
-				result = container_manager()->open(name.c_str(), NULL, &container_);
+				result = container_manager()->open(name.c_str(), nullptr, &container_);
 
 				ThrowOnTioClientError(result);
 
 				name_ = name;
 			}
 
+
 			template<typename TConnection>
-			void create(TConnection* cn, const string& name, const string& type)
+			void create(TConnection* cn, const string& name, const string& type = "")
 			{
 				int result;
 
@@ -442,7 +533,10 @@ namespace tio
 				name_.clear();
 			}
 
-			static void EventCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
+
+			static void EventCallback(int result, void* handle, void* cookie, unsigned int event_code, 
+				const char* group_name, const char* container_name, 
+				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
 				TKey typedKey;
@@ -454,10 +548,12 @@ namespace tio
 				if(value->data_type != TIO_DATA_TYPE_NONE)
 					FromTioData(value, &typedValue);
 				
-				me->eventCallback_("event", typedKey, typedValue);
+				me->eventCallback_(container_name, "event", typedKey, typedValue);
 			}
 
-			static void WaitAndPopNextCallback(void* cookie, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
+			// typedef void (*event_callback_t)(void* /*cookie*/, const char* /*group_name*/, const char* /*container_name*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+			static void WaitAndPopNextCallback(void* cookie, const char* /*group_name*/, const char* container_name, unsigned int /*handle*/, unsigned int /*event_code*/, 
+				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
 				TKey typedKey;
@@ -473,14 +569,20 @@ namespace tio
 				// When calling the callback, our state must be cleared. Reentrant stuff...
 				//
 				EventCallbackT cb = me->waitAndPopNextCallback_;
-				me->waitAndPopNextCallback_ = NULL;
-
-				cb("wnp_next", typedKey, typedValue);
+				me->waitAndPopNextCallback_ = nullptr;
+				
+				cb("wnp_next", container_name, typedKey, typedValue);
 			}
 
-			void wait_and_pop_next(EventCallbackT callback)
+			bool wait_and_pop_next(EventCallbackT callback)
 			{
 				int result;
+
+				if(!callback)
+					throw std::runtime_error("wait_and_pop_next callback can't be null");
+
+				if(waitAndPopNextCallback_)
+					return false;
 
 				waitAndPopNextCallback_ = callback;
 
@@ -488,6 +590,13 @@ namespace tio
 					container_,
 					&this_type::WaitAndPopNextCallback,
 					this);
+
+				return true;
+			}
+
+			void AddToGroup(const string& groupName)
+			{
+				container_manager()->group_add(groupName.c_str(), tio_container_name(container_));
 			}
 
 			void subscribe(EventCallbackT callback)
@@ -498,7 +607,7 @@ namespace tio
 
 				result = container_manager()->container_subscribe(
 					container_,
-					NULL,
+					nullptr,
 					&this_type::EventCallback,
 					this);
 			}
@@ -532,9 +641,8 @@ namespace tio
 
 				result = container_manager()->container_propget(
 					container_, 
-					TioDataConverter<key_type>(key).inptr(),
-					value.outptr(),
-					NULL);
+					TioDataConverter<string>(key).inptr(),
+					value.outptr());
 
 				ThrowOnTioClientError(result);
 
@@ -554,12 +662,12 @@ namespace tio
 					container_, 
 					TioDataConverter<key_type>(key).inptr(),
 					TioDataConverter<value_type>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
 
-			void set(const key_type& key, const value_type& value)
+			void set(const key_type& key, const value_type& value, const std::string* metadata = nullptr)
 			{
 				int result;
 
@@ -567,7 +675,7 @@ namespace tio
 					container_, 
 					TioDataConverter<key_type>(key).inptr(),
 					TioDataConverter<value_type>(value).inptr(),
-					NULL);
+					metadata ? TioDataConverter<std::string>(*metadata).inptr() : nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -580,11 +688,29 @@ namespace tio
 				result = container_manager()->container_get(
 					container_, 
 					TioDataConverter<key_type>(index).inptr(),
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
+
+				return value.value();
+			}
+
+			value_type get(const key_type& index, const value_type& defaultValue)
+			{
+				int result;
+				TioDataConverter<value_type> value;
+
+				result = container_manager()->container_get(
+					container_, 
+					TioDataConverter<key_type>(index).inptr(),
+					nullptr,
+					value.outptr(),
+					nullptr);
+
+				if(result != 0)
+					return defaultValue;
 
 				return value.value();
 			}
@@ -626,16 +752,20 @@ namespace tio
 
 				return static_cast<size_t>(count);
 			}
+
+			void add_to_group(const string& groupName)
+			{
+				container_manager()->group_add(groupName.c_str(), name_.c_str());
+			}
 		};
 	
 		template<typename TValue, typename TMetadata=std::string>
-		class list : public TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >
+		class list : public TioContainerImpl<int, TValue, TMetadata, list<TValue, TMetadata> >
 		{
 		public:
 			typedef list<TValue, TMetadata> this_type;
-			typedef typename TioContainerImpl<unsigned int, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
-
-	
+			typedef typename TioContainerImpl<int, TValue, TMetadata, list<TValue, TMetadata> >::value_type value_type;
+		
 		public:
 			void push_back(const value_type& value)
 			{
@@ -643,9 +773,9 @@ namespace tio
 
 				result = this->container_manager()->container_push_back(
 					this->container_, 
-					NULL,
+					nullptr,
 					TioDataConverter<TValue>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -656,9 +786,9 @@ namespace tio
 
 				result = this->container_manager()->container_push_front(
 					this->container_, 
-					NULL,
+					nullptr,
 					TioDataConverter<TValue>(value).inptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 			}
@@ -670,9 +800,9 @@ namespace tio
 
 				result = this->container_manager()->container_pop_back(
 					this->container_, 
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 
@@ -686,9 +816,9 @@ namespace tio
 
 				result = this->container_manager()->container_pop_front(
 					this->container_, 
-					NULL,
+					nullptr,
 					value.outptr(),
-					NULL);
+					nullptr);
 
 				ThrowOnTioClientError(result);
 

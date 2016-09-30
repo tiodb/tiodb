@@ -181,9 +181,9 @@ namespace tio { namespace BdbStorage
 			DBTYPE bdb_type;
 			u_int32_t flags;
 
-			boost::function<DbTxn* ()> GetTransaction;
-			boost::function<void ()> OnUpdate;
-			boost::function<void ()> ForceCommit;
+			std::function<DbTxn* ()> GetTransaction;
+			std::function<void ()> OnUpdate;
+			std::function<void ()> ForceCommit;
 		};
 
 	private:

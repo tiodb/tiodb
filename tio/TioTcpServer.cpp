@@ -21,7 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using boost::system::error_code;
 
 	using boost::lexical_cast;
@@ -30,11 +30,15 @@ namespace tio
 	using boost::split;
 	using boost::is_any_of;
 
-	using boost::tuple;
+	using std::tuple;
 
 	using std::setfill;
 	using std::setw;
 	using std::hex;
+
+
+	using std::cout;
+	using std::endl;
 
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
@@ -55,6 +59,11 @@ namespace tio
 		return false;
 	}
 
+	void TioTcpServer::PostCallback(function<void()> callback)
+	{
+		io_service_.post(callback);
+	}
+
 
 	void TioTcpServer::OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err)
 	{
@@ -63,7 +72,10 @@ namespace tio
 		// it will probably be called from a TioTcpSession callback
 		// and removing now will delete the session's pointer
 		//
-		io_service_.post(boost::bind(&TioTcpServer::RemoveClient, this, client));
+		PostCallback([this, client]()
+			{
+				RemoveClient(client);
+			});
 	}
 
 	void TioTcpServer::RemoveClient(shared_ptr<TioTcpSession> client)
@@ -80,16 +92,15 @@ namespace tio
 			if(i == sessions_.end())
 				return; // something is VERY wrong...
 
-	#ifdef _DEBUG
 			std::cout << "disconnect" << std::endl;
-	#endif
+
 			sessions_.erase(i);
 		}
 
 		//
 		// don't need to sync this, shared_ptr is already sync'ed, container are sync'ed too
 		// 
-		metaContainers_.sessions->Delete(lexical_cast<string>(client->GetID()), TIONULL, TIONULL);
+		metaContainers_.sessions->Delete(lexical_cast<string>(client->id()), TIONULL, TIONULL);
 		
 
 #if 0
@@ -113,15 +124,50 @@ namespace tio
 	}
 
 
-	TioTcpServer::TioTcpServer(ContainerManager& containerManager, asio::io_service& io_service, const tcp::endpoint& endpoint) :
+	TioTcpServer::TioTcpServer(ContainerManager& containerManager, 
+			asio::io_service& io_service, 
+			const tcp::endpoint& endpoint,
+			const std::string& logFilePath) :
 		containerManager_(containerManager),
 		acceptor_(io_service, endpoint),
 		io_service_(io_service),
 		lastSessionID_(0),
-		lastQueryID_(0)
+		lastQueryID_(0),
+		serverPaused_(false)
 	{
 		LoadDispatchMap();
 		InitializeMetaContainers();
+
+		if(!logFilePath.empty())
+		{
+			string finalFilePath = logFilePath;
+
+			SYSTEMTIME now;
+
+			GetLocalTime(&now);
+
+			//
+			// Given c:\intelihub.log this will change it
+			// to something like c:\intelihub_20120526.log
+			//
+
+			std::string::reverse_iterator ri;
+			std::stringstream dateString;
+
+			dateString << "_" << std::setfill('0') << 
+				std::setw(4) << now.wYear  <<
+				std::setw(2) << now.wMonth <<
+				std::setw(2) << now.wDay;
+
+			ri = std::find(finalFilePath.rbegin(), finalFilePath.rend(), '.');
+
+			if(ri != finalFilePath.rend())
+				finalFilePath.insert(finalFilePath.rend() - ri - 1, dateString.str());
+			else
+				finalFilePath += dateString.str();
+
+			logger_.Start(finalFilePath);
+		}
 	}
 
 	void TioTcpServer::InitializeMetaContainers()
@@ -129,7 +175,7 @@ namespace tio
 		//
 		// users
 		//
-		metaContainers_.users = containerManager_.CreateContainer("volatile_map", "meta/users");
+		metaContainers_.users = containerManager_.CreateContainer("volatile_map", "__meta__/users");
 
 		try
 		{
@@ -142,15 +188,15 @@ namespace tio
 
 		string userContainerType = containerManager_.ResolveAlias("users");
 
-		auth_.SetObjectDefaultRule(userContainerType, "meta/users", Auth::deny);
-		auth_.AddObjectRule(userContainerType, "meta/users", "*", "__admin__", Auth::allow);
+		auth_.SetObjectDefaultRule(userContainerType, "__meta__/users", Auth::deny);
+		auth_.AddObjectRule(userContainerType, "__meta__/users", "*", "__admin__", Auth::allow);
 
 		//
 		// sessions
 		//
-		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "meta/sessions");
+		metaContainers_.sessions = containerManager_.CreateContainer("volatile_map", "__meta__/sessions");
 
-		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "meta/session_last_command");
+		metaContainers_.sessionLastCommand = containerManager_.CreateContainer("volatile_map", "__meta__/session_last_command");
 	}
 
 	Auth& TioTcpServer::GetAuth()
@@ -160,11 +206,13 @@ namespace tio
 
 	unsigned int TioTcpServer::GenerateSessionId()
 	{
+		// TODO: sync
 		return ++lastSessionID_;
 	}
 
 	unsigned int TioTcpServer::GenerateDiffId()
 	{
+		// TODO: sync
 		return ++lastDiffID_;
 	}
 	
@@ -173,7 +221,10 @@ namespace tio
 		shared_ptr<TioTcpSession> session(new TioTcpSession(io_service_, *this, GenerateSessionId()));
 
 		acceptor_.async_accept(session->GetSocket(),
-			boost::bind(&TioTcpServer::OnAccept, this, session, asio::placeholders::error));
+			[this, session](const error_code& err)
+			{
+				OnAccept(session, err);
+			});
 	}
 
 	void TioTcpServer::OnAccept(shared_ptr<TioTcpSession> session, const error_code& err)
@@ -183,12 +234,18 @@ namespace tio
 			throw err;
 		}
 
+		if(serverPaused_)
+		{
+			DoAccept();
+			return;
+		}
+
 		{
 			tio::recursive_mutex::scoped_lock lock(sessionsMutex_);
 			sessions_.insert(session);
 		}
 
-		metaContainers_.sessions->Insert(lexical_cast<string>(session->GetID()), TIONULL, TIONULL);
+		metaContainers_.sessions->Insert(lexical_cast<string>(session->id()), TIONULL, TIONULL);
 
 		session->OnAccept();
 
@@ -208,6 +265,35 @@ namespace tio
 	}
 
 	
+	string TranslateBinaryCommand(int command)
+	{
+		if(command == TIO_COMMAND_PING) return "TIO_COMMAND_PING";
+		if(command == TIO_COMMAND_OPEN) return "TIO_COMMAND_OPEN";
+		if(command == TIO_COMMAND_CREATE) return "TIO_COMMAND_CREATE";
+		if(command == TIO_COMMAND_CLOSE) return "TIO_COMMAND_CLOSE";
+		if(command == TIO_COMMAND_SET) return "TIO_COMMAND_SET";
+		if(command == TIO_COMMAND_INSERT) return "TIO_COMMAND_INSERT";
+		if(command == TIO_COMMAND_DELETE) return "TIO_COMMAND_DELETE";
+		if(command == TIO_COMMAND_PUSH_BACK) return "TIO_COMMAND_PUSH_BACK";
+		if(command == TIO_COMMAND_PUSH_FRONT) return "TIO_COMMAND_PUSH_FRONT";
+		if(command == TIO_COMMAND_POP_BACK) return "TIO_COMMAND_POP_BACK";
+		if(command == TIO_COMMAND_POP_FRONT) return "TIO_COMMAND_POP_FRONT";
+		if(command == TIO_COMMAND_CLEAR) return "TIO_COMMAND_CLEAR";
+		if(command == TIO_COMMAND_COUNT) return "TIO_COMMAND_COUNT";
+		if(command == TIO_COMMAND_GET) return "TIO_COMMAND_GET";
+		if(command == TIO_COMMAND_SUBSCRIBE) return "TIO_COMMAND_SUBSCRIBE";
+		if(command == TIO_COMMAND_UNSUBSCRIBE) return "TIO_COMMAND_UNSUBSCRIBE";
+		if(command == TIO_COMMAND_QUERY) return "TIO_COMMAND_QUERY";
+		if(command == TIO_COMMAND_WAIT_AND_POP_NEXT) return "TIO_COMMAND_WAIT_AND_POP_NEXT";
+		if(command == TIO_COMMAND_WAIT_AND_POP_KEY) return "TIO_COMMAND_WAIT_AND_POP_KEY";
+		if(command == TIO_COMMAND_PROPGET ) return "TIO_COMMAND_PROPGET ";
+		if(command == TIO_COMMAND_PROPSET) return "TIO_COMMAND_PROPSET";
+
+		return "UNKNOWN";
+	}
+
+
+	
 
 	void TioTcpServer::OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message)
 	{
@@ -220,12 +306,34 @@ namespace tio
 
 		if(!b)
 		{
-			session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+			session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing MESSAGE_FIELD_ID_COMMAND");
 			return;
 		}
 
 		try
 		{
+#if 0
+			stringstream str;
+			string parameter;
+			int handle;
+
+			str << session.get() << " BINARY COMMAND: " << TranslateBinaryCommand(command);
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_HANDLE, &handle))
+				str << ", handle=" << handle;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_NAME, &parameter))
+				str << ", name=" << parameter;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &parameter))
+				str << ", key=" << parameter;
+
+			if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_VALUE, &parameter))
+				str << ", value=" << parameter;
+
+			cout << str.str() << endl;
+#endif
+
 			switch(command)
 			{
 			case TIO_COMMAND_PING:
@@ -235,7 +343,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing MESSAGE_FIELD_ID_VALUE");
 						break;
 					}
 
@@ -256,7 +364,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing container name (MESSAGE_FIELD_ID_NAME)");
 						break;
 					}
 
@@ -268,7 +376,7 @@ namespace tio
 					{
 						if(type.empty())
 						{
-							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "must inform type on container creation (MESSAGE_FIELD_ID_TYPE)");
 							break;
 						}
 
@@ -285,6 +393,8 @@ namespace tio
 
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_ANSWER);
 					pr1_message_add_field_int(answer.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+
+					logger_.LogMessage(container.get(), message);
 				
 					session->SendBinaryMessage(answer);
 				}
@@ -298,7 +408,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -322,6 +432,7 @@ namespace tio
 					else if(command == TIO_COMMAND_PROPGET)
 					{
 						value = container->GetProperty(searchKey.AsSz());
+						key = searchKey;
 					}
 					else
 						throw std::runtime_error("INTERNAL ERROR");
@@ -344,6 +455,8 @@ namespace tio
 						container->PopFront(&key, &value, &metadata);
 					else
 						throw std::runtime_error("INTERNAL ERROR");
+
+					logger_.LogMessage(container.get(), message);
 
 					session->SendBinaryAnswer(&key, &value, &metadata);
 				}
@@ -383,6 +496,8 @@ namespace tio
 					else
 						throw std::runtime_error("INTERNAL ERROR");
 
+					logger_.LogMessage(container.get(), message);
+
 					session->SendBinaryAnswer();
 				}
 				break;
@@ -401,26 +516,104 @@ namespace tio
 				break;
 
 				case TIO_COMMAND_QUERY:
-				{
-					int start, end;
+					{
+						int start, end, maxRecords;
 
-					shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
+						shared_ptr<ITioContainer> container = GetContainerAndParametersFromRequest(message, session, NULL, NULL, NULL);
 					
-					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START, &start))
-						start = 0;
+						if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start))
+							start = 0;
 
-					if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
-						end = 0;
+						if(!Pr1MessageGetField(message, MESSAGE_FIELD_ID_END, &end))
+							end = 0;
 
-					shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
+						maxRecords = end;
 
-					//
-					// TODO: hardcoded query id
-					//
-					session->SendBinaryResultSet(resultSet, 1);
-					
-				}
-				break;
+						function<bool(const TioData& key)> filterFunction;
+						shared_ptr<boost::regex> e;
+
+						string queryExpression;
+
+						Pr1MessageGetField(message, MESSAGE_FIELD_ID_QUERY_EXPRESSION, &queryExpression);
+
+						if(!queryExpression.empty())
+						{
+							e.reset(new boost::regex(queryExpression));
+
+							filterFunction = [e](const TioData& key) -> bool
+							{
+								if(key.GetDataType() != TioData::String)
+									return false;
+
+								return regex_match(key.AsSz(), *e);
+							};
+
+							end = start = 0;
+						}
+
+						shared_ptr<ITioResultSet> resultSet = container->Query(start, end, TIONULL);
+						
+						session->SendBinaryResultSet(resultSet, CreateNewQueryId(), filterFunction, maxRecords);
+					}
+					break;
+
+				case TIO_COMMAND_GROUP_ADD:
+					{
+						string groupName, containerName;
+						bool b;
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_GROUP_NAME, &groupName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_GROUP_NAME)");
+							break;
+						}
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_CONTAINER_NAME, &containerName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_CONTAINER_NAME)");
+							break;
+						}
+
+						shared_ptr<ITioContainer> container;
+
+						container = containerManager_.OpenContainer("", containerName);
+
+						groupManager_.AddContainer(&containerManager_, groupName, container);
+
+						session->SendBinaryAnswer();
+
+						logger_.LogMessage(container.get(), message);
+					}
+					break;
+
+				case TIO_COMMAND_GROUP_SUBSCRIBE:
+					{
+						string groupName, start;
+						bool b;
+
+						b = Pr1MessageGetField(message, MESSAGE_FIELD_ID_GROUP_NAME, &groupName);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_GROUP_NAME)");
+							break;
+						}
+
+						Pr1MessageGetField(message, MESSAGE_FIELD_ID_START_RECORD, &start);
+
+						b = groupManager_.SubscribeGroup(&containerManager_, groupName, session, start);
+
+						if(!b)
+						{
+							session->SendBinaryErrorAnswer(TIO_ERROR_NO_SUCH_OBJECT, "group not found");
+							break;
+						}
+					}
+					break;
 
 				case TIO_COMMAND_SUBSCRIBE:
 				{
@@ -432,7 +625,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -441,7 +634,7 @@ namespace tio
 						if(Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start_int))
 							start_string = lexical_cast<string>(start_int);
 
-					session->BinarySubscribe(handle, start_string);
+					session->BinarySubscribe(handle, start_string, true);
 				}
 				break;
 
@@ -453,7 +646,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 
@@ -471,7 +664,7 @@ namespace tio
 
 					if(!b)
 					{
-						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER);
+						session->SendBinaryErrorAnswer(TIO_ERROR_MISSING_PARAMETER, "missing handle (MESSAGE_FIELD_ID_HANDLE)");
 						break;
 					}
 					
@@ -482,41 +675,33 @@ namespace tio
 				break;
 
 			default:
-				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
-				return;
+				session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL, "invalid command");
+				break;
 			}
 		} 
 		catch(std::exception& ex)
 		{
-			ex;
-			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL);
+			session->SendBinaryErrorAnswer(TIO_ERROR_PROTOCOL, ex.what());
 		}
 	}
 
 
 	void TioTcpServer::OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		/*
-		if(cmd.GetCommand() == "stop")
-		{
-			io_service_.stop();
-			return;
-		}
-		*/
 		CommandFunctionMap::iterator i = dispatchMap_.find(cmd.GetCommand());
 
 		if(i != dispatchMap_.end())
 		{
-			CommandFunction& f = i->second;
+			CommandCallbackFunction& f = i->second;
 
 			try
 			{
-				f(cmd, answer, moreDataSize, session);
+				(this->*f)(cmd, answer, moreDataSize, session);
 			}
 			catch(std::exception& ex)
 			{
 				BOOST_ASSERT(false && "handler functions not supposed to throw exceptions");
-				MakeAnswer(error, answer, string("internal error: ") + ex.what());
+				MakeAnswer(error, answer, string("internal error, handler functions not supposed to throw exceptions but I've got this one: ") + ex.what());
 			}
 		}
 		else			
@@ -527,7 +712,7 @@ namespace tio
 		if(*moreDataSize == 0)
 		{
 			metaContainers_.sessionLastCommand->Set(
-				lexical_cast<string>(session->GetID()),
+				lexical_cast<string>(session->id()),
 				TioData(cmd.GetSource().c_str()),
 				cmd.GetDataBuffer()->GetSize() ? 
 					TioData(cmd.GetDataBuffer()->GetRawBuffer(), cmd.GetDataBuffer()->GetSize()) :
@@ -535,58 +720,67 @@ namespace tio
 		}
 	}
 
+
 	//
 	// commands
 	//
 	void TioTcpServer::LoadDispatchMap()
 	{
-		dispatchMap_["ping"] = boost::bind(&TioTcpServer::OnCommand_Ping, this, _1, _2, _3, _4);
-		dispatchMap_["ver"] = boost::bind(&TioTcpServer::OnCommand_Version, this, _1, _2, _3, _4);
+		dispatchMap_["ping"] = &TioTcpServer::OnCommand_Ping;
+		dispatchMap_["ver"] = &TioTcpServer::OnCommand_Version;
 		
-		dispatchMap_["create"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["open"] = boost::bind(&TioTcpServer::OnCommand_CreateContainer_OpenContainer, this, _1, _2, _3, _4);
-		dispatchMap_["close"] = boost::bind(&TioTcpServer::OnCommand_CloseContainer, this, _1, _2, _3, _4);
+		dispatchMap_["create"] = &TioTcpServer::OnCommand_CreateContainer_OpenContainer;
+		dispatchMap_["open"] = &TioTcpServer::OnCommand_CreateContainer_OpenContainer;
+		dispatchMap_["close"] = &TioTcpServer::OnCommand_CloseContainer;
 
-		dispatchMap_["delete_container"] = boost::bind(&TioTcpServer::OnCommand_DeleteContainer, this, _1, _2, _3, _4);
+		dispatchMap_["delete_container"] = &TioTcpServer::OnCommand_DeleteContainer;
 
-		dispatchMap_["list_handles"] = boost::bind(&TioTcpServer::OnCommand_ListHandles, this, _1, _2, _3, _4);
+		dispatchMap_["list_handles"] = &TioTcpServer::OnCommand_ListHandles;
 		
-		dispatchMap_["push_back"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["push_front"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["push_back"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["push_front"] = &TioTcpServer::OnAnyDataCommand;
 		
-		dispatchMap_["pop_back"] = boost::bind(&TioTcpServer::OnCommand_Pop, this, _1, _2, _3, _4);
-		dispatchMap_["pop_front"] = boost::bind(&TioTcpServer::OnCommand_Pop, this, _1, _2, _3, _4);
+		dispatchMap_["pop_back"] = &TioTcpServer::OnCommand_Pop;
+		dispatchMap_["pop_front"] = &TioTcpServer::OnCommand_Pop;
 
-		dispatchMap_["modify"] = boost::bind(&TioTcpServer::OnModify, this, _1, _2, _3, _4);
+		dispatchMap_["modify"] = &TioTcpServer::OnModify;
 
-		dispatchMap_["wnp_next"] = boost::bind(&TioTcpServer::OnCommand_WnpNext, this, _1, _2, _3, _4);
-		dispatchMap_["wnp_key"] = boost::bind(&TioTcpServer::OnCommand_WnpKey, this, _1, _2, _3, _4);
+		dispatchMap_["wnp_next"] = &TioTcpServer::OnCommand_WnpNext;
+		dispatchMap_["wnp_key"] = &TioTcpServer::OnCommand_WnpKey;
 		
-		dispatchMap_["set"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["insert"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["delete"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["clear"] = boost::bind(&TioTcpServer::OnCommand_Clear, this, _1, _2, _3, _4);
+		dispatchMap_["set"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["insert"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["delete"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["clear"] = &TioTcpServer::OnCommand_Clear;
 
-		dispatchMap_["get_property"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
-		dispatchMap_["set_property"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["get_property"] = &TioTcpServer::OnAnyDataCommand;
+		dispatchMap_["set_property"] = &TioTcpServer::OnAnyDataCommand;
 
-		dispatchMap_["get"] = boost::bind(&TioTcpServer::OnAnyDataCommand, this, _1, _2, _3, _4);
+		dispatchMap_["get"] = &TioTcpServer::OnAnyDataCommand;
 
-		dispatchMap_["get_count"] = boost::bind(&TioTcpServer::OnCommand_GetRecordCount, this, _1, _2, _3, _4);
+		dispatchMap_["get_count"] = &TioTcpServer::OnCommand_GetRecordCount;
 
-		dispatchMap_["subscribe"] = boost::bind(&TioTcpServer::OnCommand_SubscribeUnsubscribe, this, _1, _2, _3, _4);
-		dispatchMap_["unsubscribe"] = boost::bind(&TioTcpServer::OnCommand_SubscribeUnsubscribe, this, _1, _2, _3, _4);
+		dispatchMap_["subscribe"] = &TioTcpServer::OnCommand_SubscribeUnsubscribe;
+		dispatchMap_["unsubscribe"] = &TioTcpServer::OnCommand_SubscribeUnsubscribe;
 
-		dispatchMap_["command"] = boost::bind(&TioTcpServer::OnCommand_CustomCommand, this, _1, _2, _3, _4);
+		dispatchMap_["command"] = &TioTcpServer::OnCommand_CustomCommand;
 		
-		dispatchMap_["auth"] = boost::bind(&TioTcpServer::OnCommand_Auth, this, _1, _2, _3, _4);
+		dispatchMap_["auth"] = &TioTcpServer::OnCommand_Auth;
 
-		dispatchMap_["set_permission"] = boost::bind(&TioTcpServer::OnCommand_SetPermission, this, _1, _2, _3, _4);
+		dispatchMap_["pause"] = &TioTcpServer::OnCommand_PauseResume;
+		dispatchMap_["resume"] = &TioTcpServer::OnCommand_PauseResume;
 
-		dispatchMap_["query"] = boost::bind(&TioTcpServer::OnCommand_Query, this, _1, _2, _3, _4);
+		dispatchMap_["set_permission"] = &TioTcpServer::OnCommand_SetPermission;
+
+		dispatchMap_["query"] = &TioTcpServer::OnCommand_Query;
+
+		dispatchMap_["queryex"] = &TioTcpServer::OnCommand_QueryEx;
 		
-		dispatchMap_["diff_start"] = boost::bind(&TioTcpServer::OnCommand_Diff_Start, this, _1, _2, _3, _4);
-		dispatchMap_["diff"] = boost::bind(&TioTcpServer::OnCommand_Diff, this, _1, _2, _3, _4);
+		dispatchMap_["diff_start"] = &TioTcpServer::OnCommand_Diff_Start;
+		dispatchMap_["diff"] = &TioTcpServer::OnCommand_Diff;
+
+		dispatchMap_["group_add"] = &TioTcpServer::OnCommand_GroupAdd;
+		dispatchMap_["group_subscribe"] = &TioTcpServer::OnCommand_GroupSubscribe;
 
 	}
 
@@ -641,6 +835,82 @@ namespace tio
 		return header.str();
 	}
 
+
+	void TioTcpServer::OnCommand_QueryEx(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 2, at_least))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		shared_ptr<ITioContainer> container;
+		unsigned int handle;
+
+		try
+		{
+			handle = lexical_cast<unsigned int>(cmd.GetParameters()[0]);
+			container = session->GetRegisteredContainer(handle);
+		}
+		catch(std::exception&)
+		{
+			MakeAnswer(error, answer, "invalid handle");
+			return;
+		}
+
+		unsigned maxRecords = 0xFFFFFFFF;
+
+		if(cmd.GetParameters().size() > 2)
+		{
+			try
+			{
+				maxRecords = lexical_cast<unsigned>(cmd.GetParameters()[2]);
+			}
+			catch(std::exception&)
+			{
+				MakeAnswer(error, answer, "invalid record limit parameter");
+				return;
+			}
+		}
+
+		string queryRegex = cmd.GetParameters()[1];
+
+		const boost::regex e(queryRegex);
+
+		shared_ptr<ITioResultSet> resultSet = container->Query(0, 0, TioData());
+
+		unsigned queryId = CreateNewQueryId();
+
+		session->SendResultSetStart(queryId);
+
+		for(unsigned a = 0 ; a < maxRecords ; )
+		{
+			TioData key, value, metadata;
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+
+			if(!b)
+				break;
+
+			b = resultSet->MoveNext();
+
+			if(key.GetDataType() != TioData::String)
+				continue;
+
+			if(regex_match(key.AsSz(), e))
+			{
+				session->SendResultSetItem(queryId, key, value, metadata);
+				a++;
+			}
+
+			if(!b) break;
+		}
+
+		session->SendResultSetEnd(queryId);
+
+		return;
+
+	}
 
 	void TioTcpServer::OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
@@ -743,6 +1013,70 @@ namespace tio
 		info.destination->PushBack(TIONULL, serialized, info.source->GetName());
 	}
 
+	void TioTcpServer::OnCommand_GroupAdd(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		//
+		// group_add group_name container_name
+		//
+		if(!CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		const string& groupName = cmd.GetParameters()[0];
+		const string& containerName = cmd.GetParameters()[1];
+
+		try
+		{
+			shared_ptr<ITioContainer> container;
+
+			container = containerManager_.OpenContainer("", containerName);
+
+			groupManager_.AddContainer(&containerManager_, groupName, container);
+
+			MakeAnswer(success, answer, "");
+		}
+		catch (std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+		}
+
+	}
+
+
+
+	void TioTcpServer::OnCommand_GroupSubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		//
+		// group_subscribe group_name [start]
+		//
+		if(!CheckParameterCount(cmd, 1, exact) && 
+		   !CheckParameterCount(cmd, 2, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		const string& groupName = cmd.GetParameters()[0];
+		string start;
+
+		if(cmd.GetParameters().size() == 2)
+		{
+			start = cmd.GetParameters()[1];
+		}
+
+		try
+		{
+			groupManager_.SubscribeGroup(&containerManager_, groupName, session, start);
+		}
+		catch (std::exception& ex)
+		{
+			MakeAnswer(error, answer, ex.what());
+		}
+
+	}
+
 	void TioTcpServer::OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
 		if(!CheckParameterCount(cmd, 1, exact))
@@ -824,7 +1158,13 @@ namespace tio
 
 	void TioTcpServer::SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet)
 	{
-		session->SendResultSet(resultSet, ++lastQueryID_);
+		session->SendResultSet(resultSet, CreateNewQueryId());
+	}
+
+
+	unsigned TioTcpServer::CreateNewQueryId()
+	{
+		return ++lastQueryID_;
 	}
 
 	//
@@ -881,12 +1221,20 @@ namespace tio
 			if(infoCopy.diffType == DiffSessionType_List)
 			{
 				subscriptionCookie =
-					infoCopy.source->Subscribe(boost::bind(&ListChangeRecorder, infoCopy, _1, _2, _3, _4), "0");
+					infoCopy.source->Subscribe(
+					[infoCopy](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+					{
+						ListChangeRecorder(infoCopy, event_name, key, value, metadata);
+					}, "0");
 			}
 			else if(infoCopy.diffType == DiffSessionType_Map)
 			{
 				subscriptionCookie =
-					infoCopy.source->Subscribe(boost::bind(&MapChangeRecorder, infoCopy, _1, _2, _3, _4), "");
+					infoCopy.source->Subscribe(
+					[infoCopy](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
+					{
+						MapChangeRecorder(infoCopy, event_name, key, value, metadata);
+					}, "");
 			}
 
 			SendResultSet(session, infoCopy.destination->Query(0, 0, TIONULL));
@@ -1256,13 +1604,16 @@ namespace tio
 
 	void TioTcpServer::OnCommand_SubscribeUnsubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
-		if(!CheckParameterCount(cmd, 1, exact) && !CheckParameterCount(cmd, 2, exact))
+		if(!CheckParameterCount(cmd, 1, exact) && 
+		   !CheckParameterCount(cmd, 2, exact) &&
+		   !CheckParameterCount(cmd, 3, exact))
 		{
 			MakeAnswer(error, answer, "invalid parameter count");
 			return;
 		}
 
 		unsigned int handle;
+		int filterEnd = -1;
 
 		try
 		{
@@ -1285,12 +1636,22 @@ namespace tio
 
 			string start;
 
-			if(cmd.GetParameters().size() == 2)
+			if(cmd.GetParameters().size() >= 2)
+			{
 				start = cmd.GetParameters()[1];
+				
+				if(start == "__none__")
+					start.clear();
+			}
+
+			if(cmd.GetParameters().size() == 3)
+			{
+				filterEnd = lexical_cast<int>(cmd.GetParameters()[2]);
+			}
 
 			if(cmd.GetCommand() == "subscribe")
 			{
-				session->Subscribe(handle, start);
+				session->Subscribe(handle, start, filterEnd);
 
 				//
 				// we'll NOT send the answer, because session::subscribe already did
@@ -1408,6 +1769,43 @@ namespace tio
 		MakeAnswer(success, answer);
 	}
 
+	void TioTcpServer::OnCommand_PauseResume(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	{
+		if(!CheckParameterCount(cmd, 0, exact))
+		{
+			MakeAnswer(error, answer, "invalid parameter count");
+			return;
+		}
+
+		//
+		// This command will pause the server and disconnect everyone, except
+		// the current connection. It's useful when you want to load some
+		// data to the server without having everyone receiving the events
+		//
+		if(cmd.GetCommand() == "pause")
+		{
+			for(auto i = sessions_.begin() ; i != sessions_.end() ; ++i)
+			{
+				//
+				// We will not drop the current connection
+				//
+				if((*i) == session)
+					continue;
+				
+				(*i)->InvalidateConnection(error_code());
+			}
+
+			serverPaused_ = true;
+		}
+		else if(cmd.GetCommand() == "resume")
+		{
+			serverPaused_ = false;
+		}
+
+		MakeAnswer(success, answer);
+
+	}
+
 	void TioTcpServer::OnCommand_Auth(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
 		if(!CheckParameterCount(cmd, 3, exact))
@@ -1506,6 +1904,9 @@ namespace tio
 					MakeAnswer(error, answer, "invalid name, names starting with __ are reserved for internal use");
 					return;
 				}
+
+				if(containerType.empty())
+					containerType = "volatile_list";
 
 				if(!CheckCommandAccess(cmd.GetCommand(), answer, session))
 					return;
@@ -2048,8 +2449,9 @@ namespace tio
 				try
 				{
 					TioData value;
+					string propertyValue = container->GetProperty(key.AsSz());
 
-					value.Set(container->GetProperty(key.AsSz()).c_str(), true);
+					value.Set(propertyValue.c_str(), propertyValue.size());
 					
 					MakeDataAnswer(key, value, TIONULL, answer);
 				}

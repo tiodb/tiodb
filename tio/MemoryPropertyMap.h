@@ -23,7 +23,7 @@ namespace tio
 	namespace MemoryStorage
 	{
 		
-		using boost::shared_ptr;
+		using std::shared_ptr;
 		using boost::lexical_cast;
 
 		class MemoryPropertyMap : public ITioPropertyMap
