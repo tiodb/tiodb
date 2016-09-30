@@ -31,7 +31,6 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/bind.hpp>
 #include <boost/asio.hpp>
 #include <boost/foreach.hpp>
 
@@ -57,7 +56,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	using boost::system::error_code;
 	namespace asio = boost::asio;
 	using boost::asio::ip::tcp;
@@ -330,8 +329,8 @@ namespace tio
 
 		typedef TioAsyncClient ThisType;
 
-		typedef boost::function<void (error_code)> ConnectCallback;
-		typedef boost::function<void (error_code, ProtocolAnswer*)> AnswerCallback;
+		typedef std::function<void (error_code)> ConnectCallback;
+		typedef std::function<void (error_code, ProtocolAnswer*)> AnswerCallback;
 
 		tcp::socket socket_;
 		asio::streambuf buffer_;
@@ -397,7 +396,7 @@ namespace tio
 		void SendRawCommand(const string& command, AnswerCallback callback)
 		{
 			size_t bufferSize = command.size();
-			boost::shared_ptr<char> buf(new char[bufferSize]);
+			std::shared_ptr<char> buf(new char[bufferSize]);
 
 			memcpy(buf.get(), command.c_str(), command.size());
 
@@ -545,7 +544,7 @@ namespace tio
 			return cmdStream.str();
 		}
 
-		void _OnCommandSent(boost::shared_ptr<char> buf, size_t bytes_transferred, error_code err)
+		void _OnCommandSent(std::shared_ptr<char> buf, size_t bytes_transferred, error_code err)
 		{
 			if(err)
 			{
@@ -652,13 +651,13 @@ namespace tio
 		asio::io_service io_service_;
 		tcp::socket socket_;
 		asio::streambuf buffer_;
-		std::queue< boost::function<void (const ProtocolAnswer&)> > answerCallbackQueue_;
+		std::queue< std::function<void (const ProtocolAnswer&)> > answerCallbackQueue_;
 		boost::mutex answerCallbackQueueMutex_;
-		boost::function<void (const ProtocolAnswer&)> eventCallback_;
+		std::function<void (const ProtocolAnswer&)> eventCallback_;
 		ProtocolAnswer currentAnswer_;
 		bool started_;
 
-		void _Connect(boost::function<void(void)> callback, const string& host, unsigned short port)
+		void _Connect(std::function<void(void)> callback, const string& host, unsigned short port)
 		{
 			socket_.async_connect(
 				ip::tcp::endpoint(ip::address_v4::from_string(host), port),
@@ -698,7 +697,7 @@ namespace tio
 				eventCallback_(currentAnswer_);
 			else
 			{
-				boost::function<void (const ProtocolAnswer&)> f;
+				std::function<void (const ProtocolAnswer&)> f;
 
 				{
 					boost::mutex::scoped_lock l(answerCallbackQueueMutex_);
@@ -866,7 +865,7 @@ namespace tio
 			delete buffer;
 		}
 
-		void _OnConnect(boost::function<void(void)> callback, error_code err)
+		void _OnConnect(std::function<void(void)> callback, error_code err)
 		{
 			boost::asio::detail::throw_error(err);
 			AsyncReadLine();
@@ -914,7 +913,7 @@ namespace tio
 
 #endif // _WIN32
 
-		void AsyncConnect(boost::function<void(void)> callback, const string& host, unsigned short port)
+		void AsyncConnect(std::function<void(void)> callback, const string& host, unsigned short port)
 		{
 			io_service_.post(
 				boost::bind(&AsyncTioClient::_Connect, this, callback, host, port) );
@@ -931,7 +930,7 @@ namespace tio
 			return shared_ptr<TioData>(data ? new TioData(data) : NULL);
 		}
 
-		void AsyncSendCommand(boost::function<void (const ProtocolAnswer&)> callback, const string& command, const string& parameter,
+		void AsyncSendCommand(std::function<void (const ProtocolAnswer&)> callback, const string& command, const string& parameter,
 			TioData* key = NULL, TioData* value = NULL, TioData* metadata = NULL)
 		{
 			{
@@ -984,7 +983,7 @@ namespace tio
 			io_service_.run();
 		}
 
-		void SetEventCallback(boost::function<void (const ProtocolAnswer&)> callback)
+		void SetEventCallback(std::function<void (const ProtocolAnswer&)> callback)
 		{
 			eventCallback_ = callback;
 		}

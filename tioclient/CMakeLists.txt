@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 2.6)
 
-PROJECT(tioclient)
+PROJECT(intelihubclient)
 
-ADD_LIBRARY(tioclient tioclient.c)
+SET (TIO_BUILD_DIR ../../../bin)
+
+SET(LIBRARY_OUTPUT_PATH ${TIO_BUILD_DIR} CACHE PATH "Build directory" FORCE)
+
+ADD_LIBRARY(intelihubclient tioclient.c)
 
