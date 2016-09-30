@@ -10,7 +10,7 @@ namespace tio
 	using std::string;
 	using std::cout;
 	using std::endl;
-	using boost::shared_ptr;
+	using std::shared_ptr;
 	namespace python = boost::python;
 
 	python::object g_pythonContainerManager;

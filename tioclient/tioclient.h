@@ -6,9 +6,11 @@
 
 #ifdef _MSC_VER
 	#define _CRT_SECURE_NO_WARNINGS
+	#define _WINSOCK_DEPRECATED_NO_WARNINGS
 	#include <stdio.h>
 	#include <tchar.h>
 	#include <assert.h>
+	#include <time.h>
 	#include <WinSock.h>
 	#pragma comment(lib ,"ws2_32.lib")
 #else
@@ -16,6 +18,7 @@
 	#include <stdlib.h>
 	#include <assert.h>
 	#include <stdio.h>
+	#include <time.h>
 	#include <string.h>
 	#include <sys/types.h> 
 	#include <sys/socket.h>
@@ -29,6 +32,8 @@
 extern "C" {
 #endif
 
+#define TIO_DEFAULT_PORT                2605
+
 #define TIO_DATA_TYPE_NONE	 			0x1
 #define TIO_DATA_TYPE_STRING 			0x2
 #define TIO_DATA_TYPE_INT 				0x3
@@ -40,6 +45,7 @@ extern "C" {
 #define TIO_ERROR_PROTOCOL      		  -3
 #define TIO_ERROR_MISSING_PARAMETER       -4
 #define TIO_ERROR_NO_SUCH_OBJECT	      -5
+#define TIO_ERROR_TIMEOUT			      -6
 
 #define TIO_COMMAND_PING				0x10
 #define TIO_COMMAND_OPEN				0x11
@@ -61,16 +67,22 @@ extern "C" {
 #define TIO_COMMAND_WAIT_AND_POP_NEXT	0x21
 #define TIO_COMMAND_WAIT_AND_POP_KEY	0x22
 
+#define TIO_EVENT_SNAPSHOT_END			0x23
+
 #define TIO_COMMAND_PROPGET 			0x30
 #define TIO_COMMAND_PROPSET 			0x31
 
+#define TIO_COMMAND_GROUP_ADD 			0x33
+#define TIO_COMMAND_GROUP_SUBSCRIBE		0x34
 
 #define TIO_FAILED(x) (x < 0)
 
+#define TIO_DEBUG_FLAG_DUMP_MESSAGES_TO_STDOUT 0x01
 
-#ifndef SOCKET
-#define SOCKET int
-#endif
+
+//#ifndef SOCKET
+//#define SOCKET int
+//#endif
 
 struct TIO_DATA
 {	
@@ -82,19 +94,23 @@ struct TIO_DATA
 };
 
 
-typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
-typedef void (*query_callback_t)(void* /*cookie*/, unsigned int /*queryid*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+typedef void (*event_callback_t)(int /*result*/, void* /*handle*/, void* /*cookie*/,  unsigned int /*event_code*/, 
+								 const char* /*group_name*/, const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+
+typedef void (*query_callback_t)(int /*result*/, void* /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
+								 const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
 
 struct TIO_CONNECTION;
 struct TIO_CONTAINER;
 
 
 //
-// TIO_DATA related funcions
+// TIO_DATA related functions
 //
 void tiodata_init(struct TIO_DATA* tiodata);
 unsigned int tiodata_get_type(struct TIO_DATA* tiodata);
 void tiodata_set_as_none(struct TIO_DATA* tiodata);
+void tiodata_free(struct TIO_DATA* tiodata);
 
 //
 // It works the same way MFC (argh) string. You ask for the buffer to
@@ -119,19 +135,25 @@ void tiodata_convert_to_string(struct TIO_DATA* tiodata);
 
 // MUST call it before using tio
 void tio_initialize();
+void tio_set_debug_flags(int flags);
 
 int tio_connect(const char* host, short port, struct TIO_CONNECTION** connection);
 void tio_disconnect(struct TIO_CONNECTION* connection);
+
+void tio_begin_network_batch(struct TIO_CONNECTION* connection);
+void tio_finish_network_batch(struct TIO_CONNECTION* connection);
+
 int tio_create(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_open(struct TIO_CONNECTION* connection, const char* name, const char* type, struct TIO_CONTAINER** container);
 int tio_close(struct TIO_CONTAINER* container);
 
-int tio_receive_pending_events(struct TIO_CONNECTION* connection, unsigned int min_events);
+int tio_receive_next_pending_event(struct TIO_CONNECTION* connection, const unsigned* timeout_in_seconds);
 int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int max_events);
 
 
 int tio_ping(struct TIO_CONNECTION* connection, char* payload);
 
+const char* tio_container_name(struct TIO_CONTAINER* container);
 
 int tio_container_propset(struct TIO_CONTAINER* container, const struct TIO_DATA* key, const struct TIO_DATA* value);
 int tio_container_propget(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* value);
@@ -146,10 +168,16 @@ int tio_container_clear(struct TIO_CONTAINER* container);
 int tio_container_delete(struct TIO_CONTAINER* container, const struct TIO_DATA* key);
 int tio_container_get(struct TIO_CONTAINER* container, const struct TIO_DATA* search_key, struct TIO_DATA* key, struct TIO_DATA* value, struct TIO_DATA* metadata);
 int tio_container_get_count(struct TIO_CONTAINER* container, int* count);
-int tio_container_query(struct TIO_CONTAINER* container, int start, int end, query_callback_t query_callback, void* cookie);
+int tio_container_query(struct TIO_CONTAINER* container, int start, int end, const char* regex, query_callback_t query_callback, void* cookie);
 int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* start, event_callback_t event_callback, void* cookie);
 int tio_container_unsubscribe(struct TIO_CONTAINER* container);
 int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie);
+
+int tio_group_add(struct TIO_CONNECTION* connection, const char* group_name, const char* container_name);
+int tio_group_subscribe(struct TIO_CONNECTION* connection, const char* group_name, const char* start);
+int tio_group_set_subscription_callback(struct TIO_CONNECTION* connection,  event_callback_t callback, void* cookie);
+
+const char* tio_get_last_error_description();
 
 
 //
@@ -163,7 +191,6 @@ struct KEY_AND_VALUE
 
 typedef void (*tio_plugin_start_t)(void* container_manager, struct KEY_AND_VALUE* parameters);
 typedef void (*tio_plugin_stop_t)();
-
 
 #ifdef __cplusplus
 } // extern "C" 

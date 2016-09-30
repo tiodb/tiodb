@@ -29,7 +29,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 using namespace tio;
 
-using boost::shared_ptr;
+using std::shared_ptr;
 using boost::scoped_array;
 using std::cout;
 using std::endl;
@@ -68,7 +68,8 @@ void SetupContainerManager(
 
 void RunServer(tio::ContainerManager* manager,
 			   unsigned short port, 
-			   const vector< pair<string, string> >& users)
+			   const vector< pair<string, string> >& users,
+			   const string& logFilePath)
 {
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
@@ -94,7 +95,7 @@ void RunServer(tio::ContainerManager* manager,
 		}
 	}
 
-	tio::TioTcpServer tioServer(*manager, io_service, e);
+	tio::TioTcpServer tioServer(*manager, io_service, e, logFilePath);
 
 	cout << "running on port " << port << "." << endl;
 
@@ -260,6 +261,17 @@ protected:
 	{
 		delete ((shared_ptr<ITioContainer>*)handle);
 		return 0;
+	}
+
+	virtual int group_add(const char* group_name, const char* container_name)
+	{
+		//
+		// TODO: no group subscription support for plugins yet
+		//
+		ASSERT(false);
+		return -666;
+
+
 	}
 
 	virtual int container_propset(void* handle, const struct TIO_DATA* key, const struct TIO_DATA* value)
@@ -465,7 +477,7 @@ protected:
 
 			while(resultset->GetRecord(&key, &value, &metadata))
 			{
-				query_callback(cookie, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+				query_callback(0, handle, cookie, 0, container->GetName().c_str(), cpp2c(key), cpp2c(value), cpp2c(metadata));
 				resultset->MoveNext();
 			}
 		}
@@ -479,12 +491,18 @@ protected:
 
 	static void SubscribeBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+		//
+		// TODO: need to change code to use the new callback signature
+		//
+		//event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
 	static void WaitAndPopNextBridge(void* cookie, event_callback_t event_callback, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
+		//
+		// TODO: need to change code to use the new callback signature
+		//
+		//event_callback(cookie, 10, 0, cpp2c(key), cpp2c(value), cpp2c(metadata));
 	}
 
 	virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)
@@ -503,7 +521,14 @@ protected:
 
 		try
 		{
-			cppHandle = container->Subscribe(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4), startString);
+			// adding "this" due to a bug in gcc...
+			cppHandle = container->Subscribe(
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
+				},
+				startString);
+
 			subscriptionHandles_[handle] = cppHandle;
 		}
 		catch(std::exception&)
@@ -536,7 +561,11 @@ protected:
 
 		try
 		{
-			container->WaitAndPopNext(boost::bind(&LocalContainerManager::SubscribeBridge, cookie, event_callback, _1, _2, _3, _4));
+			container->WaitAndPopNext(
+				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
+				{
+					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
+				});
 		}
 		catch(std::exception&)
 		{
@@ -556,7 +585,7 @@ class PluginThread
 {
 	tio_plugin_start_t func_;
 	tio::IContainerManager* containerManager_;
-	queue<boost::function<void()> > eventQueue_;
+	queue<std::function<void()> > eventQueue_;
 	boost::condition_variable hasWork_;
 
 public:
@@ -647,15 +676,16 @@ int main(int argc, char* argv[])
 #endif
 			("plugin", po::value< vector<string> >(), "load and run a plugin")
 			("plugin-parameter", po::value< vector<string> >(), "parameters to be passed to plugins. name=value")
-			("port", po::value<unsigned short>(), "listening port")
+			("port", po::value<unsigned short>(), "listening port. If not informed, 2605")
 			("threads", po::value<unsigned short>(), "number of running threads")
+			("log-path", po::value<string>(), "log file path. It must be a full file path, not just the directory. Ex: c:\\data\\intelihub.log")
 			("data-path", po::value<string>(), "sets data path");
 
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
 
-		if(vm.count("data-path") == 0 || vm.count("port") == 0)
+		if(vm.count("data-path") == 0)
 		{
 			cout << desc << endl;
 			return 1;
@@ -741,11 +771,22 @@ int main(int argc, char* argv[])
 				LoadPythonPlugins(vm["python-plugin"].as< vector<string> >(), pluginParameters);
 			}
 #endif
+
+			unsigned short port = 2605;
+
+			if(vm.count("port"))
+				port = vm["port"].as<unsigned short>();
+
+			string logFilePath;
+
+			if(vm.count("log-path"))
+				logFilePath = vm["log-path"].as<string>();
 		
 			RunServer(
 				&containerManager,
-				vm["port"].as<unsigned short>(),
-				users);
+				port,
+				users,
+				logFilePath);
 		}
 	}
 	catch(std::exception& ex)

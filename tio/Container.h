@@ -1042,6 +1042,7 @@ namespace tio
 		ValueAndMetadata() 
 		{}
 
+
 		ValueAndMetadata(const TioData& value, const TioData& metadata) 
 			: value(value), metadata(metadata)
 		{
