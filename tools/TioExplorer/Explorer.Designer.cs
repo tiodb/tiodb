@@ -1,4 +1,4 @@
-﻿namespace InteliHubExplorer
+﻿namespace TioExplorer
 {
     partial class Explorer
     {
@@ -261,7 +261,7 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.KeyPreview = true;
             this.Name = "Explorer";
-            this.Text = "InteliHub Explorer";
+            this.Text = "Tio Explorer";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Explorer_FormClosing);
             this.Load += new System.EventHandler(this.Explorer_Load);
             this.KeyUp += new System.Windows.Forms.KeyEventHandler(this.Explorer_KeyUp);

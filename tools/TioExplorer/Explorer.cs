@@ -7,7 +7,7 @@ using System.Windows.Forms;
 using System.Threading;
 using System.Linq;
 
-namespace InteliHubExplorer
+namespace TioExplorer
 {
     public partial class Explorer : Form
     {
@@ -17,7 +17,7 @@ namespace InteliHubExplorer
             public string value;
         }
 
-        InteliHubClient.Connection m_connection;
+        TioClient.Connection m_connection;
         string m_server = (string)Application.UserAppDataRegistry.GetValue("server", "localhost");
         Int16 m_port = Convert.ToInt16(Application.UserAppDataRegistry.GetValue("port", 2605));
         string m_containerName = (string)Application.UserAppDataRegistry.GetValue("containerName", "");
@@ -45,7 +45,7 @@ namespace InteliHubExplorer
             if (m_connection != null)
                 m_connection.Disconnect();
 
-            m_connection = new InteliHubClient.Connection(m_server, m_port);
+            m_connection = new TioClient.Connection(m_server, m_port);
 
             Application.UserAppDataRegistry.SetValue("server", m_server);
             Application.UserAppDataRegistry.SetValue("port", m_port);
@@ -74,7 +74,7 @@ namespace InteliHubExplorer
 
             m_listingThread = new Thread(delegate()
             {
-                InteliHubClient.Connection cn = new InteliHubClient.Connection(m_connection.Host, m_connection.Port);
+                TioClient.Connection cn = new TioClient.Connection(m_connection.Host, m_connection.Port);
                 
                 m_containerCount = cn.Open("__meta__/containers").Count;
 

@@ -1,4 +1,4 @@
-﻿namespace InteliHubExplorer
+﻿namespace TioExplorer
 {
     partial class ContainerViewer
     {

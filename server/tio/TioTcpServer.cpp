@@ -147,8 +147,8 @@ namespace tio
 			GetLocalTime(&now);
 
 			//
-			// Given c:\intelihub.log this will change it
-			// to something like c:\intelihub_20120526.log
+			// Given c:\tio.log this will change it
+			// to something like c:\tio_20120526.log
 			//
 
 			std::string::reverse_iterator ri;

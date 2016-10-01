@@ -9,7 +9,31 @@ namespace TioClient
         IntPtr _nativeContainerHandle;
         string _name;
 
+        public enum EventCode
+        {
+            Ping = 0x10,
+            Open = 0x11,
+            Create = 0x12,
+            Close = 0x13,
+            Set = 0x14,
+            Insert = 0x15,
+            Delete = 0x16,
+            PushBack = 0x17,
+            PushFront = 0x18,
+            PopBack = 0x19,
+            PopFront = 0x1a,
+            Clear = 0x1b,
+            Count = 0x1c,
+            Get = 0x1d,
+            Subscribe = 0x1e,
+            Unsubscribe = 0x1f,
+            Query = 0x20,
+            WaitAndPopNext = 0x21,
+            WaitAndPopKey = 0x22
+        }
+
         public delegate void QueryCallback(object key, object value, object metadata);
+        public delegate void EventCallback(EventCode eventCode, object key, object value, object metadata);
 
         public string Name { get { return _name; } }
 
@@ -25,8 +49,12 @@ namespace TioClient
                 _nativeContainerHandle,
                 0,
                 0,
-                delegate(IntPtr cookie,
+                null,
+                delegate(int result,
+                IntPtr handle,
+                IntPtr cookie,
                 uint queryid,
+                string containerName,
                 ref NativeImports.TIO_DATA key,
                 ref NativeImports.TIO_DATA value,
                 ref NativeImports.TIO_DATA metadata)
@@ -36,6 +64,34 @@ namespace TioClient
                         NativeImports.TioDataConverter.ToObject(value),
                         NativeImports.TioDataConverter.ToObject(metadata));
                 },
+                IntPtr.Zero);
+        }
+
+
+
+        public void Subscribe(EventCallback callback)
+        {
+            NativeImports.TIO_DATA start = new NativeImports.TIO_DATA();// = NativeImports.TioDataConverter.FromObject(null);            
+
+            NativeImports.tio_container_subscribe(
+                _nativeContainerHandle,
+               ref start,
+                delegate(int result,
+                    IntPtr cookie,
+                    IntPtr handle,
+                    uint eventCode,
+                    ref NativeImports.TIO_DATA key,
+                    ref NativeImports.TIO_DATA value,
+                    ref NativeImports.TIO_DATA metadata)
+                    {
+                        EventCode convertedEventCode = (EventCode)eventCode;
+
+                        callback(
+                            convertedEventCode,
+                            NativeImports.TioDataConverter.ToObject(key),
+                            NativeImports.TioDataConverter.ToObject(value),
+                            NativeImports.TioDataConverter.ToObject(metadata));
+                    },
                 IntPtr.Zero);
         }
 
@@ -61,6 +117,22 @@ namespace TioClient
             }
 
             return ret;
+        }
+
+
+        public int Count
+        {
+            get
+            {
+                int result;
+                int count;
+
+                result = NativeImports.tio_container_get_count(
+                    _nativeContainerHandle,
+                    out count);
+
+                return count;
+            }
         }
 
         public void Set(object key, object value, object metadata = null)

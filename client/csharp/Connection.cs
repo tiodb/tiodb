@@ -7,11 +7,16 @@ namespace TioClient
     public class Connection
     {
         IntPtr _nativeHandle = new IntPtr();
+        string _host = null;
+        short _port = 0;
 
         static Connection()
         {
             NativeImports.tio_initialize();
         }
+
+        public string Host { get { return _host; } }
+        public short Port { get { return _port; } }
 
         public Container Open(string name)
         {
@@ -23,26 +28,32 @@ namespace TioClient
             return new Container(handle, name);
         }
 
+        public void Close()
+        {
+            int result = NativeImports.tio_disconnect(_nativeHandle);
+        }
+
         public Connection(string host, short port)
         {
-            int result;
-
-            result = NativeImports.tio_connect(host, port, out _nativeHandle);
+            int result = NativeImports.tio_connect(host, port, out _nativeHandle);
             NativeImports.ThrowOnNativeApiError(result);
+
+            _host = host;
+            _port = port;
         }
 
         public void Disconnect()
         {
-            //NativeImports.tio_disconnect(_nativeHandle);
+            NativeImports.tio_disconnect(_nativeHandle);
 
             _nativeHandle = new IntPtr();
+            _host = null;
+            _port = 0;
         }
 
         public void Ping(string host, short port)
         {
-            int result;
-
-            result = NativeImports.tio_ping(_nativeHandle, "TioClientClr");
+            int result = NativeImports.tio_ping(_nativeHandle, "tioclient");
             NativeImports.ThrowOnNativeApiError(result);
         }
     }

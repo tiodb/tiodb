@@ -170,10 +170,14 @@ namespace TioClient
             [MarshalAs(UnmanagedType.LPStr)] string name,
             [MarshalAs(UnmanagedType.LPStr)] string type,
             out IntPtr nativeContainerHandle);
-        
-        //int tio_close(struct TIO_CONTAINER* container);
+
+        //void tio_disconnect(struct TIO_CONNECTION* connection)
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int tio_close(IntPtr connection);
+        public static extern int tio_disconnect(IntPtr connection);
+
+        //void tio_close(struct TIO_CONTAINER* connection)
+        [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_close(IntPtr container);
 
         // int tio_ping(struct TIO_CONNECTION* connection, char* payload);
         [DllImport("tioclient.dll", CallingConvention=CallingConvention.Cdecl)]
@@ -203,27 +207,73 @@ namespace TioClient
             ref TIO_DATA value,
             ref TIO_DATA metadata);
 
+        //int tio_container_get_count(struct TIO_CONTAINER* container, int* count);
+        [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_get_count(
+            IntPtr container,
+            out int count);
+
+
+        
+        // typedef void (*query_callback_t)(int /*result*/, unsigned int /*handle*/, void* /*cookie*/, unsigned int /*queryid*/, 
+		// const char* /*container_name*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         public delegate void query_callback_t(
+            int result,
+            IntPtr handle, 
             IntPtr cookie, 
-            uint queryid, 
+            uint queryid,
+            [MarshalAs(UnmanagedType.LPStr)] string containerName,
             ref TIO_DATA key,
             ref TIO_DATA value,
             ref TIO_DATA metadata);
 
+
+        /*
+         * int tio_container_query(struct TIO_CONTAINER* container, int start, int end, 
+						const char* regex,
+						query_callback_t query_callback, void* cookie)
+         */ 
         [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
         public static extern int tio_container_query(
             IntPtr container,
             int start, 
-            int end, 
+            int end,
+            [MarshalAs(UnmanagedType.LPStr)] string regex,
             query_callback_t query_callback, 
+            IntPtr cookie);
+
+        // subscription
+
+        // typedef void (*event_callback_t)(void* /*cookie*/, unsigned int /*handle*/, unsigned int /*event_code*/, const struct TIO_DATA*, const struct TIO_DATA*, const struct TIO_DATA*);
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void event_callback_t(
+            int result,
+            IntPtr cookie,
+            IntPtr container,
+            uint event_code,
+            ref TIO_DATA key,
+            ref TIO_DATA value,
+            ref TIO_DATA metadata);
+
+        // int tio_container_subscribe(
+        //   struct TIO_CONTAINER* container, 
+        //   struct TIO_DATA* start, 
+        //   event_callback_t event_callback, 
+        //   void* cookie);
+        [DllImport("tioclient.dll", CallingConvention = CallingConvention.Cdecl)]
+        public static extern int tio_container_subscribe(
+            IntPtr container,
+            ref TIO_DATA start,
+            event_callback_t event_callback,
             IntPtr cookie);
 
         public static void ThrowOnNativeApiError(int result)
         {
-            if(result < 0)
-                throw new Exception("tio protocol error");
+            if (result < 0)
+            {
+                throw new Exception("Tio error, number " + result.ToString());
+            }
         }
-
     }
 }

@@ -6,12 +6,12 @@ using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
 
-namespace InteliHubExplorer
+namespace TioExplorer
 {
     public partial class ContainerViewer : Form
     {
-        InteliHubClient.Connection m_connection = null;
-        InteliHubClient.Container m_container = null;
+        TioClient.Connection m_connection = null;
+        TioClient.Container m_container = null;
         string m_server;
         Int16 m_port;
         string m_containerName;
@@ -99,7 +99,7 @@ namespace InteliHubExplorer
 
             try
             {
-                m_connection = new InteliHubClient.Connection(m_server, m_port);
+                m_connection = new TioClient.Connection(m_server, m_port);
                 m_container = m_connection.Open(m_containerName);
             }
             catch (Exception ex)

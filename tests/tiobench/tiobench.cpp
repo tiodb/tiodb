@@ -1,6 +1,4 @@
- // intelihubbench.cpp : Defines the entry point for the console application.
-//
-
+ 
 #include "stdafx.h"
 #include "../../client/c/tioclient.h"
 #include "../../client/cpp/tioclient.hpp"
