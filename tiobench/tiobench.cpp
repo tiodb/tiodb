@@ -2,8 +2,8 @@
 //
 
 #include "stdafx.h"
-#include "../InteliHubClient/tioclient.h"
-#include "../InteliHubClient/tioclient.hpp"
+#include "../tioclient/c/tioclient.h"
+#include "../tioclient/cpp/tioclient.hpp"
 
 using std::thread;
 using std::function;
@@ -19,14 +19,14 @@ using std::cout;
 using std::endl;
 
 
-class InteliHubTestRunner
+class TioTestRunner
 {
 	vector<function<void(void)>> tests_;
 	bool running_;
 
 public:
 
-	InteliHubTestRunner()
+	TioTestRunner()
 		: running_(false)
 	{
 
@@ -147,7 +147,7 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	return ret;
 }
 
-class InteliHubTesterSubscriber
+class TioTesterSubscriber
 {
 	vector<pair<string, string>> container_names_;
 	string host_name_;
@@ -156,22 +156,22 @@ class InteliHubTesterSubscriber
 
 public:
 
-	InteliHubTesterSubscriber(const string& host_name)
+	TioTesterSubscriber(const string& host_name)
 		: host_name_(host_name)
 		, should_stop_(false)
 	{
 	}
 
-	InteliHubTesterSubscriber(const InteliHubTesterSubscriber&) = delete;
-	InteliHubTesterSubscriber& operator = (const InteliHubTesterSubscriber&) = delete;
-	InteliHubTesterSubscriber(InteliHubTesterSubscriber&& rhv) = delete;
+	TioTesterSubscriber(const TioTesterSubscriber&) = delete;
+	TioTesterSubscriber& operator = (const TioTesterSubscriber&) = delete;
+	TioTesterSubscriber(TioTesterSubscriber&& rhv) = delete;
 
-	~InteliHubTesterSubscriber()
+	~TioTesterSubscriber()
 	{
 		assert(!thread_.joinable());
 	}
 
-	InteliHubTesterSubscriber(const string& host_name,
+	TioTesterSubscriber(const string& host_name,
 		const string& container_name,
 		const string& container_type)
 		: host_name_(host_name)
@@ -250,7 +250,7 @@ public:
 };
 
 
-class InteliHubStressTest
+class TioStressTest
 {
 	string host_name_;
 	string container_name_;
@@ -260,7 +260,7 @@ class InteliHubStressTest
 	unsigned* persec_;
 public:
 
-	InteliHubStressTest(
+	TioStressTest(
 		const string& host_name,
 		const string& container_name,
 		const string& container_type,
@@ -316,7 +316,7 @@ int main()
 
 
 	const string hostname("localhost");
-	InteliHubTestRunner runner;
+	TioTestRunner runner;
 
 	int baseline = 0;
 
@@ -326,7 +326,7 @@ int main()
 		unsigned persec;
 
 		runner.add_test(
-			InteliHubStressTest(
+			TioStressTest(
 			hostname,
 			generate_container_name(),
 			"volatile_list",
@@ -348,7 +348,7 @@ int main()
 		{
 			string test_description = "single volatile list, clients=" + to_string(client_count) + 
 				", subscribers=" + to_string(subscriber_count);
-			vector<unique_ptr<InteliHubTesterSubscriber>> subscribers;
+			vector<unique_ptr<TioTesterSubscriber>> subscribers;
 
 			vector<unsigned> persec(client_count);
 			
@@ -358,7 +358,7 @@ int main()
 			for(unsigned a = 0; a < client_count; a++)
 			{
 				runner.add_test(
-					InteliHubStressTest(
+					TioStressTest(
 					hostname,
 					container_name,
 					container_type,
@@ -369,7 +369,7 @@ int main()
 
 			for(unsigned a = 0; a < subscriber_count; a++)
 			{
-				subscribers.emplace_back(new InteliHubTesterSubscriber(hostname, container_name, container_type));
+				subscribers.emplace_back(new TioTesterSubscriber(hostname, container_name, container_type));
 					
 
 				(*subscribers.rbegin())->start();
@@ -415,7 +415,7 @@ int main()
 		for(int a = 0; a < client_count; a++)
 		{
 			runner.add_test(
-				InteliHubStressTest(
+				TioStressTest(
 				"localhost",
 				generate_container_name(),
 				"volatile_list",

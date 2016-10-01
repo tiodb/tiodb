@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 import weakref
 
-INTELIHUB_DEFAULT_PORT = 2605
+TIO_DEFAULT_PORT = 2605
 
 separator = '^'
 
@@ -708,7 +708,7 @@ def parse_url(url):
             host, port = host_and_maybe_port
         else:
             host = host_and_maybe_port[0]
-            port = INTELIHUB_DEFAULT_PORT
+            port = TIO_DEFAULT_PORT
 
         port = int(port)
 
@@ -739,9 +739,9 @@ def connect(url):
 
 
 def main():
-    hub = connect('tio://127.0.0.1')
+    tio = connect('tio://127.0.0.1')
     def sink(c, e, k, v, m): print c, e, k, v, m
-    l = hub.create('xpto', 'volatile_list')
+    l = tio.create('xpto', 'volatile_list')
     l.subscribe(sink)
 
     return

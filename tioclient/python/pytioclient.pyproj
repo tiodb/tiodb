@@ -5,7 +5,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{14e19fa9-174d-49c9-863d-5f9ed25123f2}</ProjectGuid>
     <ProjectHome />
-    <StartupFile>test_intelihub.py</StartupFile>
+    <StartupFile>test_tio.py</StartupFile>
     <SearchPath />
     <WorkingDirectory>.</WorkingDirectory>
     <OutputPath>.</OutputPath>
@@ -23,9 +23,9 @@
     <PtvsTargetsFile>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets</PtvsTargetsFile>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="intelihubclient.py" />
-    <Compile Include="intelihubclient_c.py" />
-    <Compile Include="test_intelihub.py" />
+    <Compile Include="tioclient.py" />
+    <Compile Include="tioclient_c.py" />
+    <Compile Include="test_tio.py" />
   </ItemGroup>
   <Import Project="$(PtvsTargetsFile)" Condition="Exists($(PtvsTargetsFile))" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.Common.targets" Condition="!Exists($(PtvsTargetsFile))" />

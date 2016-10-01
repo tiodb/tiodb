@@ -1,4 +1,4 @@
-import intelihubclient
+import tioclient
 import random
 import unittest
 import datetime
@@ -76,15 +76,15 @@ class HubMirror(object):
     def on_event(self, container, event_name, k, v, m):
         self.containers[container.name].on_event(container, event_name, k, v, m)
 
-class InteliHubTestCase(unittest.TestCase):
+class tioTestCase(unittest.TestCase):
     def setUp(self):
-        self.hub = intelihubclient.connect('localhost')
+        self.tio = tioclient.connect('localhost')
 
     def get_me_a_random_container_name(self):
         return 'TEST_' + uuid.uuid4().hex
 
 
-class PerfomanceTests(InteliHubTestCase):
+class PerfomanceTests(tioTestCase):
     def __speed_test(self, func, count, bytes, useKey = False):
         v = '*' * bytes
         
@@ -124,26 +124,26 @@ class PerfomanceTests(InteliHubTestCase):
         for test in tests:
             type = test['type']
             hasKey = test['hasKey']
-            ds = self.hub.create(namePerfix + type, type)
+            ds = self.tio.create(namePerfix + type, type)
             result = self.__speed_test(ds.set if hasKey else ds.push_back, count, bytes, hasKey)
 
             print '%s: %d msg/s' % (type, result)
 
-class ContainerTests(InteliHubTestCase):
+class ContainerTests(tioTestCase):
     def test_create_all_container_types(self):
         types = ('volatile_list', 'volatile_map', 'persistent_list', 'persistent_map')
 
         for t in types:
-            self.hub.create(t + 'container', t)
+            self.tio.create(t + 'container', t)
 
         for t in types:
-            self.hub.open(t + 'container', t)
+            self.tio.open(t + 'container', t)
 
     def test_dispatch_pending_max(self):
         '''
             Test if the 'max' parameter of dispatch_pending_events is being repected
         '''
-        l = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        l = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
 
         how_many = ListReceiveCounter(self)
 
@@ -153,7 +153,7 @@ class ContainerTests(InteliHubTestCase):
             l.append(x)
 
         # just to guarantee we will receive all pending events from the server
-        self.hub.ping()
+        self.tio.ping()
 
         dispatched = l.dispatch_pending_events(1)
         self.assertEqual(dispatched, 1)
@@ -172,12 +172,12 @@ class ContainerTests(InteliHubTestCase):
         self.assertEqual(how_many.receive_count, 11)
 
     def test_volatile_list_get(self):
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
         self.__list_get_test(container)
         return container
 
     def test_persistent_list_get(self):
-        container = self.hub.create(self.get_me_a_random_container_name(), 'persistent_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'persistent_list')
         self.__list_get_test(container)
         return container
 
@@ -244,7 +244,7 @@ class ContainerTests(InteliHubTestCase):
         for container_type in container_types:
             for size in [0,1,2,3,5,7,11,50,1001]:
                 name = self.get_me_a_random_container_name()
-                container = self.hub.create(name, container_type)
+                container = self.tio.create(name, container_type)
                 container.clear()
                 mirror_items = range(size)
                 container.extend(mirror_items)
@@ -255,7 +255,7 @@ class ContainerTests(InteliHubTestCase):
         #
         # TODO: verify results
         #
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_map')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_map')
         diff = container.diff_start()
 
         for x in range(20) :
@@ -272,7 +272,7 @@ class ContainerTests(InteliHubTestCase):
         #
         # TODO: verify results
         #
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
         diff = container.diff_start()
 
         container.extend(range(100))
@@ -287,14 +287,14 @@ class ContainerTests(InteliHubTestCase):
         def f(key, value, metadata):
             pass
             
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
         container.wait_and_pop_next(f)
         container.append('abababu')
         container.wait_and_pop_next(f)
         container.append('xpto')
 
     def test_events(self):
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
         mirror = ListMirror(self)
         container.subscribe(mirror.on_event)
 
@@ -322,7 +322,7 @@ class ContainerTests(InteliHubTestCase):
         check_mirror([])
 
     def test_slice_subscribe(self):
-        container = self.hub.create(self.get_me_a_random_container_name(), 'volatile_list')
+        container = self.tio.create(self.get_me_a_random_container_name(), 'volatile_list')
         mirror = ListMirror(self)
 
         def check_mirror(expected_list_state):
@@ -501,7 +501,7 @@ class ContainerTests(InteliHubTestCase):
         added_item_count = 10
 
         #print '\tcreating containers...'
-        containers = [self.hub.create(self.get_me_a_random_container_name()) for x in range(container_count)]
+        containers = [self.tio.create(self.get_me_a_random_container_name()) for x in range(container_count)]
 
         def sink(*args):
             pass#print args
@@ -513,20 +513,20 @@ class ContainerTests(InteliHubTestCase):
 
         #print '\tadding to group containers...'
         for container in containers:
-            self.hub.group_add('test_group', container.name)
+            self.tio.group_add('test_group', container.name)
 
         #print '\tgroup subscribe...'
-        self.hub.group_subscribe('test_group', sink, 0)
+        self.tio.group_subscribe('test_group', sink, 0)
 
-        self.hub.ping()
-        self.hub.DispatchPendingEvents()
+        self.tio.ping()
+        self.tio.DispatchPendingEvents()
 
         #print '\tadding items to container after subscription'
         for index, container in enumerate(containers):
             for x in range(added_item_count):
                 container.push_back(str(index) * 2)
 
-        self.hub.DispatchPendingEvents()
+        self.tio.DispatchPendingEvents()
 
     def test_group_subscribe_new_container_after_subscription(self):
         group_name = self.get_me_a_random_container_name()
@@ -538,7 +538,7 @@ class ContainerTests(InteliHubTestCase):
 
         mirror = HubMirror(self)
 
-        c1 = self.hub.create(c1_name)
+        c1 = self.tio.create(c1_name)
 
         c1_contents = [str(x) for x in range(10)]
         c2_contents = [str(x) for x in range(20)]
@@ -550,22 +550,22 @@ class ContainerTests(InteliHubTestCase):
         #
         c1.extend(c1_contents)
 
-        self.hub.group_add(group_name, c1_name)
+        self.tio.group_add(group_name, c1_name)
 
-        self.hub.group_subscribe(group_name, mirror.on_event, 0)
+        self.tio.group_subscribe(group_name, mirror.on_event, 0)
 
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c1_name].l, c1_contents)
 
         #
         # scenario 2: container created after subscription, added to group before adding items
         #
-        c2 = self.hub.create(c2_name)
-        self.hub.group_add(group_name, c2_name)
+        c2 = self.tio.create(c2_name)
+        self.tio.group_add(group_name, c2_name)
         c2.extend(c2_contents)
 
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c2_name].l, c2_contents)
 
@@ -573,23 +573,23 @@ class ContainerTests(InteliHubTestCase):
         # scenario 3: container created after subscription, adding items
         # before adding to group
         #
-        c3 = self.hub.create(c3_name)
+        c3 = self.tio.create(c3_name)
         c3.extend(c3_contents)
-        self.hub.group_add(group_name, c3_name)
+        self.tio.group_add(group_name, c3_name)
         
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c3_name].l, c3_contents)
 
         #
         # scenario 4: subscribe to group before adding containers
         #
-        self.hub.group_subscribe(group_name_2, mirror.on_event, 0)
-        c4 = self.hub.create(c4_name)
+        self.tio.group_subscribe(group_name_2, mirror.on_event, 0)
+        c4 = self.tio.create(c4_name)
         c4.extend(c4_contents)
-        self.hub.group_add(group_name_2, c4_name)
+        self.tio.group_add(group_name_2, c4_name)
 
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c4_name].l, c4_contents)
 
@@ -600,7 +600,7 @@ class ContainerTests(InteliHubTestCase):
 
         mirror = HubMirror(self)
 
-        c1 = self.hub.create(c1_name)
+        c1 = self.tio.create(c1_name)
 
         c1_contents = [str(x) for x in range(10)]
         c2_contents = [str(x) for x in range(20)]
@@ -611,22 +611,22 @@ class ContainerTests(InteliHubTestCase):
         # scenario 1
         #
         c1.extend(c1_contents)
-        self.hub.group_add(group_name, c1_name)
+        self.tio.group_add(group_name, c1_name)
 
-        self.hub.group_subscribe(group_name, mirror.on_event, start_offset)
+        self.tio.group_subscribe(group_name, mirror.on_event, start_offset)
 
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c1_name].l, c1_contents[start_offset:])
 
         #
         # scenario 2: container created after subscription, added to group before adding items
         #
-        c2 = self.hub.create(c2_name)
+        c2 = self.tio.create(c2_name)
         c2.extend(c2_contents)
-        self.hub.group_add(group_name, c2_name)
+        self.tio.group_add(group_name, c2_name)
 
-        self.hub.RunLoop(1)
+        self.tio.RunLoop(1)
 
         self.assertEqual(mirror.containers[c2_name].l, c2_contents[start_offset:])
 
@@ -634,17 +634,17 @@ class ContainerTests(InteliHubTestCase):
     def test_batch(self):
         container_count = 100
         item_count = 50
-        self.hub.wait_for_answers = False
+        self.tio.wait_for_answers = False
 
-        self.hub.ping()
+        self.tio.ping()
 
         #print 'creating containers...'
         for index in range(container_count):
-            container =  self.hub.create(self.get_me_a_random_container_name())
+            container =  self.tio.create(self.get_me_a_random_container_name())
             for x in range(item_count):
                 container.push_back(str(x))
 
-        self.hub.ReceivePendingAnswers()
+        self.tio.ReceivePendingAnswers()
         
 if __name__ == '__main__':
     unittest.main()

@@ -18,7 +18,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #include "Container.h"
 #include "Command.h"
-#include "../tioclient/tioclient_internals.h"
+#include "../tioclient/c/tioclient_internals.h"
 //#include "TioTcpServer.h"
 
 namespace tio
