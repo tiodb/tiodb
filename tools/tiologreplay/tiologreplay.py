@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.normpath(os.getcwd() + "\\.."))
 
-import intelihubclient
+import tioclient
 import time
 import datetime
 import argparse
@@ -113,7 +113,7 @@ class StatsLogger(object):
       self.last_log = time.time()
       self.last_log_message_count = self.message_count
 
-class InteliHubLoadToMemorySink(object):
+class TioLoadToMemorySink(object):
   def __init__(self):
     self.containers = {}
 
@@ -161,7 +161,7 @@ class InteliHubLoadToMemorySink(object):
         pass
         
       elif log_entry.command == 'group_add':
-        #hub.group_add(key, value)
+        #tio.group_add(key, value)
         pass
         
       else:
@@ -170,13 +170,13 @@ class InteliHubLoadToMemorySink(object):
     return True
 
 
-class InteliHubReplaySink(object):
+class TioReplaySink(object):
   def __init__(self, hub_address, batch_size = 1):
-    self.hub = intelihubclient.connect(hub_address)
+    self.tio = tioclient.connect(hub_address)
     self.containers = {}
     self.batch_size = batch_size
     if self.batch_size > 1:
-      self.hub.wait_for_answers = False
+      self.tio.wait_for_answers = False
 
   def on_log_entry(self, log_entry):
     if log_entry.command == 'create':
@@ -184,7 +184,7 @@ class InteliHubReplaySink(object):
       if must_ignore_this_container(log_entry.key):
         return False
       
-      container = self.hub.create(log_entry.key, log_entry.value)
+      container = self.tio.create(log_entry.key, log_entry.value)
       container.clear()
       self.containers[log_entry.handle] = container
     else:
@@ -208,13 +208,13 @@ class InteliHubReplaySink(object):
       elif log_entry.command == 'propset':
         container.propset(log_entry.key, log_entry.value)
       elif log_entry.command == 'group_add':
-        self.hub.group_add(log_entry.key, log_entry.value)
+        self.tio.group_add(log_entry.key, log_entry.value)
       else:
         raise Exception('unknown command ' + command)
 
-      if not self.hub.wait_for_answers:
-        if self.hub.pending_answers_count > self.batch_size:
-          self.hub.ReceivePendingAnswers()
+      if not self.tio.wait_for_answers:
+        if self.tio.pending_answers_count > self.batch_size:
+          self.tio.ReceivePendingAnswers()
 
     return True
 
@@ -226,7 +226,7 @@ class MultiSinkSink(object):
     for sink in self.sinks:
       sink.on_log_entry(log_entry)
 
-class InteliHubLogResumeParser(object):
+class TioLogResumeParser(object):
   def __init__(self, sink):
     self.speed = 10
     self.sink = sink
@@ -273,7 +273,7 @@ class InteliHubLogResumeParser(object):
         f = file(file_path, 'r')
 
     if pause:
-      hub.server_pause()
+      tio.server_pause()
 
     current_line = 0
     while 1:
@@ -335,7 +335,7 @@ def change_speed_via_keyboard(current_speed):
     return current_speed
         
         
-class InteliHubLogParser(object):
+class TioLogParser(object):
   def __init__(self, sink, keyboard_control = False):
     self.speed = 10
     self.sink = sink
@@ -372,7 +372,7 @@ class InteliHubLogParser(object):
         f = file(file_path, 'r')
 
     if pause:
-      hub.server_pause()
+      tio.server_pause()
 
     send_count = 0
 
@@ -425,10 +425,10 @@ class InteliHubLogParser(object):
         
         
 def main():
-  argparser = argparse.ArgumentParser('Replay InteliHub logs')
-  argparser.add_argument('hub')
+  argparser = argparse.ArgumentParser('Replay Tio transaction logs')
+  argparser.add_argument('tio')
   argparser.add_argument('file_path')
-  argparser.add_argument('--speed', default=0, type=int, help='speed that messages will be send to hub. 0 = as fast as possible')
+  argparser.add_argument('--speed', default=0, type=int, help='speed that messages will be send to tio. 0 = as fast as possible')
   argparser.add_argument('--keyboard-control', action='store_true', help='allow speed to be controlled via keyboard')
   argparser.add_argument('--log-step', default=10000, type=int, help='message interval that will be used to log progress on terminal')
   argparser.add_argument('--delay', default=0, type=int, help='Message delay relative to original message time. ' +
@@ -438,16 +438,16 @@ def main():
 
   params = argparser.parse_args()
 
-  print 'Loading file "%s" to InteliHub @ %s, %d msgs/sec, %s, %s' % \
-    (params.file_path, params.hub, params.speed,
+  print 'Loading file "%s" to Tio @ %s, %d msgs/sec, %s, %s' % \
+    (params.file_path, params.tio, params.speed,
      '(follow file)' if params.follow else '', ' (pause server while loading)' if params.pause else '')
 
-  parser = InteliHubLogParser(
-      InteliHubReplaySink(params.hub, batch_size = params.log_step),
+  parser = TioLogParser(
+      TioReplaySink(params.tio, batch_size = params.log_step),
       keyboard_control = params.keyboard_control)
 
   if params.pause:
-    hub_sink.hub.pause()
+    hub_sink.tio.pause()
 
   try:
     parser.replay(
@@ -459,7 +459,7 @@ def main():
     
   finally:
     if params.pause:
-      hub.server_resume()
+      tio.server_resume()
     
 
 if __name__ == '__main__':

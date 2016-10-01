@@ -3,5 +3,5 @@ import py2exe
 
 setup(
 	options = {'py2exe': {'bundle_files': 1, 'compressed': True}},
-	console=['intelihublog.py']
+	console=['tiologreplay.py']
 	)
