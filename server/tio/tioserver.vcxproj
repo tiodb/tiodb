@@ -23,6 +23,7 @@
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>tio</RootNamespace>
     <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <ProjectName>tioserver</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -69,23 +70,23 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <OutDir>..\..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
     <TargetName>tio</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <TargetName>tio</TargetName>
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <OutDir>..\..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <OutDir>..\..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
     <TargetName>tio</TargetName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>tio</TargetName>
     <LinkIncremental>false</LinkIncremental>
-    <OutDir>..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
+    <OutDir>..\..\bin\$(PlatformTarget)\$(Configuration)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -210,7 +211,7 @@
     <ClInclude Include="VectorStorage.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\tioclient\c\tioclient.c">
+    <ClCompile Include="..\..\client\c\tioclient.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
@@ -230,7 +231,7 @@
     <ClCompile Include="TioTcpSession.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="tio.rc" />
+    <ResourceCompile Include="tioserver.rc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

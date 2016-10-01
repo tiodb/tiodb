@@ -21,7 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "MemoryStorage.h"
 //#include "BdbStorage.h"
 #include "LogDbStorage.h"
-#include "../tioclient/cpp/tioclient.hpp"
+#include "../../client/cpp/tioclient.hpp"
 
 #if TIO_PYTHON_PLUGIN_SUPPORT
 #include "TioPython.h"
@@ -97,9 +97,9 @@ void RunServer(tio::ContainerManager* manager,
 
 	tio::TioTcpServer tioServer(*manager, io_service, e, logFilePath);
 
-	cout << "running on port " << port << "." << endl;
-
 	tioServer.Start();
+
+	cout << "Up and running!" << endl;
 
 	io_service.run();
 
@@ -662,7 +662,7 @@ int main(int argc, char* argv[])
 {
 	namespace po = boost::program_options;
 
-	//cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
+	cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
 
 	try
 	{
@@ -684,12 +684,6 @@ int main(int argc, char* argv[])
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
-
-		if(vm.count("data-path") == 0)
-		{
-			cout << desc << endl;
-			return 1;
-		}
 
 		vector< pair<string, string> > aliases;
 
@@ -731,8 +725,15 @@ int main(int argc, char* argv[])
 			cout << "Starting infrastructure... " << endl;
 			tio::ContainerManager containerManager;
 			LocalContainerManager localContainerManager(containerManager);
+
+			string dataPath =
+				vm.count("data-path") == 0 ?
+				boost::filesystem::temp_directory_path().generic_string() :
+				vm["data-path"].as<string>();
+
+			cout << "Saving files to " << dataPath << endl;
 			
-			SetupContainerManager(&containerManager, vm["data-path"].as<string>(), aliases);
+			SetupContainerManager(&containerManager, dataPath, aliases);
 
 			//
 			// Parse plugin parameters
@@ -777,10 +778,16 @@ int main(int argc, char* argv[])
 			if(vm.count("port"))
 				port = vm["port"].as<unsigned short>();
 
+			cout << "Listening on port " << port << endl;
+
 			string logFilePath;
 
-			if(vm.count("log-path"))
+			if (vm.count("log-path"))
+			{
 				logFilePath = vm["log-path"].as<string>();
+
+				cout << "Saving transaction log to " << logFilePath << endl;
+			}
 		
 			RunServer(
 				&containerManager,

@@ -2,8 +2,8 @@
 //
 
 #include "stdafx.h"
-#include "../tioclient/c/tioclient.h"
-#include "../tioclient/cpp/tioclient.hpp"
+#include "../../client/c/tioclient.h"
+#include "../../client/cpp/tioclient.hpp"
 
 using std::thread;
 using std::function;
