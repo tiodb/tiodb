@@ -293,10 +293,116 @@ namespace tio
 		return "UNKNOWN";
 	}
 
+	string HttpGetStatusMessage(int status)
+	{
+		switch (status)
+		{
+		case 200: return "OK";
+		case 404: return "Not Found";
+		case 400: return "Bad Request";
+		case 500: return "Internal Server Error";
+		default: return "Nevermind";
+		}
+	}
+
+	void SendHttpResponse(
+		const shared_ptr<TioTcpSession>& session,
+		const map<string, string>& headers,
+		int status,
+		const string& message)
+	{
+		//
+		// TODO: adapt format to "Accept" header (json, xml, etc)
+		//
+		session->SendHttpResponseAndClose(status, HttpGetStatusMessage(status), "text/plain", nullptr, message);
+	}
+
+	struct TIO_HTTP_RESPONSE
+	{
+		map<string, string> headers;
+		int status;
+		string mimeType;
+		string body;
+
+		TIO_HTTP_RESPONSE() : status(500)
+		{}
+	};
+
+	static const string HTML_HEADER = R"(
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+ <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+ <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+</head><body><div class="container-fluid">
+		)";
+
+	static const string HTML_FOOTER = R"(
+	</div></body></html>
+		)";
+
+	TIO_HTTP_RESPONSE CreateContainerHttpResponse(const map<string, string>& headers, const shared_ptr<ITioContainer>& container)
+	{
+		TIO_HTTP_RESPONSE ret;
+
+		auto i = headers.find("Accept");
+
+		if (i == headers.end() || i->second.find("text/html") != string::npos)
+		{
+			ret.body = HTML_HEADER;
+			ret.body += R"(
+				<div class="row">
+				  <div class="col-sm-4">)";
+
+			ret.body += "<h4>";
+			ret.body += container->GetName();
+			ret.body += "</h4>";
+			ret.body += R"(
+                    <table class="table table-bordered">
+					  <thead>
+						<tr><td>key</td><td>value</td><td>metadata</td></tr>
+					  </thead>
+					<tbody>
+			)";
+
+			auto resultSet = container->Query(0, 0, nullptr);
+
+			TioData k, v, m;
+
+			while (resultSet->GetRecord(&k, &v, &m))
+			{
+				ret.body += "<tr>";
+				ret.body += "<td>";
+				ret.body += k.AsString();
+				ret.body += "</td><td>";
+				ret.body += v.AsString();
+				ret.body += "</td><td>";
+				ret.body += m.AsString();
+				ret.body += "</td></tr>";
+
+				resultSet->MoveNext();
+			}
+
+			ret.body += "</tbody></table></div></div>";
+			ret.body += HTML_FOOTER;
+
+			ret.mimeType = "text/html";
+			ret.status = 200;
+		}
+		else
+		{
+			ret.status = 400;
+		}
+
+		return ret;
+	}
+
 
 	void TioTcpServer::OnHttpCommand(
 		const string& verb, 
 		const string& path, 
+		const map<string, string>& headers,
 		const string& body,
 		const shared_ptr<TioTcpSession>& session)
 	{
@@ -316,33 +422,43 @@ namespace tio
 					session->SendHttpResponseAndClose(
 						200,
 						"OK",
-						"text/plain",
+						"text/plain", 
+						nullptr,
 						"hello from tiodb. unix time=" + to_string(time(nullptr)));
 				}
 				else
 				{
-					auto container = containerManager_.OpenContainer("", normalizedPath);
+					shared_ptr<ITioContainer> container;
+					
+					try
+					{
+						container = containerManager_.OpenContainer("", normalizedPath);
+					}
+					catch (std::runtime_error& ex)
+					{
+						SendHttpResponse(session, headers, 404, "container not found");
+					}
+
+					auto response = CreateContainerHttpResponse(headers, container);
 
 					session->SendHttpResponseAndClose(
-						200, 
-						"OK", 
-						"text/plain",
-						to_string(container->GetRecordCount()) + " items");
-
+						response.status,
+						HttpGetStatusMessage(response.status),
+						response.mimeType,
+						&response.headers,
+						response.body);
 				}
 			}
 			else
 			{
-				session->SendHttpResponseAndClose(400, "Bad Request", "text/plain", "Bad Request");
+				SendHttpResponse(session, headers, 400, "Bad Request");
 			}
 		}
 		catch (std::exception& ex)
 		{
-			session->SendHttpResponseAndClose(
-				500, 
-				"ERROR", 
-				"text/plain", 
-				string("Internal Server Error: ") + ex.what());
+			SendHttpResponse(session, headers, 400, "Bad Request");
+
+			SendHttpResponse(session, headers, 500, string("Internal Server Error : ") + ex.what());
 		}
 	}
 	

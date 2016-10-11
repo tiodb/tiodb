@@ -568,7 +568,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void InvalidateConnection(const error_code& err);
 
-		void SendHttpResponseAndClose(int statusCode, const string& statusMessage, const string& mimeType, const string& body);
+		void SendHttpResponseAndClose(int statusCode, const string& statusMessage, const string& mimeType, const map<string, string>* responseHeaders, const string& body);
 		
 	};		
 }

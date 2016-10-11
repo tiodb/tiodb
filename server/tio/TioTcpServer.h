@@ -660,7 +660,7 @@ namespace tio
 
 		void OnTextCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message);
-		void OnHttpCommand(const string& verb, const string& path, const string& body, const shared_ptr<TioTcpSession>& session);
+		void OnHttpCommand(const string& verb, const string& path, const map<string, string>& headers, const string& body, const shared_ptr<TioTcpSession>& session);
 
 		void Start();
 

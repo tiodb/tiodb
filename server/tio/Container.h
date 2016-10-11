@@ -31,6 +31,7 @@ namespace tio
 	using std::pair;
 	using std::function;
 	using std::shared_ptr;
+	using std::to_string;
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -223,6 +224,11 @@ namespace tio
 		{
 			type_ = None;
 			Set(str);
+		}
+
+		TioData(std::nullptr_t n)
+		{
+			type_ = None;
 		}
 
 		~TioData()
@@ -501,6 +507,19 @@ namespace tio
 		{
 			CheckDataType(String);
 			return string_;
+		}
+
+		string AsString() const
+		{
+			switch (type_)
+			{
+			case TioData::Int: return to_string(int_);
+			case TioData::Double: return to_string(double_);
+			case TioData::String: return string_;
+			case TioData::None: return string();
+			default:
+				throw std::runtime_error("invalid data type");
+			}
 		}
 
 		const void* AsRaw() const 

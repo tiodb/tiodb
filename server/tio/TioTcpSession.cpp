@@ -303,11 +303,17 @@ namespace tio
 		int statusCode,
 		const string& statusMessage,
 		const string& mimeType,
+		const map<string, string>* responseHeaders,
 		const string& body)
 	{
 		auto httpAnswer = make_shared<string>();
+		httpAnswer->reserve(body.size() + 100);
 
+		//
+		// TODO: send headers from responseHeaders parameter
+		//
 		httpAnswer->append("HTTP/1.1 " + to_string(statusCode) + " " + statusMessage +  "\r\n");
+		httpAnswer->append("Server: tiodb\r\n");
 		httpAnswer->append("Content-Type: " + mimeType + "\r\n");
 		httpAnswer->append("Connection: close\r\n");
 		httpAnswer->append("Content-Length: " + to_string(body.size()) + "\r\n");
@@ -324,6 +330,54 @@ namespace tio
 		);
 	}
 
+	bool ParseHttpHeaders(const string& str, map<string, string>* headerMap)
+	{
+		vector<string> lines;
+		map<string, string> ret;
+
+		size_t currentPosition = 0;
+
+		for (;;)
+		{
+			if (currentPosition == str.size())
+				break;
+
+			auto separatorPos = str.find(':', currentPosition);
+			auto lineEndingPos = str.find('\n', currentPosition);
+
+			if (separatorPos == string::npos || lineEndingPos == string::npos)
+				break;
+
+			// empty value (no separator inside string)
+			if (separatorPos > lineEndingPos)
+			{
+				return false;
+			}
+			
+			auto keyStart = str.begin() + currentPosition;
+			auto keyEnd = str.begin() + separatorPos;
+			auto valueStart = str.begin() + separatorPos + 1;
+			auto valueEnd = str.begin() + lineEndingPos - 1;
+
+			currentPosition = lineEndingPos + 1;
+
+			// HTTP RFC says there any be any amount of spaces around ':' char
+			while (*keyEnd == ' ' && keyEnd > keyStart) --keyEnd;
+			while (*valueStart == ' ' && valueStart < valueEnd) ++valueStart;
+			if (*valueEnd == '\r') --valueEnd;
+
+			string key(keyStart, keyEnd);
+			string value(valueStart, valueEnd + 1);
+
+			if (key.empty())
+				continue;
+
+			(*headerMap)[key] = value;
+		}
+
+		return true;
+	}
+
 
 	void TioTcpSession::OnReadHttpCommand(const error_code& err, size_t read)
 	{
@@ -333,14 +387,27 @@ namespace tio
 		string str(read, ' ');
 		istream stream(&buf_);
 
-		//
-		// read all the http header
-		// We will ignore them for now
-		//
 		stream.read(&str[0], read);
 
+		map<string, string> headers;
+		
+		bool b = ParseHttpHeaders(str, &headers);
+
+		if (!b)
+		{
+			// Invalid http headers
+			InvalidateConnection(error_code());
+			return;
+		}
+		
 		string path = *currentCommand_.GetParameters().begin();
-		server_.OnHttpCommand(currentCommand_.GetCommand(), path, string(), shared_from_this());
+
+		server_.OnHttpCommand(
+			currentCommand_.GetCommand(), 
+			path, 
+			headers, 
+			string(),
+			shared_from_this());
 
 	}
 
