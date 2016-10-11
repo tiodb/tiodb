@@ -69,11 +69,22 @@ namespace tio
 
 		command_ = params_[0];
 		params_.erase(params_.begin());
+
+		if (!params_.empty())
+		{
+			if (*params_.rbegin() == "HTTP/1.1")
+				isHttp_ = true;
+		}
 	}
 
 	const string& Command::GetCommand() const
 	{
 		return command_;
+	}
+
+	bool Command::IsHttp() const
+	{
+		return isHttp_;
 	}
 
 	const string& Command::GetSource() const

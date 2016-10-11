@@ -21,6 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	
+	using std::to_string;
 	using std::shared_ptr;
 	using boost::system::error_code;
 
@@ -293,6 +294,57 @@ namespace tio
 	}
 
 
+	void TioTcpServer::OnHttpCommand(
+		const string& verb, 
+		const string& path, 
+		const string& body,
+		const shared_ptr<TioTcpSession>& session)
+	{
+		string normalizedPath = path;
+
+		if (!normalizedPath.empty() && path[0] == '/')
+		{
+			normalizedPath.erase(normalizedPath.begin());
+		}
+
+		try
+		{
+			if (verb == "GET")
+			{
+				if (path == "/")
+				{
+					session->SendHttpResponseAndClose(
+						200,
+						"OK",
+						"text/plain",
+						"hello from tiodb. unix time=" + to_string(time(nullptr)));
+				}
+				else
+				{
+					auto container = containerManager_.OpenContainer("", normalizedPath);
+
+					session->SendHttpResponseAndClose(
+						200, 
+						"OK", 
+						"text/plain",
+						to_string(container->GetRecordCount()) + " items");
+
+				}
+			}
+			else
+			{
+				session->SendHttpResponseAndClose(400, "Bad Request", "text/plain", "Bad Request");
+			}
+		}
+		catch (std::exception& ex)
+		{
+			session->SendHttpResponseAndClose(
+				500, 
+				"ERROR", 
+				"text/plain", 
+				string("Internal Server Error: ") + ex.what());
+		}
+	}
 	
 
 	void TioTcpServer::OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message)
@@ -686,7 +738,7 @@ namespace tio
 	}
 
 
-	void TioTcpServer::OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
+	void TioTcpServer::OnTextCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session)
 	{
 		CommandFunctionMap::iterator i = dispatchMap_.find(cmd.GetCommand());
 

@@ -26,6 +26,7 @@ namespace tio
 	using std::endl;
 
 	using std::shared_ptr;
+	using std::make_shared;
 	using boost::scoped_ptr;
 	using boost::system::error_code;
 
@@ -36,6 +37,8 @@ namespace tio
 	using boost::is_any_of;
 
 	using std::tuple;
+
+	using std::to_string;
 
 	using std::make_pair;
 	using std::string;
@@ -258,6 +261,16 @@ namespace tio
 					});
 	}
 
+	void TioTcpSession::ReadHttpCommand()
+	{
+		asio::async_read_until(socket_, buf_, "\r\n\r\n",
+			[shared_this = shared_from_this()](const error_code& err, size_t read)
+			{
+				shared_this->OnReadHttpCommand(err, read);
+			});
+	}
+
+
 	void TioTcpSession::ReadBinaryProtocolMessage()
 	{
 		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
@@ -284,6 +297,51 @@ namespace tio
 			{
 				shared_this->OnReadCommand(err, read);
 			});
+	}
+
+	void TioTcpSession::SendHttpResponseAndClose(
+		int statusCode,
+		const string& statusMessage,
+		const string& mimeType,
+		const string& body)
+	{
+		auto httpAnswer = make_shared<string>();
+
+		httpAnswer->append("HTTP/1.1 " + to_string(statusCode) + " " + statusMessage +  "\r\n");
+		httpAnswer->append("Content-Type: " + mimeType + "\r\n");
+		httpAnswer->append("Connection: close\r\n");
+		httpAnswer->append("Content-Length: " + to_string(body.size()) + "\r\n");
+		httpAnswer->append("\r\n");
+		httpAnswer->append(body);
+
+		asio::async_write(
+			socket_,
+			asio::buffer(*httpAnswer),
+			[shared_this = shared_from_this(), httpAnswer](const error_code& err, size_t sent)
+			{
+				shared_this->InvalidateConnection(err);
+			}
+		);
+	}
+
+
+	void TioTcpSession::OnReadHttpCommand(const error_code& err, size_t read)
+	{
+		if (CheckError(err))
+			return;
+
+		string str(read, ' ');
+		istream stream(&buf_);
+
+		//
+		// read all the http header
+		// We will ignore them for now
+		//
+		stream.read(&str[0], read);
+
+		string path = *currentCommand_.GetParameters().begin();
+		server_.OnHttpCommand(currentCommand_.GetCommand(), path, string(), shared_from_this());
+
 	}
 
 	void TioTcpSession::OnReadCommand(const error_code& err, size_t read)
@@ -333,12 +391,17 @@ namespace tio
 				return;
 			}
 		}
+		else if (currentCommand_.IsHttp())
+		{
+			ReadHttpCommand();
+			return;
+		}
 
 #ifdef _TIO_DEBUG
 		cout << "<< " << str << endl;
 #endif
 
-		server_.OnCommand(currentCommand_, answer, &moreDataSize, shared_from_this());
+		server_.OnTextCommand(currentCommand_, answer, &moreDataSize, shared_from_this());
 		
 		if(moreDataSize)
 		{
@@ -404,7 +467,7 @@ namespace tio
 
 		buf_.sgetn((char*)dataBuffer->GetRawBuffer(), static_cast<std::streamsize>(dataSize));
 
-		server_.OnCommand(currentCommand_, answer, &moreDataSize, shared_from_this());
+		server_.OnTextCommand(currentCommand_, answer, &moreDataSize, shared_from_this());
 
 		BOOST_ASSERT(moreDataSize == 0);
 

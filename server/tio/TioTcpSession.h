@@ -428,6 +428,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
 		void OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err);
+		void ReadHttpCommand();
 		void ReadBinaryProtocolMessage();
 
 
@@ -510,6 +511,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnAccept();
 		void ReadCommand();
 
+		void OnReadHttpCommand(const error_code& err, size_t read);
 		unsigned int id();
 		bool UsesBinaryProtocol() const;
 
@@ -564,8 +566,9 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
 		bool commandRunning_;
 
-
 		void InvalidateConnection(const error_code& err);
+
+		void SendHttpResponseAndClose(int statusCode, const string& statusMessage, const string& mimeType, const string& body);
 		
 	};		
 }

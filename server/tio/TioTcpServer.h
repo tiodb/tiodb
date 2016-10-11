@@ -655,11 +655,12 @@ namespace tio
 	public:
 		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint, const std::string& logFilePath);
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
-		void OnCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void PostCallback(function<void()> callback);
-		
+
+		void OnTextCommand(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnBinaryCommand(shared_ptr<TioTcpSession> session, PR1_MESSAGE* message);
+		void OnHttpCommand(const string& verb, const string& path, const string& body, const shared_ptr<TioTcpSession>& session);
 
 		void Start();
 

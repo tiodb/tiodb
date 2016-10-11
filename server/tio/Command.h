@@ -37,6 +37,7 @@ namespace tio
 		string source_;
 		const char* separators_;
 		shared_ptr<tio::Buffer> data_;
+		bool isHttp_ = false;
 
 	public:
 		Command();
@@ -44,6 +45,8 @@ namespace tio
 		const string& GetSource() const;
 		const string& GetCommand() const;
 		const Parameters& GetParameters() const;
+
+		bool IsHttp() const;
 
 		shared_ptr<tio::Buffer>& GetDataBuffer();
 		void SetDataBuffer(const shared_ptr<tio::Buffer>& data);
