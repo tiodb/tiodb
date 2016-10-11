@@ -348,7 +348,42 @@ namespace tio
 
 		auto i = headers.find("Accept");
 
-		if (i == headers.end() || i->second.find("text/html") != string::npos)
+		if (i == headers.end() || 
+			i->second.find("application/json") != string::npos ||
+			i->second == "*/*")
+		{
+			ret.body.clear();
+			ret.body += "{\""  "_meta"   "\":{";
+			ret.body += "\""   "container_name"   "\":";
+			ret.body += "\"" + container->GetName() + "\""  ",";
+			ret.body += "\""   "container_type"   "\":";
+			ret.body += "\"" + container->GetType() + "\"";
+			ret.body += "}"   ",";
+			ret.body += "\""  "value"   "\":[";
+
+			auto resultSet = container->Query(0, 0, nullptr);
+			TioData k, v, m;
+			while (resultSet->GetRecord(&k, &v, &m))
+			{
+				ret.body += "{\"key\":\"";
+				ret.body += k.AsString();
+				ret.body += "\",\"value\":\"";
+				ret.body += v.AsString();
+				ret.body += "\",\"metadata\":\"";
+				ret.body += m.AsString();
+				ret.body += "\"},";
+				resultSet->MoveNext();
+			}
+
+			// remove last comma
+			ret.body.resize(ret.body.size() - 1);
+
+			ret.body += "]}";
+
+			ret.mimeType = "application/json";
+			ret.status = 200;
+		}
+		else if (i->second.find("text/html") != string::npos)
 		{
 			ret.body = HTML_HEADER;
 			ret.body += R"(
