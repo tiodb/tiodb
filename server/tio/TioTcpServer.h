@@ -24,6 +24,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "TioTcpSession.h"
 #include "auth.h"
 #include "logdb.h"
+#include "HttpParser.h"
 
 namespace tio
 {

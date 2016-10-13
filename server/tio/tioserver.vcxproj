@@ -196,6 +196,7 @@
     <ClInclude Include="Command.h" />
     <ClInclude Include="Container.h" />
     <ClInclude Include="ContainerManager.h" />
+    <ClInclude Include="HttpParser.h" />
     <ClInclude Include="ListStorage.h" />
     <ClInclude Include="logdb.h" />
     <ClInclude Include="LogDbStorage.h" />
