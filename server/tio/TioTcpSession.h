@@ -19,6 +19,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "Container.h"
 #include "Command.h"
 #include "../../client/c/tioclient_internals.h"
+#include "HttpParser.h"
 //#include "TioTcpServer.h"
 
 namespace tio
@@ -428,7 +429,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
 		void OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err);
-		void ReadHttpCommand();
+		void ReadHttpCommand(const shared_ptr<HttpParser> httpParser);
 		void ReadBinaryProtocolMessage();
 
 
@@ -511,7 +512,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void OnAccept();
 		void ReadCommand();
 
-		void OnReadHttpCommand(const error_code& err, size_t read);
+		void OnReadHttpCommand(const shared_ptr<HttpParser>& httpParser, const error_code& err, size_t read);
 		unsigned int id();
 		bool UsesBinaryProtocol() const;
 

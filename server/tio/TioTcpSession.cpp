@@ -261,14 +261,50 @@ namespace tio
 					});
 	}
 
-	void TioTcpSession::ReadHttpCommand()
+	void TioTcpSession::ReadHttpCommand(const shared_ptr<HttpParser> httpParser)
 	{
-		asio::async_read_until(socket_, buf_, "\r\n\r\n",
-			[shared_this = shared_from_this()](const error_code& err, size_t read)
-			{
-				shared_this->OnReadHttpCommand(err, read);
-			});
+		if (buf_.size())
+		{
+			OnReadHttpCommand(httpParser, error_code(), buf_.size());
+		}
+		else
+		{
+			asio::async_read(socket_, buf_,
+				[shared_this = shared_from_this(), httpParser](const error_code& err, size_t read)
+				{
+					shared_this->OnReadHttpCommand(httpParser, err, read);
+				});
+		}
 	}
+
+	void TioTcpSession::OnReadHttpCommand(const shared_ptr<HttpParser>& httpParser, const error_code& err, size_t read)
+	{
+		if (CheckError(err))
+			return;
+
+		const char* readData = asio::buffer_cast<const char*>(buf_.data());
+
+		bool haveAFullMessage = httpParser->FeedBytes(readData, buf_.size());
+
+		buf_.consume(buf_.size());
+
+		if (httpParser->error())
+		{
+			InvalidateConnection(error_code());
+			return;
+		}
+
+		if (!haveAFullMessage)
+		{
+			ReadHttpCommand(httpParser);
+			return;
+		}
+
+		server_.OnHttpCommand(
+			httpParser->currentMessage(),
+			shared_from_this());
+	}
+
 
 
 	void TioTcpSession::ReadBinaryProtocolMessage()
@@ -378,39 +414,6 @@ namespace tio
 		return true;
 	}
 
-
-	void TioTcpSession::OnReadHttpCommand(const error_code& err, size_t read)
-	{
-		if (CheckError(err))
-			return;
-
-		string str(read, ' ');
-		istream stream(&buf_);
-
-		stream.read(&str[0], read);
-
-		map<string, string> headers;
-		
-		bool b = ParseHttpHeaders(str, &headers);
-
-		if (!b)
-		{
-			// Invalid http headers
-			InvalidateConnection(error_code());
-			return;
-		}
-		
-		string path = *currentCommand_.GetParameters().begin();
-
-		server_.OnHttpCommand(
-			currentCommand_.GetCommand(), 
-			path, 
-			headers, 
-			string(),
-			shared_from_this());
-
-	}
-
 	void TioTcpSession::OnReadCommand(const error_code& err, size_t read)
 	{
 		if(CheckError(err))
@@ -460,7 +463,12 @@ namespace tio
 		}
 		else if (currentCommand_.IsHttp())
 		{
-			ReadHttpCommand();
+			auto httpParser = make_shared<HttpParser>();
+			httpParser->FeedBytes(str.c_str(), str.size());
+			
+			// we removed line ending before, will need to insert it back
+			httpParser->FeedBytes("\r\n", 2);
+			ReadHttpCommand(httpParser);
 			return;
 		}
 

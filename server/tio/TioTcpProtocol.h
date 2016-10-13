@@ -279,7 +279,7 @@ namespace tio
 			type(TypeUndefined)
 		{}
 
-		void Clear()
+		void Reset()
 		{
 			pendingDataSize = 0;
 			type = TypeUndefined;
@@ -310,7 +310,7 @@ namespace tio
 		if(*(line.end() - 1) == '\r')
 			line.erase(line.end() - 1);
 
-		answer->Clear();
+		answer->Reset();
 
 		answer->rawAnswerLine = line;
 

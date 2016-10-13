@@ -11,6 +11,7 @@ namespace tio
 
 	struct HTTP_MESSAGE
 	{
+		string method;
 		string url;
 		map<string, string> headers;
 	};
@@ -19,10 +20,10 @@ namespace tio
 	{
 		http_parser_settings settings_;
 		http_parser parser_;
+		bool finished_ = false;
 
 		string nextHeaderName_;
 		HTTP_MESSAGE currentMessage_;
-
 
 		static int on_header_value(http_parser* parser, const char* str, size_t len)
 		{
@@ -32,7 +33,13 @@ namespace tio
 
 		static int on_message_begin(http_parser* parser)
 		{
-			static_cast<HttpParser*>(parser->data)->Clear();
+			static_cast<HttpParser*>(parser->data)->OnMessageBegin();
+			return 0;
+		}
+
+		static int on_message_complete(http_parser* parser)
+		{
+			static_cast<HttpParser*>(parser->data)->OnMessageComplete();
 			return 0;
 		}
 
@@ -48,11 +55,6 @@ namespace tio
 			return 0;
 		}
 
-		void Clear()
-		{
-			currentMessage_ = HTTP_MESSAGE();
-			nextHeaderName_.clear();
-		}
 
 		void SetNextHeaderName(const char* str, size_t len)
 		{
@@ -69,28 +71,75 @@ namespace tio
 			currentMessage_.headers[nextHeaderName_].assign(str, len);
 		}
 
+		void OnMessageBegin()
+		{
+
+		}
+
+		void OnMessageComplete()
+		{
+			switch (parser_.method)
+			{
+			case HTTP_GET:
+				currentMessage_.method = "GET";
+				break;
+			case HTTP_POST:
+				currentMessage_.method = "POST";
+				break;
+			case HTTP_DELETE:
+				currentMessage_.method = "DELETE";
+				break;
+			case HTTP_PATCH:
+				currentMessage_.method = "PATCH";
+				break;
+			default:
+				break;
+			}
+			
+			finished_ = true;
+		}
+
 	public:
-		HttpParser()
+
+		void Reset()
 		{
 			http_parser_init(&parser_, HTTP_REQUEST);
-			
+
 			parser_.data = this;
 
 			memset(&settings_, 0, sizeof(settings_));
 
 			settings_.on_message_begin = &HttpParser::on_message_begin;
+			settings_.on_message_complete = &HttpParser::on_message_complete;
 			settings_.on_header_field = &HttpParser::on_header_field;
 			settings_.on_header_value = &HttpParser::on_header_value;
 			settings_.on_url = &HttpParser::on_url;
+
+			currentMessage_ = HTTP_MESSAGE();
+			nextHeaderName_.clear();
+			finished_ = false;
 		}
 
-		bool Parse(const char* data, size_t len, HTTP_MESSAGE* httpMessage)
+		HttpParser()
 		{
-			http_parser_execute(&parser_, &settings_, data, len);
-			*httpMessage = currentMessage_;
-			return true;
+			Reset();
 		}
 
+		bool FeedBytes(const char* data, size_t len)
+		{
+			assert(!finished_);
+			http_parser_execute(&parser_, &settings_, data, len);
+			return finished_;
+		}
 
+		const HTTP_MESSAGE& currentMessage()
+		{
+			return currentMessage_;
+		}
+
+		bool error() const
+		{
+			return parser_.http_errno != 0;
+		}
 	};
 }

@@ -35,6 +35,13 @@ namespace tio
 			Set(data, size);
 		}
 
+		Buffer(size_t size)
+			: Buffer()
+		{
+			Alloc(size);
+		}
+		
+
 		Buffer()
 			: buffer_(NULL), size_(0)
 		{}

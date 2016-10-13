@@ -435,24 +435,21 @@ namespace tio
 
 
 	void TioTcpServer::OnHttpCommand(
-		const string& verb, 
-		const string& path, 
-		const map<string, string>& headers,
-		const string& body,
+		const HTTP_MESSAGE& httpMessage,
 		const shared_ptr<TioTcpSession>& session)
 	{
-		string normalizedPath = path;
+		string normalizedPath = httpMessage.url;
 
-		if (!normalizedPath.empty() && path[0] == '/')
+		if (!normalizedPath.empty() && normalizedPath[0] == '/')
 		{
 			normalizedPath.erase(normalizedPath.begin());
 		}
 
 		try
 		{
-			if (verb == "GET")
+			if (httpMessage.method == "GET")
 			{
-				if (path == "/")
+				if (normalizedPath.empty())
 				{
 					session->SendHttpResponseAndClose(
 						200,
@@ -471,10 +468,10 @@ namespace tio
 					}
 					catch (std::runtime_error& ex)
 					{
-						SendHttpResponse(session, headers, 404, "container not found");
+						SendHttpResponse(session, httpMessage.headers, 404, "container not found");
 					}
 
-					auto response = CreateContainerHttpResponse(headers, container);
+					auto response = CreateContainerHttpResponse(httpMessage.headers, container);
 
 					session->SendHttpResponseAndClose(
 						response.status,
@@ -486,14 +483,14 @@ namespace tio
 			}
 			else
 			{
-				SendHttpResponse(session, headers, 400, "Bad Request");
+				SendHttpResponse(session, httpMessage.headers, 400, "Bad Request");
 			}
 		}
 		catch (std::exception& ex)
 		{
-			SendHttpResponse(session, headers, 400, "Bad Request");
+			SendHttpResponse(session, httpMessage.headers, 400, "Bad Request");
 
-			SendHttpResponse(session, headers, 500, string("Internal Server Error : ") + ex.what());
+			SendHttpResponse(session, httpMessage.headers, 500, string("Internal Server Error : ") + ex.what());
 		}
 	}
 	
