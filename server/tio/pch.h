@@ -78,6 +78,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #include <boost/tuple/tuple.hpp>
 
+#include <boost/locale.hpp>
+
 #include <boost/foreach.hpp>
 
 #include <boost/typeof/std/utility.hpp>

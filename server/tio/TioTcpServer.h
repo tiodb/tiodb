@@ -267,7 +267,6 @@ namespace tio
 
 		BinaryProtocolLogger()
 			: lastGlobalHandle_(0)
-			, f_(NULL)
 		{
 		}
 

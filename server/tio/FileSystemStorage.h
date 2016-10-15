@@ -17,11 +17,13 @@ limitations under the License.
 #pragma once
 
 #include "logdb.h"
+#include "MemoryStorage.h"
 
 namespace tio {
 	namespace FileSystemStorage
 	{
 		using std::make_tuple;
+		using std::make_shared;
 
 		namespace filesystem = boost::filesystem;
 
@@ -30,6 +32,18 @@ namespace tio {
 		using filesystem::directory_iterator;
 		using filesystem::is_regular_file;
 		using filesystem::is_directory;
+		using boost::locale::conv::utf_to_utf;
+
+		static const unsigned MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+
+		bool IsAbsoluteAndNoEvilPath(const char* path)
+		{
+			//
+			// TODO: implement
+			//
+			return true;
+		}
 
 		class FileDirectoryStorage :
 			boost::noncopyable,
@@ -42,14 +56,13 @@ namespace tio {
 			filesystem::path directoryPath_;
 		public:
 
-			FileDirectoryStorage(const string& directoryPath, const string& name, const string& type)
+			FileDirectoryStorage(filesystem::path& directoryPath, const string& name, const string& type)
 				: directoryPath_(directoryPath)
 				, name_(name)
 				, type_(type)
 			{
 				if (!is_directory(directoryPath_))
 					throw runtime_error("invalid directory");
-
 			}
 
 			~FileDirectoryStorage()
@@ -134,7 +147,33 @@ namespace tio {
 
 			virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)
 			{
-				throw std::invalid_argument("not supported");
+				if(!value)
+					throw std::invalid_argument("value argument can't be null");
+
+				if(!IsAbsoluteAndNoEvilPath(searchKey.AsSz()))
+					throw std::invalid_argument("key not found");
+
+				logdb::File f;
+				path fullPath = directoryPath_ / searchKey.AsSz();
+
+				bool b = f.Open(fullPath.generic_string().c_str());
+
+				if(!b)
+					throw std::invalid_argument("key not found");
+
+				auto fileSize = f.GetFileSize();
+
+				if(fileSize > MAX_FILE_SIZE)
+					throw std::invalid_argument("file to big");
+
+				char* buffer = value->AllocStringAndGetBuffer(fileSize);
+
+				auto read = f.Read(buffer, fileSize);
+
+				if(read != fileSize)
+					throw std::invalid_argument("i/o error");
+
+				*key = searchKey;
 			}
 
 			virtual unsigned int Subscribe(EventSink sink, const string& start)
@@ -144,13 +183,14 @@ namespace tio {
 
 			virtual void Unsubscribe(unsigned int cookie)
 			{
-				dispatcher_.Unsubscribe(cookie);
+				throw std::invalid_argument("not supported");
 			}
 
 			virtual string Get(const string& key)
 			{
-				throw std::invalid_argument("not supported");
-
+				TioData nada, value;
+				GetRecord(key, &nada, &value, nullptr);
+				return value.AsString();
 			}
 			virtual void Set(const string& key, const string& value)
 			{
@@ -162,6 +202,32 @@ namespace tio {
 		class FileSystemStorageManager : public ITioStorageManager
 		{
 			path rootPath_;
+
+			const vector<string> SupportedTypes = { "directory" };
+
+			set<string> directoryList_;
+
+			void ReloadDirectoryList()
+			{
+				directoryList_.clear();
+				ReloadDirectoryList(rootPath_);
+			}
+
+			void ReloadDirectoryList(const path& currentPath)
+			{
+				auto pathPrefixSize = rootPath_.generic_string().size() + 1;
+
+				for (auto& entry : directory_iterator(currentPath))
+				{
+					if (!is_directory(entry.path()))
+						continue;
+
+					directoryList_.emplace(entry.path().generic_string().substr(pathPrefixSize));
+
+					ReloadDirectoryList(entry.path());
+				}
+			}
+
 		public:
 
 			FileSystemStorageManager(const string& rootPath) : rootPath_(rootPath)
@@ -171,22 +237,35 @@ namespace tio {
 
 			virtual std::vector<string> GetSupportedTypes()
 			{
-				return{ "filesystem_map" };
+				return SupportedTypes;
+			}
+
+			static bool IsValidPath(const string& containerName)
+			{
+				//
+				// TODO: implement
+				//
+				return true;
 			}
 
 			inline bool Exists(const string& containerType, const string& containerName)
 			{
-				throw std::invalid_argument("not supported");
-			}
+				if(containerType == "directory")
+					throw std::invalid_argument("invalid container type");
 
-			inline string GenerateNamelessName()
-			{
-				throw std::invalid_argument("not supported");
+				if(!IsValidPath(containerName))
+					throw std::invalid_argument("invalid container name");
+
+				auto nativePath = utf_to_utf<path::value_type>(containerName);
+
+				auto fullPath = rootPath_ / nativePath;
+
+				return is_directory(fullPath);
 			}
 
 			void CheckType(const string& type)
 			{
-				if (type != "persistent_list" && type != "persistent_map")
+				if (std::find(begin(SupportedTypes), end(SupportedTypes), type) == end(SupportedTypes))
 					throw std::invalid_argument("storage type not supported");
 			}
 						
@@ -195,25 +274,31 @@ namespace tio {
 				throw std::invalid_argument("not supported");
 			}
 
-			
-
 			virtual vector<StorageInfo> GetStorageList()
 			{
 				vector<StorageInfo> ret;
+				
+				if (directoryList_.empty())
+					ReloadDirectoryList();
 
-				for (const auto& entry : directory_iterator(rootPath_))
-				{
-					auto x = StorageInfo{ entry.path().c_str(), "filesystem_map" };
-					//ret.push_back();
-				}
-
+				for (auto& v : directoryList_)
+					ret.push_back({ v, "directory" });
+				
 				return ret;
 			}
 
 			virtual pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> >
 				OpenStorage(const string& type, const string& name)
 			{
-				throw std::invalid_argument("not supported");
+				if(directoryList_.find(name) == cend(directoryList_))
+					throw std::invalid_argument("container not found");
+
+				pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> > ret;
+
+				ret.first = make_shared<FileDirectoryStorage>(rootPath_ / name, name, "directory");
+				ret.second = make_shared<MemoryStorage::MemoryPropertyMap>();
+				
+				return ret;
 			}
 
 			virtual pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> >

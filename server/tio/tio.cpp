@@ -21,6 +21,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include "MemoryStorage.h"
 //#include "BdbStorage.h"
 #include "LogDbStorage.h"
+#include "FileSystemStorage.h"
 #include "../../client/cpp/tioclient.hpp"
 
 #if TIO_PYTHON_PLUGIN_SUPPORT
@@ -30,26 +31,43 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 using namespace tio;
 
 using std::shared_ptr;
+using std::make_shared;
 using boost::scoped_array;
 using std::cout;
 using std::endl;
 using std::queue;
 
+namespace fs = boost::filesystem;
+
 void LoadStorageTypes(ContainerManager* containerManager, const string& dataPath)
 {
-	shared_ptr<ITioStorageManager> mem = 
-		shared_ptr<ITioStorageManager>(new tio::MemoryStorage::MemoryStorageManager());
+	fs::path rootPath(dataPath);
 	
-	shared_ptr<ITioStorageManager> ldb = 
-		shared_ptr<ITioStorageManager>(new tio::LogDbStorage::LogDbStorageManager(dataPath));
+	auto logdbDirPath = rootPath / "logdb_storage";
+	auto fsDirPath = rootPath / "filesystem_storage";
 
-	containerManager->RegisterFundamentalStorageManagers(mem, mem);
+	if (!fs::is_directory(logdbDirPath))
+		fs::create_directory(logdbDirPath);
 
-//	containerManager->RegisterStorageManager("bdb_map", bdb);
-//	containerManager->RegisterStorageManager("bdb_vector", bdb);
+	if (!fs::is_directory(fsDirPath))
+		fs::create_directory(fsDirPath);
 
-	containerManager->RegisterStorageManager("persistent_list", ldb);
-	containerManager->RegisterStorageManager("persistent_map", ldb);
+
+	cout << "Initializing memory store... ";
+	auto memoryStorageManager = make_shared<tio::MemoryStorage::MemoryStorageManager>();
+	containerManager->RegisterFundamentalStorageManagers(memoryStorageManager, memoryStorageManager);
+	cout << "done!" << endl;
+
+	cout << "Initializing logdb store... ";
+	auto logDbStorageManager = make_shared<tio::LogDbStorage::LogDbStorageManager>(logdbDirPath.generic_string());
+	containerManager->RegisterStorageManager("persistent_list", logDbStorageManager);
+	containerManager->RegisterStorageManager("persistent_map", logDbStorageManager);
+	cout << "done!" << endl;
+
+	cout << "Initializing filesystem store... ";
+	auto fileSystemStorageManager = make_shared<tio::FileSystemStorage::FileSystemStorageManager>(fsDirPath.generic_string());
+	containerManager->RegisterStorageManager("directory", fileSystemStorageManager);
+	cout << "done!" << endl;
 }
 
 void SetupContainerManager(
@@ -728,10 +746,13 @@ int main(int argc, char* argv[])
 
 			string dataPath =
 				vm.count("data-path") == 0 ?
-				boost::filesystem::temp_directory_path().generic_string() :
+				fs::temp_directory_path().generic_string() :
 				vm["data-path"].as<string>();
 
-			cout << "Saving files to " << dataPath << endl;
+			if (!fs::is_directory(dataPath))
+				throw std::invalid_argument("\"data-path\" argument must be an existing directory path");
+
+			cout << "Saving data files to " << dataPath << endl;
 			
 			SetupContainerManager(&containerManager, dataPath, aliases);
 

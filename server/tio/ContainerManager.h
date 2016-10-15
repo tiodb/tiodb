@@ -43,15 +43,15 @@ namespace tio
 
         shared_ptr<ITioContainer> meta_containers_, meta_availableTypes_;
 
-		shared_ptr<ITioContainer> CreateOrOpen(string type, OperationType op, const string& name);
+		shared_ptr<ITioContainer> CreateOrOpen(const string& type, OperationType op, const string& name);
 
-		shared_ptr<ITioStorageManager> GetStorageManagerByType(string type);
+		shared_ptr<ITioStorageManager> GetStorageManagerByType(const string& type);
 	public:
 
 		void AddAlias(const string& alias, const string& type);
 		
-		void RegisterFundamentalStorageManagers( shared_ptr<ITioStorageManager> volatileList, shared_ptr<ITioStorageManager> volatileMap);
-		void RegisterStorageManager(const string& type, shared_ptr<ITioStorageManager> manager);
+		void RegisterFundamentalStorageManagers(const shared_ptr<ITioStorageManager>& volatileList, const shared_ptr<ITioStorageManager>& volatileMap);
+		void RegisterStorageManager(const string& type, const shared_ptr<ITioStorageManager>& manager);
 	
 		shared_ptr<ITioContainer> CreateContainer(const string& type, const string& name);
 		shared_ptr<ITioContainer> OpenContainer(const string& type, const string& name);

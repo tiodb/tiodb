@@ -37,6 +37,7 @@
     <ClInclude Include="HttpParser.h">
       <Filter>protocols\http</Filter>
     </ClInclude>
+    <ClInclude Include="FileSystemStorage.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="tioserver.rc" />

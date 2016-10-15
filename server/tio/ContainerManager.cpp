@@ -20,8 +20,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	void ContainerManager::RegisterFundamentalStorageManagers(
-		shared_ptr<ITioStorageManager> volatileList,
-		shared_ptr<ITioStorageManager> volatileMap)
+		const shared_ptr<ITioStorageManager>& volatileList,
+		const shared_ptr<ITioStorageManager>& volatileMap)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
 
@@ -41,7 +41,7 @@ namespace tio
 		meta_availableTypes_->PushBack(TIONULL, "volatile_map");
 	}
 
-	void ContainerManager::RegisterStorageManager(const string& type, shared_ptr<ITioStorageManager> manager)
+	void ContainerManager::RegisterStorageManager(const string& type, const shared_ptr<ITioStorageManager>& manager)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
 
@@ -51,20 +51,20 @@ namespace tio
 
         std::vector<StorageInfo> storageList = manager->GetStorageList();
 
-        BOOST_FOREACH(StorageInfo& si, storageList)
+        for(const StorageInfo& si: storageList)
         {
             meta_containers_->Set(si.name, si.type);
         }
 	}
 
 
-	shared_ptr<ITioStorageManager> ContainerManager::GetStorageManagerByType(string type)
+	shared_ptr<ITioStorageManager> ContainerManager::GetStorageManagerByType(const string& type)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
 
-		type = ResolveAlias(type);
+		auto finalTypeName = ResolveAlias(type);
 
-		ManagerByType::iterator i = managerByType_.find(type);
+		ManagerByType::iterator i = managerByType_.find(finalTypeName);
 
 		if(i == managerByType_.end())
 			throw std::invalid_argument(string("invalid type: ") + type);
@@ -72,11 +72,11 @@ namespace tio
 		return i->second;
 	}
 
-	shared_ptr<ITioContainer> ContainerManager::CreateOrOpen(string type, OperationType op, const string& name)
+	shared_ptr<ITioContainer> ContainerManager::CreateOrOpen(const string& type, OperationType op, const string& name)
 	{
 		tio::recursive_mutex::scoped_lock lock(bigLock_);
 
-		type = ResolveAlias(type);
+		auto finalTypeName = ResolveAlias(type);
 
 		OpenContainersMap::const_iterator i = openContainers_.find(name);
 
@@ -89,7 +89,7 @@ namespace tio
 			shared_ptr<ITioContainer> container = i->second.lock();
 			
 			// check if user didn't ask for wrong type
-			if(op == create && container->GetType() != type)
+			if(op == create && container->GetType() != finalTypeName)
 				throw std::runtime_error("invalid container type");
 
 			return container;
@@ -100,12 +100,12 @@ namespace tio
 
 		if(op == create)
 		{
-			shared_ptr<ITioStorageManager> storageManager = GetStorageManagerByType(type);
+			shared_ptr<ITioStorageManager> storageManager = GetStorageManagerByType(finalTypeName);
 
-			pair_assign(storage, propertyMap) = storageManager->CreateStorage(type, name);
+			pair_assign(storage, propertyMap) = storageManager->CreateStorage(finalTypeName, name);
 			
 			if(meta_containers_)
-				meta_containers_->Set(name, type);
+				meta_containers_->Set(name, finalTypeName);
 		}
 		else if (op == open)
 		{
@@ -113,12 +113,12 @@ namespace tio
 			{
 				TioData value;
 				meta_containers_->GetRecord(name, NULL, &value);
-				type = value.AsSz();
+				finalTypeName = value.AsSz();
 			}
 
-			shared_ptr<ITioStorageManager> storageManager = GetStorageManagerByType(type);
+			shared_ptr<ITioStorageManager> storageManager = GetStorageManagerByType(finalTypeName);
 
-			pair_assign(storage, propertyMap) = storageManager->OpenStorage(type, name);
+			pair_assign(storage, propertyMap) = storageManager->OpenStorage(finalTypeName, name);
 		}
 
 		shared_ptr<ITioContainer> container(new Container(storage, propertyMap));

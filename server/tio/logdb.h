@@ -31,7 +31,6 @@ namespace logdb
 	class File
 	{
 		HANDLE h;
-		DWORD _flags;
 
 		bool HasError()
 		{
@@ -40,22 +39,22 @@ namespace logdb
 		}
 
 	public:
-		File(DWORD flags = FILE_FLAG_NO_BUFFERING) 
-			: h(INVALID_HANDLE_VALUE), _flags(flags)
+		File() 
+			: h(INVALID_HANDLE_VALUE)
 		{}
 
-		bool Create(const char* name)
+		bool Create(const char* name, int flags=0)
 		{
 			h = CreateFile(name, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, 
-				OPEN_ALWAYS, _flags, NULL);
+				OPEN_ALWAYS, flags, NULL);
 
 			return !HasError();
 		}
 
-		bool Open(const char* name)
+		bool Open(const char* name, int flags=0)
 		{
 			h = CreateFile(name, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, 
-				OPEN_EXISTING, _flags, NULL);
+				OPEN_EXISTING, flags, NULL);
 
 			return !HasError();
 		}
@@ -71,32 +70,38 @@ namespace logdb
 			h = INVALID_HANDLE_VALUE;
 		}
 
-		DWORD Read(void* buffer, DWORD size)
+		size_t Read(void* buffer, uint32_t size)
 		{
 			ASSERT(IsValid());
 			DWORD read = 0;
-			ReadFile(h, buffer, size, &read, NULL);
+			bool b = ReadFile(h, buffer, size, &read, NULL);
+			HasError();
 			return read;
 		}
 
-		DWORD Write(const void* buffer, DWORD size)
+		size_t Write(const void* buffer, size_t size)
 		{
 			ASSERT(IsValid());
 			DWORD written;
-			WriteFile(h, buffer, size, &written, NULL);
+			BOOL b = WriteFile(h, buffer, size, &written, NULL);
 			return written;
 		}
 
-		void SetPointer(DWORD offset)
+		void SetPointer(size_t offset)
 		{
 			ASSERT(IsValid());
-			SetFilePointer(h, offset, 0, FILE_BEGIN);
+			LARGE_INTEGER li;
+			li.QuadPart = offset;
+			SetFilePointerEx(h, li, nullptr, FILE_BEGIN);
 		}
 
-		DWORD GetFileSize()
+		size_t GetFileSize()
 		{
 			ASSERT(IsValid());
-			return ::GetFileSize(h, NULL);
+			LARGE_INTEGER li;
+			li.QuadPart = 0;
+			::GetFileSizeEx(h, &li);
+			return li.QuadPart;
 		}
 
 		void FlushMetadata()
@@ -114,7 +119,7 @@ namespace logdb
 		int _file;	
 
 	public:
-		File(int flags = 0) 
+		File() 
 			: _file(-1)
 		{}
 
@@ -135,14 +140,14 @@ namespace logdb
 			return _file != -1;
 		}
 
-		DWORD Read(void* buffer, DWORD size)
+		size_t Read(void* buffer, size_t size)
 		{
 			return read(_file, buffer, size);
 		}
 
-		DWORD Write(const void* buffer, DWORD size)
+		size_t Write(const void* buffer, size_t size)
 		{
-			DWORD ret = write(_file, buffer, size);
+			size_t ret = write(_file, buffer, size);
 		#ifdef __APPLE__
 			// MACOSX doesn't support fdatasync
 			fsync(_file);
@@ -152,12 +157,12 @@ namespace logdb
 			return ret;
 		}
 
-		void SetPointer(DWORD offset)
+		void SetPointer(size_t offset)
 		{
 			lseek(_file, offset, SEEK_SET);
 		}
 
-		DWORD GetFileSize()
+		size_t GetFileSize()
 		{
 			struct stat s;
 
@@ -288,12 +293,20 @@ namespace logdb
 
 		bool Create(const char* name)
 		{
-			return _file.Create(name);
+			return _file.Create(name
+#ifdef _WIN32
+				, FILE_FLAG_NO_BUFFERING
+#endif 
+			);
 		}
 
 		bool Open(const char* name)
 		{
-			return _file.Open(name);
+			return _file.Open(name
+#ifdef _WIN32
+				, FILE_FLAG_NO_BUFFERING
+#endif 
+			);
 		}
 
 		bool IsValid()

@@ -434,6 +434,19 @@ namespace tio
 			type_ = None;
 		}
 
+		char* AllocStringAndGetBuffer(size_t size)
+		{
+			Free();
+
+			string_ = new char[size + 1];
+			string_[size] = '\0';
+
+			type_ = String;
+			stringSize_ = size;
+
+			return string_;
+		}
+
 		void Set(const TioData& v)
 		{
 			CopyFrom(v);
@@ -467,12 +480,8 @@ namespace tio
 		{
 			Free();
 
-			string_= new char[size+1];
-			memcpy(string_, v, size);
-			string_[size] = '\0';
-			
-			type_ = String;
-			stringSize_ = size;
+			char* buffer = AllocStringAndGetBuffer(size);
+			memcpy(buffer, v, size);
 		}
 
 		void CheckDataType(Type t) const 
