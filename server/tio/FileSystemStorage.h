@@ -36,14 +36,41 @@ namespace tio {
 
 		static const unsigned MAX_FILE_SIZE = 10 * 1024 * 1024;
 
-
-		bool IsAbsoluteAndNoEvilPath(const char* path)
+		path GetAbsolutePathAndProtectAgainstBadGuys(const path basePath, const char* filePath)
 		{
 			//
-			// TODO: implement
+			// TODO: Defense against UNICODE atacks. Check https://www.owasp.org/index.php/Canonicalization,_locale_and_Unicode
+			// This boost function is throwing a exception
 			//
-			return true;
+			string sanitizedPath = filePath;// boost::locale::normalize(filePath);
+
+			if (*filePath == '\0' || *filePath == '.')
+				throw std::invalid_argument("invalid path");
+
+			const char* i = filePath;
+
+			// not we will start on the second char
+			while (++i)
+			{
+				char current = *i;
+				char previous = *(i + 1);
+
+				if (current == '/' ||
+					current == '\\' ||
+					current == ':' ||
+					(current == '.' && previous == '.'))
+				{
+					throw std::invalid_argument("invalid path");
+				}
+			}
+
+			auto finalPath = basePath / sanitizedPath;
+
+			return finalPath;
 		}
+
+
+		
 
 		class FileDirectoryStorage :
 			boost::noncopyable,
@@ -150,11 +177,8 @@ namespace tio {
 				if(!value)
 					throw std::invalid_argument("value argument can't be null");
 
-				if(!IsAbsoluteAndNoEvilPath(searchKey.AsSz()))
-					throw std::invalid_argument("key not found");
-
 				logdb::File f;
-				path fullPath = directoryPath_ / searchKey.AsSz();
+				path fullPath = GetAbsolutePathAndProtectAgainstBadGuys(directoryPath_, searchKey.AsSz());
 
 				bool b = f.Open(fullPath.generic_string().c_str());
 
@@ -222,7 +246,14 @@ namespace tio {
 					if (!is_directory(entry.path()))
 						continue;
 
-					directoryList_.emplace(entry.path().generic_string().substr(pathPrefixSize));
+					const string& fileName = entry.path().filename().generic_string();
+
+					if (fileName.empty() || fileName[0] == '.')
+						continue;
+
+					const string& pathString = entry.path().generic_string();
+
+					directoryList_.emplace(pathString.substr(pathPrefixSize));
 
 					ReloadDirectoryList(entry.path());
 				}
@@ -230,7 +261,8 @@ namespace tio {
 
 		public:
 
-			FileSystemStorageManager(const string& rootPath) : rootPath_(rootPath)
+			FileSystemStorageManager(const string& rootPath) 
+				: rootPath_(rootPath)
 			{
 
 			}
@@ -253,12 +285,7 @@ namespace tio {
 				if(containerType == "directory")
 					throw std::invalid_argument("invalid container type");
 
-				if(!IsValidPath(containerName))
-					throw std::invalid_argument("invalid container name");
-
-				auto nativePath = utf_to_utf<path::value_type>(containerName);
-
-				auto fullPath = rootPath_ / nativePath;
+				auto fullPath = GetAbsolutePathAndProtectAgainstBadGuys(rootPath_, containerName.c_str());
 
 				return is_directory(fullPath);
 			}
