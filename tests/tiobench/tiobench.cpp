@@ -307,9 +307,9 @@ int main()
 
 #else
 	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 10 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 100 * 1000;
 	unsigned MAX_CLIENTS = 512;
-	unsigned MAX_SUBSCRIBERS = 64;
+	unsigned MAX_SUBSCRIBERS = 0;
 #endif
 
 
@@ -342,7 +342,7 @@ int main()
 
 	for(unsigned client_count = 1; client_count <= MAX_CLIENTS; client_count *= 2)
 	{
-		for(unsigned subscriber_count = 1; subscriber_count <= MAX_SUBSCRIBERS; subscriber_count *= 2)
+		for(unsigned subscriber_count = 0; subscriber_count <= MAX_SUBSCRIBERS; subscriber_count *= 2)
 		{
 			string test_description = "single volatile list, clients=" + to_string(client_count) + 
 				", subscribers=" + to_string(subscriber_count);
@@ -400,6 +400,9 @@ int main()
 
 			cout << "total " << total << " ops/sec"
 				 << ", perf vs baseline=" << vs_baseline << "%, " << slower << "% slower" << endl;
+
+			if (subscriber_count == 0)
+				subscriber_count = 1;
 		}
 	}
 
