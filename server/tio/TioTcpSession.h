@@ -344,7 +344,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	private:
 		unsigned int id_;
 
+		unsigned MAGIC_;
+
 		asio::io_service& io_service_;
+		asio::strand strand_;
 		tcp::socket socket_;
 		TioTcpServer& server_;
 
@@ -373,6 +376,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		std::queue<std::function<void (shared_ptr<TioTcpSession>)>> lowPendingBytesThresholdCallbacks_;
 
         std::queue<std::string> pendingSendData_;
+
+		recursive_mutex bigLock_;
 		
 		std::list< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 		std::vector< asio::const_buffer > beingSendData_;
@@ -545,7 +550,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer);
 		void Unsubscribe(unsigned int handle);
 
-		const vector<string>& GetTokens();
+		const vector<string> GetTokens();
 		void AddToken(const string& token);
 
 		shared_ptr<ITioContainer> GetDiffDestinationContainer(unsigned int handle);

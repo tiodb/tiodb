@@ -82,7 +82,7 @@ namespace tio
 	void TioTcpServer::RemoveClient(shared_ptr<TioTcpSession> client)
 	{
 		{
-			tio::recursive_mutex::scoped_lock lock(sessionsMutex_);
+			lock_guard<decltype(sessionsMutex_)> lock(sessionsMutex_);
 
 			SessionsSet::iterator i = sessions_.find(client);
 
@@ -93,7 +93,7 @@ namespace tio
 			if(i == sessions_.end())
 				return; // something is VERY wrong...
 
-			std::cout << "disconnect" << std::endl;
+			//std::cout << "disconnect" << std::endl;
 
 			sessions_.erase(i);
 		}
@@ -207,13 +207,11 @@ namespace tio
 
 	unsigned int TioTcpServer::GenerateSessionId()
 	{
-		// TODO: sync
 		return ++lastSessionID_;
 	}
 
 	unsigned int TioTcpServer::GenerateDiffId()
 	{
-		// TODO: sync
 		return ++lastDiffID_;
 	}
 	
@@ -242,7 +240,7 @@ namespace tio
 		}
 
 		{
-			tio::recursive_mutex::scoped_lock lock(sessionsMutex_);
+			lock_guard<decltype(sessionsMutex_)> lock(sessionsMutex_);
 			sessions_.insert(session);
 		}
 
@@ -1343,7 +1341,7 @@ namespace tio
 			info.diffType = diffType;
 
 			{
-				tio::recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+				lock_guard<decltype(diffSessionsMutex_)> lock(diffSessionsMutex_);
 				diffSessions_[info.diffID] = info;
 			}
 
@@ -1398,7 +1396,7 @@ namespace tio
 		bool found = false;
 
 		{
-			tio::recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+			lock_guard<decltype(diffSessionsMutex_)> lock(diffSessionsMutex_);
 			DiffSessions::iterator i = diffSessions_.find(diffID);
 			if(i != diffSessions_.end())
 				infoCopy = i->second;
@@ -1440,7 +1438,7 @@ namespace tio
 			SendResultSet(session, infoCopy.destination->Query(0, 0, TIONULL));
 
 			{
-				tio::recursive_mutex::scoped_lock lock(diffSessionsMutex_);
+				lock_guard<decltype(diffSessionsMutex_)> lock(diffSessionsMutex_);
 				DiffSessions::iterator i = diffSessions_.find(diffID);
 				if(i != diffSessions_.end())
 					i->second.firstQuerySent = true;
@@ -1645,7 +1643,7 @@ namespace tio
 			bool popNow = false;
 
 			{
-				tio::recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
+				lock_guard<decltype(keyPoppersPerContainerMutex_)> lock(keyPoppersPerContainerMutex_);
 				
 				KeyPoppersPerContainerMap::iterator i = keyPoppersPerContainer_.find(fullQualifiedName);
 
@@ -1696,7 +1694,7 @@ namespace tio
 				//
 				string keyAsString = key.AsSz();
 				{
-					tio::recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
+					lock_guard<decltype(keyPoppersPerContainerMutex_)> lock(keyPoppersPerContainerMutex_);
 					keyPoppersPerContainer_[fullQualifiedName][keyAsString].push_back(KeyPopperInfo(session, handle, keyAsString));
 				}
 
@@ -2423,7 +2421,7 @@ namespace tio
 			//
 			// TODO: find a way to not hold this lock for so long
 			// 
-			tio::recursive_mutex::scoped_lock lock(keyPoppersPerContainerMutex_);
+			lock_guard<decltype(keyPoppersPerContainerMutex_)> lock(keyPoppersPerContainerMutex_);
 			//
 			// support for "wait and pop key" (wnp_key)
 			//
@@ -2486,7 +2484,7 @@ namespace tio
 		//
 		// TODO: BIGLOCK
 		// 
-		tio::recursive_mutex::scoped_lock lock(nextPoppersMutex_);
+		lock_guard<decltype(nextPoppersMutex_)> lock(nextPoppersMutex_);
 
 		NextPoppersMap::iterator i = nextPoppers_.find(GetFullQualifiedName(container));
 

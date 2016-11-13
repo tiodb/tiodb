@@ -97,6 +97,10 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #include <deque>
 #include <limits>
 
+#include <thread>
+#include <mutex>
+#include <atomic>
+
 //
 // macros are evil, you know?
 //
@@ -142,6 +146,9 @@ template<typename T1, typename T2> inline T1 min (T1 l, T2 r) { return l < r ? l
 //
 namespace tio
 {
+	typedef std::recursive_mutex recursive_mutex;
+	
+	/*
 	class recursive_mutex
 	{
 	public:
@@ -151,6 +158,7 @@ namespace tio
 			scoped_lock(recursive_mutex& m){}
 		};
 	};
+	*/
 }
 
 

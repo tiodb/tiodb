@@ -38,6 +38,7 @@ namespace tio
 	using std::vector;
 	using std::map;
 	using std::deque;
+	using std::atomic;
 	
 	std::string Serialize(const std::list<const TioData*>& fields);
 
@@ -547,9 +548,9 @@ namespace tio
 		DiffSessions diffSessions_;
 		tio::recursive_mutex diffSessionsMutex_;
 
-		unsigned int lastSessionID_;
-		unsigned int lastQueryID_;
-		unsigned int lastDiffID_;
+		atomic<unsigned int> lastSessionID_;
+		atomic<unsigned int> lastQueryID_;
+		atomic<unsigned int> lastDiffID_;
 
 		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
 		NextPoppersMap nextPoppers_;

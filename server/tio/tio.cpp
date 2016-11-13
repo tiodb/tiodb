@@ -73,10 +73,8 @@ void RunServer(tio::ContainerManager* manager,
 {
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
-
-#ifndef _WIN32
-	//ProfilerStart("/tmp/tio.prof");
-#endif
+	using std::thread;
+	using std::vector;
 
 	asio::io_service io_service;
 	tcp::endpoint e(tcp::v4(), port);
@@ -95,17 +93,31 @@ void RunServer(tio::ContainerManager* manager,
 		}
 	}
 
+	asio::io_service::work work(io_service);
+
 	tio::TioTcpServer tioServer(*manager, io_service, e, logFilePath);
 
 	tioServer.Start();
 
-	cout << "Up and running!" << endl;
+	unsigned threadCount = 16;
+	vector<thread> threads;
 
-	io_service.run();
+	for (unsigned a = 0; a < threadCount; a++)
+	{
+		threads.emplace_back(
+			[&]()
+			{
+				io_service.run();
+			});
+	}
 
-#ifndef _WIN32
-	//ProfilerStop();
-#endif
+	cout << "Up and running, " << threadCount << " threads" << endl;
+
+	for (auto& t : threads)
+	{
+		if (t.joinable())
+			t.join();
+	}
 }
 
 class cpp2c

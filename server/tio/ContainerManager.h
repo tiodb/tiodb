@@ -23,6 +23,8 @@ namespace tio
 	using std::shared_ptr;
 	using std::weak_ptr;
 
+	using std::lock_guard;
+
 	class ContainerManager
 	{
 		typedef std::map<string, shared_ptr<ITioStorageManager> > ManagerByType;

@@ -23,7 +23,7 @@ namespace tio
 		shared_ptr<ITioStorageManager> volatileList,
 		shared_ptr<ITioStorageManager> volatileMap)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		managerByType_["volatile_list"] = volatileList;
 		managerByType_["volatile_map"] = volatileMap;
@@ -43,8 +43,8 @@ namespace tio
 
 	void ContainerManager::RegisterStorageManager(const string& type, shared_ptr<ITioStorageManager> manager)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
-
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		
 		managerByType_[type] = manager;
 
 		meta_availableTypes_->PushBack(TIONULL, type);
@@ -60,7 +60,7 @@ namespace tio
 
 	shared_ptr<ITioStorageManager> ContainerManager::GetStorageManagerByType(string type)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		type = ResolveAlias(type);
 
@@ -74,7 +74,7 @@ namespace tio
 
 	shared_ptr<ITioContainer> ContainerManager::CreateOrOpen(string type, OperationType op, const string& name)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		type = ResolveAlias(type);
 
@@ -130,7 +130,7 @@ namespace tio
 
 	void ContainerManager::DeleteContainer(const string& type, const string& name)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		string realType = ResolveAlias(type);
 		shared_ptr<ITioStorageManager> storageManager = GetStorageManagerByType(realType);
@@ -153,7 +153,7 @@ namespace tio
 
 	void ContainerManager::AddAlias(const string& alias, const string& type)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		aliases_[alias] = type;
 
@@ -161,14 +161,14 @@ namespace tio
 
 	bool ContainerManager::Exists(const string& containerType, const string& containerName)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		return GetStorageManagerByType(containerType)->Exists(containerType, containerName);
 	}
 
 	string ContainerManager::ResolveAlias(const string& type)
 	{
-		tio::recursive_mutex::scoped_lock lock(bigLock_);
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		if(type.empty())
 			return type;

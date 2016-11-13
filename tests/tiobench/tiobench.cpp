@@ -304,159 +304,170 @@ int main()
 	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
 	unsigned MAX_CLIENTS = 1024;
 	unsigned MAX_SUBSCRIBERS = 64;
-
 #else
-	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 100 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 250 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 250 * 1000;
 	unsigned MAX_CLIENTS = 512;
 	unsigned MAX_SUBSCRIBERS = 0;
 #endif
 
-
 	const string hostname("localhost");
-	TioTestRunner runner;
-
-	int baseline = 0;
-
-
-	{
-		string test_description = "single volatile list, one client";
-		unsigned persec;
-
-		runner.add_test(
-			TioStressTest(
-			hostname,
-			generate_container_name(),
-			"volatile_list",
-			&vector_perf_test_c,
-			VOLATILE_TEST_COUNT,
-			&persec));
-
-		runner.run();
-		
-		baseline = persec;
-		
-		cout << test_description << ": " << persec << " ops/sec" << endl;
-	}
-
-
-	for(unsigned client_count = 1; client_count <= MAX_CLIENTS; client_count *= 2)
-	{
-		for(unsigned subscriber_count = 0; subscriber_count <= MAX_SUBSCRIBERS; subscriber_count *= 2)
-		{
-			string test_description = "single volatile list, clients=" + to_string(client_count) + 
-				", subscribers=" + to_string(subscriber_count);
-			vector<unique_ptr<TioTesterSubscriber>> subscribers;
-
-			vector<unsigned> persec(client_count);
-			
-			string container_name = generate_container_name();
-			string container_type = "volatile_list";
-
-			for(unsigned a = 0; a < client_count; a++)
-			{
-				runner.add_test(
-					TioStressTest(
-					hostname,
-					container_name,
-					container_type,
-					&vector_perf_test_c,
-					VOLATILE_TEST_COUNT / client_count * 2,
-					&persec[a]));
-			}
-
-			for(unsigned a = 0; a < subscriber_count; a++)
-			{
-				subscribers.emplace_back(new TioTesterSubscriber(hostname, container_name, container_type));
-					
-
-				(*subscribers.rbegin())->start();
-			}
-
-			runner.run();
-
-			for(auto& subscriber : subscribers)
-			{
-				subscriber->stop();
-			}
-
-			for(auto& subscriber : subscribers)
-			{
-				subscriber->join();
-			}
-
-			cout << test_description << ": ";
-
-			int total = 0;
-
-			for(unsigned p : persec)
-			{
-				cout << p << ", ";
-				total += p;
-			}
-
-			float vs_baseline = ((float)total / baseline) * 100.0f;
-			float slower = 100.0f - vs_baseline;
-
-			cout << "total " << total << " ops/sec"
-				 << ", perf vs baseline=" << vs_baseline << "%, " << slower << "% slower" << endl;
-
-			if (subscriber_count == 0)
-				subscriber_count = 1;
-		}
-	}
-
-
-	for(int client_count = 1; client_count <= 1024; client_count *= 2)
-	{
-		string test_description = "multiple volatile lists, client count=" + to_string(client_count);
-
-		vector<unsigned> persec(client_count);
-
-		for(int a = 0; a < client_count; a++)
-		{
-			runner.add_test(
-				TioStressTest(
-				"localhost",
-				generate_container_name(),
-				"volatile_list",
-				&vector_perf_test_c,
-				VOLATILE_TEST_COUNT / client_count * 2,
-				&persec[a]));
-		}
-
-		runner.run();
-
-		cout << test_description << ": ";
-
-		unsigned total = 0;
-
-		for(unsigned p : persec)
-		{
-			cout << p << ", ";
-			total += p;
-		}
-
-		cout << "total " << total << " ops/sec" << endl;
-	}
 
 
 	//
 	// CONNECTIONS TEST
 	//
+	try
 	{
-		vector<unique_ptr<tio::Connection>> connections;
-		unsigned log_step = 100;
-
-		for(unsigned a = 0; a < MAX_CLIENTS; a++)
 		{
-			connections.push_back(make_unique<tio::Connection>(hostname));
+			vector<unique_ptr<tio::Connection>> connections;
+			unsigned log_step = 100;
 
-			if(a % log_step == 0)
-				cout << a << "  connections" << endl;
+			for (unsigned a = 0; a < MAX_CLIENTS; a++)
+			{
+				connections.push_back(make_unique<tio::Connection>(hostname));
+
+				if (a % log_step == 0)
+					cout << a << "  connections" << endl;
+			}
+
+			cout << "finished connection, starting disconnecting..." << endl;
+
+			connections.clear();
+
+			cout << "all clients disconected" << endl;
+		}
+
+		TioTestRunner runner;
+
+		int baseline = 0;
+
+
+		{
+			string test_description = "single volatile list, one client";
+			unsigned persec;
+
+			runner.add_test(
+				TioStressTest(
+					hostname,
+					generate_container_name(),
+					"volatile_list",
+					&vector_perf_test_c,
+					VOLATILE_TEST_COUNT,
+					&persec));
+
+			runner.run();
+
+			baseline = persec;
+
+			cout << test_description << ": " << persec << " ops/sec" << endl;
+		}
+		
+		for (unsigned client_count = 1; client_count <= MAX_CLIENTS; client_count *= 2)
+		{
+			for (unsigned subscriber_count = 0; subscriber_count <= MAX_SUBSCRIBERS; subscriber_count *= 2)
+			{
+				string test_description = "single volatile list, clients=" + to_string(client_count) +
+					", subscribers=" + to_string(subscriber_count);
+				vector<unique_ptr<TioTesterSubscriber>> subscribers;
+
+				vector<unsigned> persec(client_count);
+
+				string container_name = generate_container_name();
+				string container_type = "volatile_list";
+
+				for (unsigned a = 0; a < client_count; a++)
+				{
+					runner.add_test(
+						TioStressTest(
+							hostname,
+							container_name,
+							container_type,
+							&vector_perf_test_c,
+							VOLATILE_TEST_COUNT / client_count * 2,
+							&persec[a]));
+				}
+
+				for (unsigned a = 0; a < subscriber_count; a++)
+				{
+					subscribers.emplace_back(new TioTesterSubscriber(hostname, container_name, container_type));
+
+
+					(*subscribers.rbegin())->start();
+				}
+
+				runner.run();
+
+				for (auto& subscriber : subscribers)
+				{
+					subscriber->stop();
+				}
+
+				for (auto& subscriber : subscribers)
+				{
+					subscriber->join();
+				}
+
+				cout << test_description << ": ";
+
+				int total = 0;
+
+				for (unsigned p : persec)
+				{
+					cout << p << ", ";
+					total += p;
+				}
+
+				float vs_baseline = ((float)total / baseline) * 100.0f;
+				float slower = 100.0f - vs_baseline;
+
+				cout << "total " << total << " ops/sec"
+					<< ", perf vs baseline=" << vs_baseline << "%, " << slower << "% slower" << endl;
+
+				if (subscriber_count == 0)
+					subscriber_count = 1;
+			}
+		}
+
+
+		for (int client_count = 1; client_count <= 1024; client_count *= 2)
+		{
+			string test_description = "multiple volatile lists, client count=" + to_string(client_count);
+
+			vector<unsigned> persec(client_count);
+
+			for (int a = 0; a < client_count; a++)
+			{
+				runner.add_test(
+					TioStressTest(
+						"localhost",
+						generate_container_name(),
+						"volatile_list",
+						&vector_perf_test_c,
+						VOLATILE_TEST_COUNT / client_count * 2,
+						&persec[a]));
+			}
+
+			runner.run();
+
+			cout << test_description << ": ";
+
+			unsigned total = 0;
+
+			for (unsigned p : persec)
+			{
+				cout << p << ", ";
+				total += p;
+			}
+
+			cout << "total " << total << " ops/sec" << endl;
 		}
 	}
-
+	catch (std::exception& ex)
+	{
+		cout << "EXCEPTION: " << ex.what() << endl;
+		return -1;
+	}
 
 	//{
 	//	TIO_CONTAINER* container;

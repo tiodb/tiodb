@@ -65,6 +65,7 @@ namespace tio
 		io_service_(io_service),
 		socket_(io_service),
 		server_(server),
+		strand_(io_service),
 		lastHandle_(0),
 		valid_(true),
         pendingSendSize_(0),
@@ -73,6 +74,7 @@ namespace tio
 		id_(id),
 		binaryProtocol_(false)
 	{
+		MAGIC_ = 0xBABACA;
 		return;
 	}
 	
@@ -83,7 +85,9 @@ namespace tio
 		BOOST_ASSERT(handles_.empty());
 		BOOST_ASSERT(poppers_.empty());
 
-		logstream_ << "session " << id_ << " just died" << endl;
+		MAGIC_ = 0xFEEEFEEE;
+
+		//logstream_ << "session " << id_ << " just died" << endl;
 
 		return;
 	}
@@ -91,6 +95,8 @@ namespace tio
 
 	void TioTcpSession::StopDiffs()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		for(DiffMap::iterator i = diffs_.begin() ; i != diffs_.end() ; ++i)
 		{
 			i->second.first->Unsubscribe(i->second.second);
@@ -105,6 +111,8 @@ namespace tio
 
 	shared_ptr<ITioContainer> TioTcpSession::GetDiffDestinationContainer(unsigned int handle)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		DiffMap::const_iterator i = diffs_.find(handle);
 
 		if(i != diffs_.end())
@@ -153,6 +161,7 @@ namespace tio
 			},
 			"__none__"); // "__none__" will make us receive only the updates (not the snapshot)
 
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		diffs_[handle] = make_pair(destinationContainer, cookie); 
 	}
 
@@ -174,7 +183,7 @@ namespace tio
 
 	void TioTcpSession::OnAccept()
 	{
-		logstream_ << "new connection, id=" << id_ << std::endl;
+		//logstream_ << "new connection, id=" << id_ << std::endl;
 
 		socket_.set_option(tcp::no_delay(true));
 
@@ -197,6 +206,8 @@ namespace tio
 
 	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		WaitAndPopNextMap::iterator i = poppers_.find(handle);
 		
 		if(i != poppers_.end())
@@ -211,6 +222,8 @@ namespace tio
 	
 	void TioTcpSession::BinaryWaitAndPopNext(unsigned int handle)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
 		//
@@ -254,15 +267,18 @@ namespace tio
 		asio::async_read(
 					socket_, 
 					asio::buffer(buffer, header->message_size),
+					strand_.wrap(
 					[shared_this, message](const error_code& err, size_t read)
 					{
 						shared_this->OnBinaryProtocolMessage(message, err);
 						
-					});
+					}));
 	}
 
 	void TioTcpSession::ReadHttpCommand(const shared_ptr<HttpParser> httpParser)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if (buf_.size())
 		{
 			OnReadHttpCommand(httpParser, error_code(), buf_.size());
@@ -270,15 +286,18 @@ namespace tio
 		else
 		{
 			asio::async_read(socket_, buf_,
+				strand_.wrap(
 				[shared_this = shared_from_this(), httpParser](const error_code& err, size_t read)
 				{
 					shared_this->OnReadHttpCommand(httpParser, err, read);
-				});
+				}));
 		}
 	}
 
 	void TioTcpSession::OnReadHttpCommand(const shared_ptr<HttpParser>& httpParser, const error_code& err, size_t read)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if (CheckError(err))
 			return;
 
@@ -316,23 +335,27 @@ namespace tio
 		asio::async_read(
 					socket_, 
 					asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
+					strand_.wrap(
 					[shared_this, header](const error_code& err, size_t read)
 					{
 						shared_this->OnBinaryProtocolMessageHeader(header, err);
-					});
+					}));
 	}
 
 	void TioTcpSession::ReadCommand()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		currentCommand_ = Command();
 
 		auto shared_this = shared_from_this();
 
 		asio::async_read_until(socket_, buf_, '\n', 
+			strand_.wrap(
 			[shared_this](const error_code& err, size_t read)
 			{
 				shared_this->OnReadCommand(err, read);
-			});
+			}));
 	}
 
 	void TioTcpSession::SendHttpResponseAndClose(
@@ -359,11 +382,12 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(*httpAnswer),
+			strand_.wrap(
 			[shared_this = shared_from_this(), httpAnswer](const error_code& err, size_t sent)
 			{
 				shared_this->InvalidateConnection(err);
 			}
-		);
+		));
 	}
 
 	bool ParseHttpHeaders(const string& str, map<string, string>* headerMap)
@@ -418,6 +442,8 @@ namespace tio
 	{
 		if(CheckError(err))
 			return;
+
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		string str;
 		stringstream answer;
@@ -498,10 +524,11 @@ namespace tio
 
 				asio::async_read(
 					socket_, buf_, asio::transfer_at_least(moreDataSize - buf_.size()),
+					strand_.wrap(
 					[shared_this, moreDataSize](const error_code& err, size_t read)
 					{
 						shared_this->OnCommandData(moreDataSize, err, read);
-					});
+					}));
 			}
 
 			moreDataToRead = true;
@@ -528,6 +555,8 @@ namespace tio
 	{
 		if(CheckError(err))
 			return;
+
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		
 		BOOST_ASSERT(buf_.size() >= dataSize);
 
@@ -929,8 +958,6 @@ namespace tio
 			SendBinaryMessage(item);
 
 			++a;
-		
-			
 		}
 
 		//
@@ -999,6 +1026,8 @@ namespace tio
 		if(!valid_)
 			return;
 
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
         if(pendingSendSize_)
         {
 			//
@@ -1038,15 +1067,18 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(buffer, answerSize), 
+			strand_.wrap(
 			[shared_this, buffer, answerSize](const error_code& err, size_t sent)
 			{
 				shared_this->OnWrite(buffer, answerSize, err, sent);
-			});
+			}));
 	}
 
 	void TioTcpSession::OnWrite(char* buffer, size_t bufferSize, const error_code& err, size_t sent)
 	{
 		delete[] buffer;
+
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
         pendingSendSize_ -= bufferSize;
 
@@ -1076,6 +1108,8 @@ namespace tio
 	{
 		if(!IsValid())
 			return;
+
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		UnsubscribeAll();
 
@@ -1113,6 +1147,8 @@ namespace tio
 
 	void TioTcpSession::UnsubscribeAll()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		pendingSnapshots_.clear();
 
 		for(SubscriptionMap::iterator i = subscriptions_.begin() ; i != subscriptions_.end() ; ++i)
@@ -1144,6 +1180,8 @@ namespace tio
 
 	unsigned int TioTcpSession::RegisterContainer(const string& containerName, shared_ptr<ITioContainer> container)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		unsigned int handle = ++lastHandle_;
 		handles_[handle] = make_pair(container, containerName);
 		return handle;
@@ -1151,6 +1189,8 @@ namespace tio
 
 	shared_ptr<ITioContainer> TioTcpSession::GetRegisteredContainer(unsigned int handle, string* containerName, string* containerType)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		HandleMap::iterator i = handles_.find(handle);
 
 		if(i == handles_.end())
@@ -1167,6 +1207,8 @@ namespace tio
 
 	void TioTcpSession::CloseContainerHandle(unsigned int handle)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		HandleMap::iterator i = handles_.find(handle);
 
 		if(i == handles_.end())
@@ -1179,6 +1221,8 @@ namespace tio
 
 	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
 		//
@@ -1285,6 +1329,8 @@ namespace tio
 
 	void TioTcpSession::BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
 
 		//
@@ -1384,6 +1430,8 @@ namespace tio
 
 	void TioTcpSession::SendPendingSnapshots()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if(pendingSnapshots_.empty())
 			return;
 
@@ -1483,6 +1531,8 @@ namespace tio
 
 	void TioTcpSession::Unsubscribe(unsigned int handle)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		SubscriptionMap::iterator i = subscriptions_.find(handle);
 		
 		if(i == subscriptions_.end())
@@ -1496,14 +1546,15 @@ namespace tio
 		subscriptions_.erase(i);
 	}
 
-	const vector<string>& TioTcpSession::GetTokens()
+	const vector<string> TioTcpSession::GetTokens()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		return tokens_;
-
 	}
 
 	void TioTcpSession::AddToken(const string& token)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		tokens_.push_back(token);
 	}
 
@@ -1583,6 +1634,8 @@ namespace tio
 
 	void TioTcpSession::SendPendingBinaryData()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if(!beingSendData_.empty())
 			return;
 
@@ -1621,10 +1674,11 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(binarySendBuffer_.get(), bufferSpaceUsed),
+			strand_.wrap(
 			[shared_this](const error_code& err, size_t sent)
-		{
-			shared_this->OnBinaryMessageSent(err, sent);
-		});
+			{
+				shared_this->OnBinaryMessageSent(err, sent);
+			}));
 	}
 
 	void TioTcpSession::OnBinaryMessageSent(const error_code& err, size_t sent)
@@ -1635,6 +1689,7 @@ namespace tio
 			return;
 		}
 
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		DecreasePendingSendSize(sent);
 		sentBytes_ += sent;
@@ -1649,12 +1704,16 @@ namespace tio
 	void TioTcpSession::RegisterLowPendingBytesCallback(std::function<void(shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
 	{
 		BOOST_ASSERT(IsPendingSendSizeTooBig());
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		lowPendingBytesThresholdCallbacks_.push(lowPendingBytesThresholdCallback);
 		logstream_ << "RegisterLowPendingBytesCallback, " << lowPendingBytesThresholdCallbacks_.size() << " callbacks" << endl;
 	}
 
 	void TioTcpSession::DecreasePendingSendSize(int size)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		pendingSendSize_ -= size;
 
 		BOOST_ASSERT(pendingSendSize_ >= 0);
@@ -1677,6 +1736,8 @@ namespace tio
 	{
 		if(!valid_)
 			return;
+
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		pendingBinarySendData_.push_back(message);
 

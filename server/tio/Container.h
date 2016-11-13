@@ -32,6 +32,7 @@ namespace tio
 	using std::function;
 	using std::shared_ptr;
 	using std::to_string;
+	using std::lock_guard;
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -881,42 +882,44 @@ namespace tio
 		
 		virtual string GetName()
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetName();
 		}
 
 		virtual string GetType()
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetType();
 		}
 
 		virtual size_t GetRecordCount()
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetRecordCount();
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->GetRecord(searchKey, key, value, metadata);
 		}
 
 		virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PopBack(key, value, metadata);
 		}
 
 		virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PopFront(key, value, metadata);
 		}
 
 		void HandleWaitAndPopNext()
 		{
+			lock_guard<decltype(mutex_)> lock(mutex_);
+
 			//
 			// We are assuming the lock is already held
 			// since it's (supposed to be) a private function
@@ -950,14 +953,14 @@ namespace tio
 				
 		virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushBack(key, value, metadata);
 			HandleWaitAndPopNext();
 		}
 
 		virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushFront(key, value, metadata);
 			HandleWaitAndPopNext();
 		}
@@ -965,66 +968,66 @@ namespace tio
 		
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Insert(key, value, metadata);
 		}
 
 		virtual void Set(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Set(key, value, metadata);
 		}
 
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Delete(key, value, metadata);
 		}
 
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->Query(startOffset, endOffset, query);
 		}
 
 		virtual void Clear()
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Clear();
 		}
 
 		virtual string Command(const string& command)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->Command(command);
 		}
 
 		virtual void SetProperty(const string& key, const string& value)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			propertyMap_->Set(key, value);
 		}
 
 		virtual string GetProperty(const string& key)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return propertyMap_->Get(key);
 		}
 
 		virtual unsigned int Subscribe(EventSink sink, const string& start)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->Subscribe(sink, start);
 		}
 		virtual void Unsubscribe(unsigned int cookie)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Unsubscribe(cookie);
 		}
 
 		virtual int WaitAndPopNext(EventSink sink)
 		{
-			tio::recursive_mutex::scoped_lock lock(mutex_);
+			lock_guard<decltype(mutex_)> lock(mutex_);
 
 			if(storage_->GetRecordCount() > 0)
 			{
