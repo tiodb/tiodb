@@ -1122,11 +1122,14 @@ namespace tio
 
 	bool TioTcpSession::IsValid()
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		return valid_;
 	}
 
 	bool TioTcpSession::CheckError(const error_code& err)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if(!!err)
 		{
 			//

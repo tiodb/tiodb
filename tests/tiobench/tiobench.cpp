@@ -27,7 +27,6 @@ public:
 	TioTestRunner()
 		: running_(false)
 	{
-
 	}
 
 	void reset()
@@ -65,11 +64,7 @@ public:
 			t.join();
 
 		reset();
-		
-
 	}
-
-
 };
 
 int vector_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned operations)
@@ -122,7 +117,7 @@ int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned opera
 	tiodata_free(&k);
 	tiodata_free(&v);
 
-		return 0;
+	return 0;
 }
 
 
@@ -304,21 +299,75 @@ int main()
 	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
 	unsigned MAX_CLIENTS = 1024;
 	unsigned MAX_SUBSCRIBERS = 64;
+	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
+	unsigned CONTAINER_TEST_ITEM_COUNT = 50;
 #else
 	unsigned VOLATILE_TEST_COUNT = 250 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 250 * 1000;
 	unsigned MAX_CLIENTS = 512;
 	unsigned MAX_SUBSCRIBERS = 0;
+	unsigned CONTAINER_TEST_COUNT = 200 * 1000;
+	unsigned CONTAINER_TEST_ITEM_COUNT = 100;
 #endif
 
 	const string hostname("localhost");
 
-
-	//
-	// CONNECTIONS TEST
-	//
 	try
 	{
+		//
+		// CONTAINER NUMBER TEST
+		//
+		{
+			tio::Connection connection(hostname);
+			vector<tio::containers::list<string>> containers(CONTAINER_TEST_COUNT);
+
+			unsigned log_step = 10 * 1000;
+			unsigned client_count = 8;
+			TioTestRunner testRunner;
+
+			unsigned containers_per_thread = CONTAINER_TEST_COUNT / client_count;
+			unsigned items_per_thread = CONTAINER_TEST_ITEM_COUNT;
+
+			cout << "starting container stress test, " << CONTAINER_TEST_COUNT << " containers" << endl;
+
+			for (unsigned a = 0; a < client_count; a++)
+			{
+				testRunner.add_test(
+					[hostname, prefix = "l_" + to_string(a), container_count = containers_per_thread, item_count = items_per_thread]()
+					{
+						tio::Connection connection(hostname);
+						vector<tio::containers::list<string>> containers(container_count);
+						TioTesterSubscriber testSubscriber(hostname);
+
+						for (unsigned a = 0; a < container_count; a++)
+						{
+							auto& c = containers[a];
+							string name = prefix + to_string(a);
+							c.create(&connection, name, "volatile_list");
+
+							testSubscriber.add_container(name, "volatile_list");
+							vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
+						}
+
+						testSubscriber.start();
+						testSubscriber.stop();
+						testSubscriber.join();
+
+						containers.clear();
+					});
+			}
+
+			testRunner.run();
+
+			cout << "finished container stress test" << endl;
+
+			containers.clear();
+		}
+
+
+		//
+		// CONNECTIONS TEST
+		//
 		{
 			vector<unique_ptr<tio::Connection>> connections;
 			unsigned log_step = 100;
