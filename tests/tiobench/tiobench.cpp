@@ -12,6 +12,7 @@ using std::to_string;
 using std::unique_ptr;
 using std::make_unique;
 using std::unordered_map;
+using std::accumulate;
 
 using std::cout;
 using std::endl;
@@ -295,18 +296,24 @@ int main()
 {
 
 #ifdef _DEBUG
-	unsigned VOLATILE_TEST_COUNT = 5 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
-	unsigned MAX_CLIENTS = 1024;
-	unsigned MAX_SUBSCRIBERS = 64;
-	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 1 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 1 * 1000;
+	unsigned MAX_CLIENTS = 128;
+	unsigned CONNECTION_STRESS_TEST_COUNT = 10 * 1000;
+	unsigned MAX_SUBSCRIBERS = 8;
+	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 50;
 #else
-	unsigned VOLATILE_TEST_COUNT = 250 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 250 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 50 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 50 * 1000;
 	unsigned MAX_CLIENTS = 512;
-	unsigned MAX_SUBSCRIBERS = 0;
-	unsigned CONTAINER_TEST_COUNT = 200 * 1000;
+	
+	//
+	// There is a TCP limit on how many connections we can make at same time...
+	//
+	unsigned CONNECTION_STRESS_TEST_COUNT = 5 * 1000;
+	unsigned MAX_SUBSCRIBERS = 16;
+	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 100;
 #endif
 
@@ -322,13 +329,16 @@ int main()
 			vector<tio::containers::list<string>> containers(CONTAINER_TEST_COUNT);
 
 			unsigned log_step = 10 * 1000;
-			unsigned client_count = 8;
+			unsigned client_count = 16;
 			TioTestRunner testRunner;
 
 			unsigned containers_per_thread = CONTAINER_TEST_COUNT / client_count;
 			unsigned items_per_thread = CONTAINER_TEST_ITEM_COUNT;
 
-			cout << "starting container stress test, " << CONTAINER_TEST_COUNT << " containers" << endl;
+			cout << "START: container stress test, " << CONTAINER_TEST_COUNT << " containers, "
+				<< client_count << " clients" << endl;
+
+			DWORD start = GetTickCount();
 
 			for (unsigned a = 0; a < client_count; a++)
 			{
@@ -344,12 +354,17 @@ int main()
 							auto& c = containers[a];
 							string name = prefix + to_string(a);
 							c.create(&connection, name, "volatile_list");
-
 							testSubscriber.add_container(name, "volatile_list");
-							vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
 						}
 
 						testSubscriber.start();
+
+						for (unsigned a = 0; a < container_count; a++)
+						{
+							auto& c = containers[a];
+							vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
+						}
+						
 						testSubscriber.stop();
 						testSubscriber.join();
 
@@ -359,7 +374,9 @@ int main()
 
 			testRunner.run();
 
-			cout << "finished container stress test" << endl;
+			DWORD delta = GetTickCount() - start;
+
+			cout << "FINISH: container stress test, " << delta << "ms" << endl;
 
 			containers.clear();
 		}
@@ -369,10 +386,14 @@ int main()
 		// CONNECTIONS TEST
 		//
 		{
+			cout << "START: connection stress test, " << CONNECTION_STRESS_TEST_COUNT << " connections" << endl;
 			vector<unique_ptr<tio::Connection>> connections;
-			unsigned log_step = 100;
+			connections.reserve(CONNECTION_STRESS_TEST_COUNT);
+			unsigned log_step = 1000;
 
-			for (unsigned a = 0; a < MAX_CLIENTS; a++)
+			DWORD start = GetTickCount();
+
+			for (unsigned a = 0; a < CONNECTION_STRESS_TEST_COUNT; a++)
 			{
 				connections.push_back(make_unique<tio::Connection>(hostname));
 
@@ -380,17 +401,22 @@ int main()
 					cout << a << "  connections" << endl;
 			}
 
-			cout << "finished connection, starting disconnecting..." << endl;
+			cout << "disconnecting..." << endl;
 
 			connections.clear();
 
-			cout << "all clients disconected" << endl;
+			DWORD delta = GetTickCount() - start;
+
+			cout << "FINISHED: connection stress test, " << delta << "ms" << endl;
 		}
+
+
+		cout << "START: data stress test, MAX_CLIENTS=" << MAX_CLIENTS << 
+			", MAX_SUBSCRIBERS=" << MAX_SUBSCRIBERS << endl;
 
 		TioTestRunner runner;
 
 		int baseline = 0;
-
 
 		{
 			string test_description = "single volatile list, one client";
@@ -409,7 +435,7 @@ int main()
 
 			baseline = persec;
 
-			cout << test_description << ": " << persec << " ops/sec" << endl;
+			cout << test_description << ": " << persec << " ops/sec (baseline)" << endl;
 		}
 		
 		for (unsigned client_count = 1; client_count <= MAX_CLIENTS; client_count *= 2)
@@ -459,19 +485,17 @@ int main()
 
 				cout << test_description << ": ";
 
-				int total = 0;
-
-				for (unsigned p : persec)
-				{
-					cout << p << ", ";
-					total += p;
-				}
+				int total = accumulate(cbegin(persec), cend(persec), 0);
 
 				float vs_baseline = ((float)total / baseline) * 100.0f;
-				float slower = 100.0f - vs_baseline;
 
 				cout << "total " << total << " ops/sec"
-					<< ", perf vs baseline=" << vs_baseline << "%, " << slower << "% slower" << endl;
+					<< ", perf vs baseline=" << vs_baseline << "% faster - ";
+
+				for (unsigned p : persec)
+					cout << p << ",";
+				
+				cout << endl;
 
 				if (subscriber_count == 0)
 					subscriber_count = 1;

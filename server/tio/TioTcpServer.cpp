@@ -464,7 +464,7 @@ namespace tio
 					{
 						container = containerManager_.OpenContainer("", normalizedPath);
 					}
-					catch (std::runtime_error& ex)
+					catch (std::runtime_error&)
 					{
 						SendHttpResponse(session, httpMessage.headers, 404, "container not found");
 					}

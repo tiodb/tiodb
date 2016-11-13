@@ -25,6 +25,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 namespace tio
 {
 	using std::endl;
+	using std::atomic;
 
 	inline TioData Pr1MessageToCppTioData(const PR1_MESSAGE_FIELD_HEADER* field)
 	{
@@ -417,7 +418,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		vector<string> tokens_;
 
-		bool valid_;
+		atomic<bool> valid_;
 
 		static int PENDING_SEND_SIZE_BIG_THRESHOLD;
 		static int PENDING_SEND_SIZE_SMALL_THRESHOLD;
@@ -429,13 +430,19 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendPendingSnapshots();
 
-		
-				
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
 		void OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err);
 		void ReadHttpCommand(const shared_ptr<HttpParser> httpParser);
 		void ReadBinaryProtocolMessage();
+
+		typedef function<void(const error_code&, size_t)> AsioCallbackT;
+
+		AsioCallbackT wrap_callback(AsioCallbackT cb)
+		{
+			return cb;
+			//return strand_.wrap(cb);
+		}
 
 
 	public:

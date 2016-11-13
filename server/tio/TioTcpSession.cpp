@@ -190,19 +190,6 @@ namespace tio
 		ReadCommand();
 	}
 
-	
-	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
-	{
-		// this thing will delete the pointer
-		shared_ptr<PR1_MESSAGE> messageHolder(message, &pr1_message_delete);
-
-		if(CheckError(err))
-			return;
-
-		server_.OnBinaryCommand(shared_from_this(), message);
-
-		ReadBinaryProtocolMessage();
-	}
 
 	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 	{
@@ -267,12 +254,26 @@ namespace tio
 		asio::async_read(
 					socket_, 
 					asio::buffer(buffer, header->message_size),
-					strand_.wrap(
+					wrap_callback(
 					[shared_this, message](const error_code& err, size_t read)
 					{
 						shared_this->OnBinaryProtocolMessage(message, err);
-						
 					}));
+	}
+
+	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
+	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
+		// this thing will delete the pointer
+		shared_ptr<PR1_MESSAGE> messageHolder(message, &pr1_message_delete);
+
+		if (CheckError(err))
+			return;
+
+		server_.OnBinaryCommand(shared_from_this(), message);
+
+		ReadBinaryProtocolMessage();
 	}
 
 	void TioTcpSession::ReadHttpCommand(const shared_ptr<HttpParser> httpParser)
@@ -286,7 +287,7 @@ namespace tio
 		else
 		{
 			asio::async_read(socket_, buf_,
-				strand_.wrap(
+				wrap_callback(
 				[shared_this = shared_from_this(), httpParser](const error_code& err, size_t read)
 				{
 					shared_this->OnReadHttpCommand(httpParser, err, read);
@@ -335,7 +336,7 @@ namespace tio
 		asio::async_read(
 					socket_, 
 					asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
-					strand_.wrap(
+					wrap_callback(
 					[shared_this, header](const error_code& err, size_t read)
 					{
 						shared_this->OnBinaryProtocolMessageHeader(header, err);
@@ -351,7 +352,7 @@ namespace tio
 		auto shared_this = shared_from_this();
 
 		asio::async_read_until(socket_, buf_, '\n', 
-			strand_.wrap(
+			wrap_callback(
 			[shared_this](const error_code& err, size_t read)
 			{
 				shared_this->OnReadCommand(err, read);
@@ -382,7 +383,7 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(*httpAnswer),
-			strand_.wrap(
+			wrap_callback(
 			[shared_this = shared_from_this(), httpAnswer](const error_code& err, size_t sent)
 			{
 				shared_this->InvalidateConnection(err);
@@ -524,7 +525,7 @@ namespace tio
 
 				asio::async_read(
 					socket_, buf_, asio::transfer_at_least(moreDataSize - buf_.size()),
-					strand_.wrap(
+					wrap_callback(
 					[shared_this, moreDataSize](const error_code& err, size_t read)
 					{
 						shared_this->OnCommandData(moreDataSize, err, read);
@@ -865,7 +866,7 @@ namespace tio
 	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		if(!valid_)
+		if(!IsValid())
 			return;
 
 		vector<EXTRA_EVENT> extraEvents;
@@ -1067,7 +1068,7 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(buffer, answerSize), 
-			strand_.wrap(
+			wrap_callback(
 			[shared_this, buffer, answerSize](const error_code& err, size_t sent)
 			{
 				shared_this->OnWrite(buffer, answerSize, err, sent);
@@ -1104,52 +1105,40 @@ namespace tio
 		return;
 	}
 
-	void TioTcpSession::InvalidateConnection(const error_code& err)
-	{
-		if(!IsValid())
-			return;
-
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		UnsubscribeAll();
-
-		server_.OnClientFailed(shared_from_this(), err);
-
-		socket_.close();
-
-		valid_ = false;
-	}
-
 	bool TioTcpSession::IsValid()
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
 		return valid_;
 	}
 
 	bool TioTcpSession::CheckError(const error_code& err)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
 		if(!!err)
 		{
-			//
-			// We can get here several times for the same connection if we have lots of pending writes
-			//
-			if(IsValid())
-			{
-				//logstream_ << "error on connection " << id_ << ": " << err.message() << endl;
-			}
-
 			InvalidateConnection(err);
-			
 			return true;
 		}
 
 		return false;
 	}
 
+	void TioTcpSession::InvalidateConnection(const error_code& err)
+	{
+		if (!IsValid())
+			return;
+
+		valid_ = false;
+
+		UnsubscribeAll();
+
+		server_.OnClientFailed(shared_from_this(), err);
+
+		socket_.close();
+	}
+
 	void TioTcpSession::UnsubscribeAll()
 	{
+		BOOST_ASSERT(!IsValid());
+
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		pendingSnapshots_.clear();
@@ -1224,6 +1213,8 @@ namespace tio
 
 	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer)
 	{
+		BOOST_ASSERT(IsValid());
+
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
 		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
@@ -1677,7 +1668,7 @@ namespace tio
 		asio::async_write(
 			socket_,
 			asio::buffer(binarySendBuffer_.get(), bufferSpaceUsed),
-			strand_.wrap(
+			wrap_callback(
 			[shared_this](const error_code& err, size_t sent)
 			{
 				shared_this->OnBinaryMessageSent(err, sent);

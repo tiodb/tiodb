@@ -35,6 +35,9 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 #pragma warning(disable : 4127) // conditional expression is constant
 #pragma warning(disable : 4512) // assignment operator could not be generated
 #pragma warning(disable : 4100) // unreferenced local parameter
+#pragma warning(disable : 4456) //  declaration of 'XX' hides previous local declaration
+#pragma warning(disable : 4457) //  declaration of 'XX' hides member
+#pragma warning(disable : 4458) //  declaration of 'XX' hides member
 #pragma warning(disable : 4121) //: 'boost::python::detail::aligned_storage<size>' : alignment of a member was sensitive to packing
 
 

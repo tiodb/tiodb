@@ -195,7 +195,7 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 	int ret = 0;
 	char* char_buffer = (char*)buffer;
 	int received = 0;
-	time_t start;
+	time_t start = 0;
 	int time_left;
 
 #if _WIN32
