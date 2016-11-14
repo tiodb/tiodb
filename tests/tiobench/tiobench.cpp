@@ -490,7 +490,7 @@ int main()
 				float vs_baseline = ((float)total / baseline) * 100.0f;
 
 				cout << "total " << total << " ops/sec"
-					<< ", perf vs baseline=" << vs_baseline << "% faster - ";
+					<< ", perf vs baseline=" << vs_baseline << "% - ";
 
 				for (unsigned p : persec)
 					cout << p << ",";
