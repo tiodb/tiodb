@@ -13,6 +13,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <numeric>
+#include <atomic>
 
 #include <iostream>
 

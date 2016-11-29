@@ -13,6 +13,7 @@ using std::unique_ptr;
 using std::make_unique;
 using std::unordered_map;
 using std::accumulate;
+using std::atomic;
 
 using std::cout;
 using std::endl;
@@ -24,18 +25,21 @@ class TioTestRunner
 	bool running_;
 
 	vector<thread> threads_;
+	atomic<unsigned> finishedThreads_;
 
 public:
 
 	TioTestRunner()
 		: running_(false)
 	{
+		reset();
 	}
 
 	void reset()
 	{
 		tests_.clear();
 		running_ = false;
+		finishedThreads_ = 0;
 	}
 
 	void add_test(function<void(void)> f)
@@ -57,6 +61,11 @@ public:
 		join();
 	}
 
+	bool finished() const
+	{
+		return finishedThreads_ == threads_.size();
+	}
+
 	void start()
 	{
 
@@ -70,6 +79,8 @@ public:
 							std::this_thread::yield();
 
 						f();
+
+						finishedThreads_++;
 					}
 			));
 		}
@@ -303,11 +314,13 @@ string generate_container_name()
 
 void deadlock_on_disconnect_test()
 {
-	static const unsigned PUBLISHER_COUNT = 16;
-	static const unsigned ITEM_COUNT = 16 * 1000;
+	static const unsigned PUBLISHER_COUNT = 60;
+	static const unsigned ITEM_COUNT = 10 * 1000;
 
 	const string hostname("localhost");
 	const string container_type("volatile_list");
+
+	cout << "deadlock test start" << endl;
 
 	tio::Connection subscriberConnection(hostname);
 	
@@ -336,11 +349,42 @@ void deadlock_on_disconnect_test()
 
 	runner.start();
 
-	Sleep(200);
+	Sleep(500);
 
-	SOCKET socket = *((SOCKET*)subscriberConnection.cnptr());
+	subscriberConnection.Disconnect();
 
-	closesocket(socket);
+	unsigned publicationCount = 0;
+
+	for (int a = 0;; a++)
+	{
+		if (runner.finished())
+			break;
+
+		
+		cout << "creating new subscribers... ";
+
+		tio::Connection newConnection(hostname);
+		vector<tio::containers::list<string>> newContainers(PUBLISHER_COUNT);
+
+		for (unsigned a = 0; a < PUBLISHER_COUNT; a++)
+		{
+			newContainers[a].open(&newConnection, containers[a].name());
+			newContainers[a].subscribe(std::bind([&]() { publicationCount++; }));
+		}
+
+		cout << "done." << endl;
+
+		for (int b = 0; b < 1; b++)
+			newConnection.WaitForNextEventAndDispatch(1);
+
+		newConnection.Disconnect();
+
+		cout << "not yet. Publication count = " << publicationCount << (a > 10 ? " PROBABLY DEADLOCK" : "") << endl;
+
+		Sleep(1 * 1000);
+	}
+
+	cout << "no deadlock" << endl;
 
 	runner.join();
 }
@@ -378,6 +422,8 @@ int main()
 	// DEADLOCK ON DISCONNECTION TEST
 	//
 	deadlock_on_disconnect_test();
+
+	return 0;
 
 	try
 	{
