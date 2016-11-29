@@ -23,6 +23,8 @@ class TioTestRunner
 	vector<function<void(void)>> tests_;
 	bool running_;
 
+	vector<thread> threads_;
+
 public:
 
 	TioTestRunner()
@@ -41,13 +43,26 @@ public:
 		tests_.push_back(f);
 	}
 
+	void join()
+	{
+		for (auto& t : threads_)
+			t.join();
+
+		reset();
+	}
+
 	void run()
 	{
-		vector<thread> threads;
+		start();
+		join();
+	}
+
+	void start()
+	{
 
 		for(auto f : tests_)
 		{
-			threads.emplace_back(
+			threads_.emplace_back(
 				thread(
 					[f, this]()
 					{
@@ -60,11 +75,6 @@ public:
 		}
 
 		running_ = true;
-
-		for(auto& t : threads)
-			t.join();
-
-		reset();
 	}
 };
 
@@ -291,6 +301,50 @@ string generate_container_name()
 	return prefix  + "_" + to_string(++seq);
 }
 
+void deadlock_on_disconnect_test()
+{
+	static const unsigned PUBLISHER_COUNT = 16;
+	static const unsigned ITEM_COUNT = 16 * 1000;
+
+	const string hostname("localhost");
+	const string container_type("volatile_list");
+
+	tio::Connection subscriberConnection(hostname);
+	
+	vector<tio::containers::list<string>> containers(PUBLISHER_COUNT);
+	vector<unsigned> persec(PUBLISHER_COUNT);
+
+	for (unsigned a = 0; a < PUBLISHER_COUNT; a++)
+	{
+		containers[a].create(&subscriberConnection, generate_container_name(), container_type);
+		containers[a].subscribe(std::bind([]() {}));
+	}
+
+	TioTestRunner runner;
+
+	for (unsigned a = 0; a < PUBLISHER_COUNT; a++)
+	{
+		runner.add_test(
+			TioStressTest(
+				hostname,
+				containers[a].name(),
+				container_type,
+				&vector_perf_test_c,
+				ITEM_COUNT,
+				&persec[a]));
+	}
+
+	runner.start();
+
+	Sleep(200);
+
+	SOCKET socket = *((SOCKET*)subscriberConnection.cnptr());
+
+	closesocket(socket);
+
+	runner.join();
+}
+
 
 int main()
 {
@@ -318,6 +372,12 @@ int main()
 #endif
 
 	const string hostname("localhost");
+
+
+	//
+	// DEADLOCK ON DISCONNECTION TEST
+	//
+	deadlock_on_disconnect_test();
 
 	try
 	{
