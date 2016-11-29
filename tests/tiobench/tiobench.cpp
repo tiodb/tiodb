@@ -68,7 +68,6 @@ public:
 
 	void start()
 	{
-
 		for(auto f : tests_)
 		{
 			threads_.emplace_back(
@@ -315,7 +314,7 @@ string generate_container_name()
 void deadlock_on_disconnect_test()
 {
 	static const unsigned PUBLISHER_COUNT = 60;
-	static const unsigned ITEM_COUNT = 10 * 1000;
+	static const unsigned ITEM_COUNT = 2 * 1000;
 
 	const string hostname("localhost");
 	const string container_type("volatile_list");
@@ -349,7 +348,7 @@ void deadlock_on_disconnect_test()
 
 	runner.start();
 
-	Sleep(500);
+	Sleep(100);
 
 	subscriberConnection.Disconnect();
 
@@ -381,7 +380,7 @@ void deadlock_on_disconnect_test()
 
 		cout << "not yet. Publication count = " << publicationCount << (a > 10 ? " PROBABLY DEADLOCK" : "") << endl;
 
-		Sleep(1 * 1000);
+		Sleep(500);
 	}
 
 	cout << "no deadlock" << endl;
@@ -422,8 +421,6 @@ int main()
 	// DEADLOCK ON DISCONNECTION TEST
 	//
 	deadlock_on_disconnect_test();
-
-	return 0;
 
 	try
 	{

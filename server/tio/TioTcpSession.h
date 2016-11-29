@@ -411,14 +411,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		//               handle
 		typedef std::map<unsigned int, shared_ptr<SUBSCRIPTION_INFO> > SubscriptionMap;
 		SubscriptionMap subscriptions_;
-		SubscriptionMap pendingSnapshots_;
 
 		typedef std::map<unsigned int, unsigned int > WaitAndPopNextMap;
 		WaitAndPopNextMap poppers_;
 
 		vector<string> tokens_;
 
-		atomic<bool> valid_;
+		bool valid_;
 
 		static int PENDING_SEND_SIZE_BIG_THRESHOLD;
 		static int PENDING_SEND_SIZE_SMALL_THRESHOLD;
@@ -427,8 +426,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendStringNow(const string& str);
 		
         void UnsubscribeAll();
-
-		void SendPendingSnapshots();
 
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);

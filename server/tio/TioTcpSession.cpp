@@ -866,7 +866,9 @@ namespace tio
 	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
-		if(!IsValid())
+		// lock_guard<decltype(bigLock_)> lock(bigLock_);
+
+		if (!valid_)
 			return;
 
 		vector<EXTRA_EVENT> extraEvents;
@@ -1024,11 +1026,11 @@ namespace tio
 
     void TioTcpSession::SendString(const string& str)
     {
-		if(!valid_)
-			return;
-
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
+		if (!valid_)
+			return;
+		
         if(pendingSendSize_)
         {
 			//
@@ -1053,6 +1055,8 @@ namespace tio
 
 	void TioTcpSession::SendStringNow(const string& str)
 	{
+		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
 		if(!valid_)
 			return;
 
@@ -1100,8 +1104,6 @@ namespace tio
 			return;
         }
 
-		SendPendingSnapshots();
-
 		return;
 	}
 
@@ -1123,25 +1125,33 @@ namespace tio
 
 	void TioTcpSession::InvalidateConnection(const error_code& err)
 	{
-		if (!IsValid())
-			return;
+		{
+			lock_guard<decltype(bigLock_)> lock(bigLock_);
 
-		valid_ = false;
+			if (!IsValid())
+				return;
 
-		UnsubscribeAll();
+			valid_ = false;
 
-		server_.OnClientFailed(shared_from_this(), err);
+			binarySendBuffer_.reset();
+			pendingBinarySendData_.clear();
+			decltype(pendingSendData_) whyDontQueueHaveAMethodNamedClear;
+			
+			pendingSendData_.swap(whyDontQueueHaveAMethodNamedClear);
+
+			//UnsubscribeAll();
+		}
+
+		//server_.OnClientFailed(shared_from_this(), err);
 
 		socket_.close();
 	}
 
 	void TioTcpSession::UnsubscribeAll()
 	{
-		BOOST_ASSERT(!IsValid());
-
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
-		pendingSnapshots_.clear();
+		BOOST_ASSERT(!IsValid());
 
 		for(SubscriptionMap::iterator i = subscriptions_.begin() ; i != subscriptions_.end() ; ++i)
 		{
@@ -1421,108 +1431,7 @@ namespace tio
 
 		return;
 	}
-
-	void TioTcpSession::SendPendingSnapshots()
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		if(pendingSnapshots_.empty())
-			return;
-
-		//
-		// This feature is disabled and we should never get here
-		//
-		BOOST_ASSERT(false);
-
-		//
-		// TODO: hard coded counter
-		//
-		for(unsigned int a = 0 ; a < 10 * 1000 ; a++)
-		{
-			if(pendingSnapshots_.empty())
-				return;
-
-			std::list<unsigned int> toRemove;
-
-			BOOST_FOREACH(SubscriptionMap::value_type& p, pendingSnapshots_)
-			{
-				unsigned int handle;
-				string event_name;
-				shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo;
-				TioData searchKey, key, value, metadata;
-
-				pair_assign(handle, subscriptionInfo) = p;
-
-				if(subscriptionInfo->resultSet)
-				{
-					bool b;
-					
-					b = subscriptionInfo->resultSet->GetRecord(&key, &value, &metadata);
-
-					if(b)
-					{
-						OnEvent(subscriptionInfo, subscriptionInfo->event_name, key, value, metadata);
-						subscriptionInfo->nextRecord++;
-					}
-
-					if(!b || !subscriptionInfo->resultSet->MoveNext())
-					{
-						// done
-						auto shared_this = shared_from_this();
-
-						subscriptionInfo->cookie = subscriptionInfo->container->Subscribe(
-							[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-							{
-								shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
-							}, "");
-
-						toRemove.push_back(handle);
-
-						continue;
-					}
-				}
-				else
-				{
-					unsigned int recordCount = subscriptionInfo->container->GetRecordCount();
-
-					if(recordCount)
-					{
-						searchKey = static_cast<int>(subscriptionInfo->nextRecord);
-
-						subscriptionInfo->container->GetRecord(searchKey, &key, &value, &metadata);
-
-						OnEvent(subscriptionInfo, subscriptionInfo->event_name, key, value, metadata);
-
-						subscriptionInfo->nextRecord++;
-					}
-
-					if(recordCount == 0 || subscriptionInfo->nextRecord >= recordCount)
-					{
-						// done
-						auto shared_this = shared_from_this();
-
-						subscriptionInfo->cookie = subscriptionInfo->container->Subscribe(
-							[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-							{
-								shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
-							}
-							, "");
-
-						toRemove.push_back(handle);
-
-						continue;
-					}
-				}
-
-			}
-
-			BOOST_FOREACH(unsigned int h, toRemove)
-			{
-				pendingSnapshots_.erase(h);
-			}
-		}
-	}
-
+	
 	void TioTcpSession::Unsubscribe(unsigned int handle)
 	{
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
@@ -1536,7 +1445,6 @@ namespace tio
 		
 		container->Unsubscribe(i->second->cookie);
 
-		pendingSnapshots_.erase(i->first);
 		subscriptions_.erase(i);
 	}
 
@@ -1630,6 +1538,9 @@ namespace tio
 	{
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
 
+		if (!valid_)
+			return;
+
 		if(!beingSendData_.empty())
 			return;
 
@@ -1690,15 +1601,14 @@ namespace tio
 
 		BOOST_ASSERT(pendingSendSize_ >= 0);
 
-		SendPendingSnapshots();
-
 		SendPendingBinaryData();
 	}
 
 	void TioTcpSession::RegisterLowPendingBytesCallback(std::function<void(shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
 	{
-		BOOST_ASSERT(IsPendingSendSizeTooBig());
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
+		BOOST_ASSERT(IsPendingSendSizeTooBig());
 
 		lowPendingBytesThresholdCallbacks_.push(lowPendingBytesThresholdCallback);
 		logstream_ << "RegisterLowPendingBytesCallback, " << lowPendingBytesThresholdCallbacks_.size() << " callbacks" << endl;
@@ -1728,10 +1638,10 @@ namespace tio
 
 	void TioTcpSession::SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
 	{
-		if(!valid_)
-			return;
-
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
+
+		if (!valid_)
+			return;
 
 		pendingBinarySendData_.push_back(message);
 
