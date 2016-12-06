@@ -100,8 +100,18 @@ namespace tio {
 			logdb::Ldb& ldb_;
 			logdb::Ldb::TABLE_INFO* tableInfo_;
 			string type_, name_;
-			EventDispatcher dispatcher_;
 			AccessType accessType_;
+
+			EventSink sink_;
+
+			void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			{
+				if (!sink_)
+					return;
+
+				sink_(GetId(), eventId, k, v, m);
+			}
+
 		public:
 
 			LogDbVectorStorage(logdb::Ldb& ldb, logdb::Ldb::TABLE_INFO* tableInfo,
@@ -115,6 +125,11 @@ namespace tio {
 			~LogDbVectorStorage()
 			{
 				return;
+			}
+
+			virtual uint64_t GetId()
+			{
+				return reinterpret_cast<uint64_t>(this);
 			}
 
 			virtual string GetName()
@@ -151,7 +166,7 @@ namespace tio {
 				if(index == logdb::LDB_INVALID_RECNO)
 					throw std::runtime_error("error appending record");
 
-				dispatcher_.RaiseEvent("push_back", (int)ldb_.GetRecordCount(tableInfo_), value, metadata);
+				Publish(EVENT_INSERT, (int)ldb_.GetRecordCount(tableInfo_) - 1, value, metadata);
 			}
 
 			virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -163,7 +178,7 @@ namespace tio {
 				ConverterHelper converter(key, value, metadata);
 
 				ldb_.InsertByIndex(tableInfo_,0, NULL, converter.GetLdbValue(), converter.GetLdbMetadata());
-				dispatcher_.RaiseEvent("push_front", 0, value, metadata);
+				Publish(EVENT_INSERT, 0, value, metadata);
 			}
 
 		private:
@@ -203,7 +218,7 @@ namespace tio {
 				if(metadata)
 					*metadata = itemMetadata;
 
-				dispatcher_.RaiseEvent("pop_back", 
+				Publish(EVENT_DELETE,
 					(int)recordIndex, // returned key is the item index
 					itemValue,
 					itemMetadata);
@@ -219,7 +234,7 @@ namespace tio {
 
 				_Pop(0, key, value, metadata);
 
-				dispatcher_.RaiseEvent("pop_front", 
+				Publish(EVENT_DELETE,
 					0, 
 					value ? *value : TIONULL,
 					metadata ? *metadata : TIONULL);
@@ -259,7 +274,7 @@ namespace tio {
 					ldb_.Set(tableInfo_, 0, *converter.GetLdbKey(), converter.GetLdbValue(), converter.GetLdbMetadata());
 				}
 
-				dispatcher_.RaiseEvent("set", key, value, metadata);
+				Publish(EVENT_SET, key, value, metadata);
 			}
 
 			virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
@@ -300,7 +315,7 @@ namespace tio {
 					ldb_.Append(tableInfo_, converter.GetLdbKey(), converter.GetLdbValue(), converter.GetLdbMetadata());
 				}
 
-				dispatcher_.RaiseEvent("insert", key, value, metadata);
+				Publish(EVENT_INSERT, key, value, metadata);
 			}
 
 			virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
@@ -327,7 +342,7 @@ namespace tio {
 						throw std::invalid_argument("invalid index");
 				}
 
-				dispatcher_.RaiseEvent("delete", key, TIONULL, TIONULL);
+				Publish(EVENT_DELETE, key, TIONULL, TIONULL);
 			}
 
 			virtual void Clear()
@@ -410,6 +425,18 @@ namespace tio {
 				
 			}
 
+
+			virtual void SetSubscriber(EventSink sink)
+			{
+				sink_ = sink;
+			}
+
+			virtual void RemoveSubscriber()
+			{
+				sink_ = nullptr;
+			}
+
+			/*
 			virtual unsigned int Subscribe(EventSink sink, const string& start)
 			{
 				size_t startIndex = 0;
@@ -461,6 +488,7 @@ namespace tio {
 			{
 				dispatcher_.Unsubscribe(cookie);
 			}
+			*/
 
 			virtual string Get(const string& key)
 			{
@@ -512,7 +540,19 @@ namespace tio {
 			string path_;
 			logdb::Ldb ldb_;
 
+			EventSink sink_;
+
 		public:
+
+			virtual void SetSubscriber(EventSink sink)
+			{
+				sink_ = sink;
+			}
+
+			virtual void RemoveSubscriber()
+			{
+				sink_ = nullptr;
+			}
 
 			LogDbStorageManager(const string& path) : path_(path)
 			{
@@ -651,6 +691,8 @@ namespace tio {
 					name,
 					type, 
 					accessType));
+
+				container->SetSubscriber(sink_);
 
 				shared_ptr<ITioPropertyMap> propertyMap = shared_ptr<ITioPropertyMap>(
 					new LogDbVectorStorage(

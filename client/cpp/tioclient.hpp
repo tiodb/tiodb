@@ -302,10 +302,6 @@ namespace tio
 			return tio_container_unsubscribe((TIO_CONTAINER*)handle);
 		}
 
-		virtual int container_wait_and_pop_next(void* handle, event_callback_t event_callback, void* cookie)
-		{
-			return tio_container_wait_and_pop_next((TIO_CONTAINER*)handle, event_callback, cookie);
-		}
 
 	public:
 		Connection() : connection_(nullptr), port_(0)

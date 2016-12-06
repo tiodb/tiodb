@@ -38,7 +38,15 @@ private:
 
 	ListType data_;
 	string name_, type_;
-	EventDispatcher dispatcher_;
+	EventSink sink_;
+
+	void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+	{
+		if (!sink_)
+			return;
+
+		sink_(GetId(), eventId, k, v, m);
+	}
 
 public:
 
@@ -46,6 +54,11 @@ public:
 		name_(name),
 		type_(type)
 	{}
+
+	virtual uint64_t GetId()
+	{
+		return reinterpret_cast<uint64_t>(this);
+	}
 
 	  virtual string GetName()
 	  {
@@ -73,7 +86,7 @@ public:
 		  
 		  data_.push_back(ValueAndMetadata(value, metadata));
 
-		  dispatcher_.RaiseEvent("push_back", static_cast<int>(data_.size() - 1), value, metadata);
+		  Publish(EVENT_INSERT, static_cast<int>(data_.size()), value, metadata);
 	  }
 
 	  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -81,7 +94,7 @@ public:
 		  CheckValue(value);
 		  data_.push_front(ValueAndMetadata(value, metadata));
 
-		  dispatcher_.RaiseEvent("push_front", 0, value, metadata);
+		  Publish(EVENT_INSERT, 0, value, metadata);
 	  }
 
 	virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
@@ -104,7 +117,7 @@ public:
 
 		data_.pop_back();
 
-		dispatcher_.RaiseEvent("pop_back",
+		Publish(EVENT_DELETE,
 			index, 
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
@@ -128,7 +141,7 @@ public:
 
 		data_.pop_front();
 
-		dispatcher_.RaiseEvent("pop_front", 
+		Publish(EVENT_DELETE,
 			0,
 			value ? *value : TIONULL,
 			metadata ? *metadata : TIONULL);
@@ -188,7 +201,7 @@ public:
 		if(metadata)
 			valueAndMetadata.metadata = metadata;
 
-		dispatcher_.RaiseEvent("set", key, value, metadata); 
+		Publish(EVENT_SET, key, value, metadata);
 	}
 
 	virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
@@ -205,7 +218,7 @@ public:
 			data_.insert(i, ValueAndMetadata(value, metadata));
 		}
 
-		dispatcher_.RaiseEvent("insert", key, value, metadata); 
+		Publish(EVENT_INSERT, key, value, metadata);
 	}
 
 	virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
@@ -221,7 +234,7 @@ public:
 
 			data_.erase(i);
 
-			dispatcher_.RaiseEvent("delete", realKey, value, metadata);
+			Publish(EVENT_DELETE, realKey, value, metadata);
 		}
 	}
 
@@ -229,7 +242,7 @@ public:
 	{
 		data_.clear();
 
-		dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL); 
+		Publish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
 	}
 
 	virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
@@ -280,7 +293,18 @@ public:
 			new VectorResultSet(std::move(resultSetItems), TIONULL));
 	}
 
-	virtual unsigned int Subscribe(EventSink sink, const string& start)
+	virtual void SetSubscriber(EventSink sink)
+	{
+		sink_ = sink;
+	}
+
+	virtual void RemoveSubscriber()
+	{
+		sink_ = nullptr;
+	}
+
+	/*
+	virtual void Subscribe(EventSink sink, const string& start)
 	{
 		unsigned int cookie = 0;
 		int startIndex = 0;
@@ -348,10 +372,7 @@ public:
 		return cookie;
 
 	}
-	virtual void Unsubscribe(unsigned int cookie)
-	{
-		dispatcher_.Unsubscribe(cookie);
-	}
+	*/
 
 	virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 	{

@@ -80,10 +80,7 @@ namespace tio
 	
 	TioTcpSession::~TioTcpSession()
 	{
-		BOOST_ASSERT(subscriptions_.empty());
-		BOOST_ASSERT(diffs_.empty());
 		BOOST_ASSERT(handles_.empty());
-		BOOST_ASSERT(poppers_.empty());
 
 		MAGIC_ = 0xFEEEFEEE;
 
@@ -92,83 +89,9 @@ namespace tio
 		return;
 	}
 
-
-	void TioTcpSession::StopDiffs()
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		for(DiffMap::iterator i = diffs_.begin() ; i != diffs_.end() ; ++i)
-		{
-			i->second.first->Unsubscribe(i->second.second);
-
-			//
-			// TODO: clear diff contents
-			//
-		}
-
-		diffs_.clear();
-	}
-
-	shared_ptr<ITioContainer> TioTcpSession::GetDiffDestinationContainer(unsigned int handle)
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		DiffMap::const_iterator i = diffs_.find(handle);
-
-		if(i != diffs_.end())
-			return i->second.first;
-		else
-			return shared_ptr<ITioContainer>();
-	}
-
-	void MapContainerMirror(shared_ptr<ITioContainer> source, shared_ptr<ITioContainer> destination,
-		const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		if(event_name == "set" || event_name == "insert")
-			destination->Set(key, value, event_name);
-		if(event_name == "delete")
-			destination->Delete(key, TIONULL, event_name);
-		else if(event_name == "clear")
-		{
-			//
-			// on a clear, we'll set an delete event for every source record
-			//
-			shared_ptr<ITioResultSet> query = source->Query(0,0, TIONULL);
-
-			TioData key;
-
-			while(query->GetRecord(&key, NULL, NULL))
-			{
-				destination->Set(key, TIONULL, "delete");
-				query->MoveNext();
-			}
-		}
-
-		//
-		// TODO: support other events
-		//
-	}
-
-	void TioTcpSession::SetupDiffContainer(unsigned int handle, 
-		shared_ptr<ITioContainer> destinationContainer)
-	{
-		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
-
-		unsigned int cookie = container->Subscribe(
-			[container, destinationContainer](const string& event_name, const TioData& key, const TioData& value, const TioData& metadata)
-			{
-				MapContainerMirror(container, destinationContainer, event_name, key, value, metadata);
-			},
-			"__none__"); // "__none__" will make us receive only the updates (not the snapshot)
-
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-		diffs_[handle] = make_pair(destinationContainer, cookie); 
-	}
-
 	unsigned int TioTcpSession::id()
 	{
 		return id_;
-
 	}
 
 	bool TioTcpSession::UsesBinaryProtocol() const
@@ -191,54 +114,6 @@ namespace tio
 	}
 
 
-	void TioTcpSession::OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		WaitAndPopNextMap::iterator i = poppers_.find(handle);
-		
-		if(i != poppers_.end())
-			poppers_.erase(i);
-
-		if(binaryProtocol_)
-			SendBinaryEvent(handle, key, value, metadata, eventName);
-		else
-			SendTextEvent(handle, key, value, metadata, eventName);
-	}
-
-	
-	void TioTcpSession::BinaryWaitAndPopNext(unsigned int handle)
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
-
-		//
-		// already subscribed
-		//
-		if(poppers_.find(handle) != poppers_.end())
-			throw std::runtime_error(string("wait and pop next command already pending for handle ") + lexical_cast<string>(handle));
-
-		unsigned int popId;
-
-		auto shared_this = shared_from_this();
-		
-		popId = container->WaitAndPopNext(
-			[shared_this, handle](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-			{
-				shared_this->OnPopEvent(handle, eventName, key, value, metadata);
-			});
-
-		//
-		// id is zero id the pop is not pending
-		//
-		if(popId)
-			poppers_[handle] = popId;
-
-		return;
-
-	}
-
 	void TioTcpSession::OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err)
 	{
 		if(CheckError(err))
@@ -249,13 +124,11 @@ namespace tio
 
 		message = pr1_message_new_get_buffer_for_receive(header.get(), &buffer);
 
-		auto shared_this = shared_from_this();
-
 		asio::async_read(
 					socket_, 
 					asio::buffer(buffer, header->message_size),
 					wrap_callback(
-					[shared_this, message](const error_code& err, size_t read)
+					[shared_this = shared_from_this(), message](const error_code& err, size_t read)
 					{
 						shared_this->OnBinaryProtocolMessage(message, err);
 					}));
@@ -325,8 +198,6 @@ namespace tio
 			shared_from_this());
 	}
 
-
-
 	void TioTcpSession::ReadBinaryProtocolMessage()
 	{
 		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
@@ -389,54 +260,6 @@ namespace tio
 				shared_this->InvalidateConnection(err);
 			}
 		));
-	}
-
-	bool ParseHttpHeaders(const string& str, map<string, string>* headerMap)
-	{
-		vector<string> lines;
-		map<string, string> ret;
-
-		size_t currentPosition = 0;
-
-		for (;;)
-		{
-			if (currentPosition == str.size())
-				break;
-
-			auto separatorPos = str.find(':', currentPosition);
-			auto lineEndingPos = str.find('\n', currentPosition);
-
-			if (separatorPos == string::npos || lineEndingPos == string::npos)
-				break;
-
-			// empty value (no separator inside string)
-			if (separatorPos > lineEndingPos)
-			{
-				return false;
-			}
-			
-			auto keyStart = str.begin() + currentPosition;
-			auto keyEnd = str.begin() + separatorPos;
-			auto valueStart = str.begin() + separatorPos + 1;
-			auto valueEnd = str.begin() + lineEndingPos - 1;
-
-			currentPosition = lineEndingPos + 1;
-
-			// HTTP RFC says there any be any amount of spaces around ':' char
-			while (*keyEnd == ' ' && keyEnd > keyStart) --keyEnd;
-			while (*valueStart == ' ' && valueStart < valueEnd) ++valueStart;
-			if (*valueEnd == '\r') --valueEnd;
-
-			string key(keyStart, keyEnd);
-			string value(valueStart, valueEnd + 1);
-
-			if (key.empty())
-				continue;
-
-			(*headerMap)[key] = value;
-		}
-
-		return true;
 	}
 
 	void TioTcpSession::OnReadCommand(const error_code& err, size_t read)
@@ -653,242 +476,6 @@ namespace tio
 		SendString(answer.str());
 	}
 
-	
-
-	bool TioTcpSession::ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, 
-		const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents)
-	{
-		if(subscriptionInfo->eventFilterStart == 0 && subscriptionInfo->eventFilterEnd == -1)
-			return true;
-
-		int currentIndex = 0;
-		int recordCount = subscriptionInfo->container->GetRecordCount();
-
-		if(eventName == "pop_front")
-		{
-			currentIndex = 0;
-			eventName = "delete";
-		}
-		else if(eventName == "pop_back")
-		{
-			currentIndex = recordCount - 1;
-			eventName = "delete";
-		}
-		else if(eventName == "push_front")
-		{
-			currentIndex = 0;
-			eventName = "insert";
-		}
-		else
-		{
-			if(key.GetDataType() != TioData::Int)
-				return true;
-
-			currentIndex = key.AsInt();
-		}
-
-		
-		int realFilterStart = NormalizeIndex(subscriptionInfo->eventFilterStart,
-			recordCount,
-			false);
-
-		int realFilterEnd = NormalizeIndex(subscriptionInfo->eventFilterEnd,
-			recordCount,
-			false);
-		//
-		//
-		// When generating events, we must always grow the slice beyond it's size instead
-		// of shrinking it when necessary. 
-		// Example: if the slice is [0:9] and client deletes a record inside
-		// the range, we must send the push_back event (to add a last record to the slice)
-		// before sending the delete. So, after the push_back event the slice will have
-		// 11 items. But it's better than having a shorter slice. It would happen if we sent
-		// the delete event before the push_back
-		//
-		// So, events that add records to the list will be sent by this function. Events
-		// that will shrink the list will be added to extraEvents, to be send after the
-		// real event
-		//
-
-		//
-		// IMPORTANT: the container was already changed. So, if we are handling a push_back,
-		// the item is already inside the container. And the recordCount reflect this, of course
-		//
-		if(eventName == "push_back")
-		{
-			if(currentIndex >= realFilterStart && currentIndex <= realFilterEnd)
-			{
-				if(realFilterStart == 0)
-					return true;
-				else
-				{
-					//
-					// On push_back, we must send key as the index of item, which
-					// is the last one. On slice, we must fix the index (key)
-					//
-					SendEvent(subscriptionInfo, "push_back",
-						currentIndex - realFilterStart, value, metadata);
-
-					return false;
-				}
-			}	
-			else
-				return false;
-		}
-		else if(eventName == "delete")
-		{
-			bool shouldSendEvent = true;
-
-			if(currentIndex > realFilterEnd)
-				return false;
-			
-			//
-			// If some record is deleted before the filter start (for example, filter starts
-			// at 10 and record 5 was deleted) the records will be shifted. So we will delete
-			// the first item to cause this effect
-			//
-			if(currentIndex <= realFilterStart)
-			{
-				extraEvents->push_back(
-					EXTRA_EVENT(
-						0, 
-						subscriptionInfo->container, 
-						"pop_front",
-						false)
-					);
-
-				shouldSendEvent = false;
-			}
-
-			if(recordCount && recordCount > realFilterEnd)
-			{
-				EXTRA_EVENT pushBackEvent(
-					realFilterEnd, 
-					subscriptionInfo->container, 
-					"push_back",
-					true);
-
-				//
-				// We will send a push_back, but client still has the current deleted
-				// record (we didn't send the delete event yet at this point). So we need
-				// to adjust the push_back key accordingly
-				//
-				pushBackEvent.key.Set(realFilterEnd + 1 - realFilterStart);
-
-				SendEvent(subscriptionInfo, "push_back", 
-					pushBackEvent.key, pushBackEvent.value, pushBackEvent.metadata);
-			}
-
-			if(realFilterStart > 0 && shouldSendEvent)
-			{
-				//
-				// adjust index to be slice related
-				//
-				SendEvent(subscriptionInfo, "delete",
-					currentIndex - realFilterStart, TIONULL, TIONULL);
-
-				return false;
-			}
-
-			return shouldSendEvent;
-		}
-		else if(eventName == "insert")
-		{
-			bool shouldSendEvent = true;
-
-			//
-			// If some record is inserted before the filter start the records will 
-			// be shifted right. So the first record changed. We should add it
-			//
-			if(currentIndex < realFilterStart)
-			{
-				EXTRA_EVENT pushFrontEvent(
-						realFilterStart, 
-						subscriptionInfo->container, 
-						"push_front",
-						true);
-				
-				SendEvent(subscriptionInfo, "push_front", 
-					0, pushFrontEvent.value, pushFrontEvent.metadata);
-
-				shouldSendEvent = false;
-			}
-
-			//
-			// The records were shifted. We should delete the last one
-			//
-			if(recordCount - 1 > realFilterEnd)
-			{
-				extraEvents->push_back(
-					EXTRA_EVENT(
-						realFilterEnd, 
-						subscriptionInfo->container, 
-						"pop_back",
-						false)
-					);
-			}
-
-			if(realFilterStart > 0 && shouldSendEvent)
-			{
-				//
-				// adjust index to be slice related
-				//
-				SendEvent(subscriptionInfo, "insert",
-					currentIndex - realFilterStart, value, metadata);
-
-				return false;
-			}
-
-			return shouldSendEvent;
-		}
-		else if(eventName == "set")
-		{
-			if(currentIndex < realFilterStart || currentIndex > realFilterEnd)
-				return false;
-			
-			SendEvent(subscriptionInfo, "set", currentIndex - realFilterStart, value, metadata);
-			return false;
-		}
-		
-		return true;
-	}
-
-	void TioTcpSession::SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
-		const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		if(subscriptionInfo->binaryProtocol)
-			SendBinaryEvent(subscriptionInfo->handle, key, value, metadata, eventName);
-		else
-			SendTextEvent(subscriptionInfo->handle, key, value, metadata, eventName);
-	}
-
-
-	void TioTcpSession::OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, 
-		const TioData& key, const TioData& value, const TioData& metadata)
-	{
-		// lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		if (!valid_)
-			return;
-
-		vector<EXTRA_EVENT> extraEvents;
-		
-		bool shouldSend = ShouldSendEvent(subscriptionInfo, eventName, key, value, metadata, &extraEvents);
-
-		if(shouldSend)
-			SendEvent(subscriptionInfo, eventName, key, value, metadata);
-
-		for(vector<EXTRA_EVENT>::const_iterator i = extraEvents.begin() ; i != extraEvents.end() ; ++i)
-		{
-			const EXTRA_EVENT& extraEvent = *i;
-
-			SendEvent(subscriptionInfo, 
-				extraEvent.eventName,
-				extraEvent.key,
-				extraEvent.value,
-				extraEvent.metadata);
-		}
-	}
 
 	void TioTcpSession::SendResultSetStart(unsigned int queryID)
 	{
@@ -1139,10 +726,10 @@ namespace tio
 			
 			pendingSendData_.swap(whyDontQueueHaveAMethodNamedClear);
 
-			//UnsubscribeAll();
+			UnsubscribeAll();
 		}
 
-		//server_.OnClientFailed(shared_from_this(), err);
+		server_.OnClientFailed(shared_from_this(), err);
 
 		socket_.close();
 	}
@@ -1150,34 +737,6 @@ namespace tio
 	void TioTcpSession::UnsubscribeAll()
 	{
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		BOOST_ASSERT(!IsValid());
-
-		for(SubscriptionMap::iterator i = subscriptions_.begin() ; i != subscriptions_.end() ; ++i)
-		{
-			unsigned int handle;
-			shared_ptr<SUBSCRIPTION_INFO> info;
-
-			pair_assign(handle, info) = *i;
-
-			GetRegisteredContainer(handle)->Unsubscribe(info->cookie);
-		}
-
-		subscriptions_.clear();
-
-		for(WaitAndPopNextMap::const_iterator i = poppers_.begin() ;  i != poppers_.end() ; ++i)
-		{
-			int handle, popId;
-			pair_assign(handle, popId) = *i;
-
-			GetRegisteredContainer(handle)->CancelWaitAndPopNext(popId);
-		}
-
-		poppers_.clear();
-
-		StopDiffs();
-
-		handles_.clear();
 	}
 
 	unsigned int TioTcpSession::RegisterContainer(const string& containerName, shared_ptr<ITioContainer> container)
@@ -1221,233 +780,6 @@ namespace tio
 		handles_.erase(i);
 	}
 
-	void TioTcpSession::Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer)
-	{
-		BOOST_ASSERT(IsValid());
-
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
-
-		//
-		// already subscribed
-		//
-		if(subscriptions_.find(handle) != subscriptions_.end())
-		{
-			SendString("answer error already subscribed\r\n");
-			return;
-		}
-
-		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO(handle));
-		subscriptionInfo->container = container;
-
-		try
-		{
-
-			//
-			// This will make Tio not to lock until it finished sending 
-			// snapshot to a client. But it makes the logic more complicated.
-			// Now all the events are being buffered at session level if it
-			// fill up the connection buffer, so it's not a huge problem
-			// and the lock up time will not be that big, unless the container
-			// is really big
-			//
-#if 0
-
-			int numericStart = lexical_cast<int>(start);
-			//
-			// lets try a query. Navigating a query is faster than accessing records
-			// using index. Imagine a linked list being accessed by index every time...
-			//
-			try
-			{
-				subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
-			}
-			catch(std::exception&)
-			{
-				//
-				// no result set, don't care. We'll carry on with the indexed access
-				//
-			}
-
-			
-			subscriptionInfo->nextRecord = numericStart;
-
-			if(IsListContainer(container))
-				subscriptionInfo->event_name = "push_back";
-			else if(IsMapContainer(container))
-				subscriptionInfo->event_name = "set";
-			else
-				throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
-
-			pendingSnapshots_[handle] = subscriptionInfo;
-			
-			subscriptions_[handle] = subscriptionInfo;
-
-			if(sendAnswer)
-				SendString("answer ok\r\n");
-			
-			SendPendingSnapshots();
-
-			return;
-#endif // #if 0
-
-		}
-		catch(boost::bad_lexical_cast&)
-		{
-
-		}
-
-		int numericStart = 0;
-		
-		boost::conversion::try_lexical_convert<int>(start, numericStart);
-
-		subscriptionInfo->eventFilterStart = numericStart;
-		subscriptionInfo->eventFilterEnd = filterEnd;
-
-		subscriptions_[handle] = subscriptionInfo;
-
-		try
-		{
-			auto shared_this = shared_from_this();
-
-			subscriptionInfo->cookie = container->Subscribe(
-				[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-				{
-					shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
-
-				}, start);
-			
-			if(sendAnswer)
-				SendString("answer ok\r\n");
-		}
-		catch(std::exception& ex)
-		{
-			subscriptions_.erase(handle);
-			SendString(string("answer error ") + ex.what() + "\r\n");
-		}
-
-		return;
-	}
-
-
-	void TioTcpSession::BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
-
-		//
-		// already subscribed
-		//
-		if(subscriptions_.find(handle) != subscriptions_.end())
-			throw std::runtime_error("already subscribed");
-
-		shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo(new SUBSCRIPTION_INFO(handle));
-		subscriptionInfo->container = container;
-		subscriptionInfo->binaryProtocol = true;
-
-		//
-		// We are not checking if the container is changing during the snapshot,
-		// it can cause problems and crashes. 
-		//
-#if 0
-		if(!start.empty())
-		{
-			try
-			{
-				int numericStart = lexical_cast<int>(start);
-
-				//
-				// lets try a query. Navigating a query is faster than accessing records
-				// using index. Imagine a linked list being accessed by index every time...
-				//
-				try
-				{
-					subscriptionInfo->resultSet = container->Query(numericStart, 0, TIONULL);
-				}
-				catch(std::exception&)
-				{
-					//
-					// no result set, don't care. We'll carry on with the indexed access
-					//
-				}
-
-				subscriptionInfo->nextRecord = numericStart;
-
-				if(IsListContainer(container))
-					subscriptionInfo->event_name = "push_back";
-				else if(IsMapContainer(container))
-					subscriptionInfo->event_name = "set";
-				else
-					throw std::runtime_error("INTERNAL ERROR: container not a list neither a map");
-
-				pendingSnapshots_[handle] = subscriptionInfo;
-
-				subscriptions_[handle] = subscriptionInfo;
-
-				SendBinaryAnswer();
-
-				SendPendingSnapshots();
-
-				return;
-			}
-			catch(boost::bad_lexical_cast&)
-			{
-
-			}
-		}
-#endif
-
-		//
-		// if we're here, start is not numeric. We'll let the container deal with this
-		//
-		subscriptions_[handle] = subscriptionInfo;
-
-		try
-		{
-			//
-			// TODO: this isn't really right, I'm just doing this to send the
-			// answer before the events. Is the the subscription fails, we're screwed,
-			// since we're sending a success answer before doing the subscription
-			//
-			if(sendAnswer)
-				SendBinaryAnswer();
-
-			auto shared_this = shared_from_this();
-
-			subscriptionInfo->cookie = container->Subscribe(
-				[shared_this, subscriptionInfo](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-				{
-					shared_this->OnEvent(subscriptionInfo, eventName, key, value, metadata);
-				}, 
-				start);
-		}
-		catch(std::exception&)
-		{
-			subscriptions_.erase(handle);
-			throw;
-		}
-
-		return;
-	}
-	
-	void TioTcpSession::Unsubscribe(unsigned int handle)
-	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
-
-		SubscriptionMap::iterator i = subscriptions_.find(handle);
-		
-		if(i == subscriptions_.end())
-			return; //throw std::invalid_argument("not subscribed");
-
-		shared_ptr<ITioContainer> container = GetRegisteredContainer(handle);
-		
-		container->Unsubscribe(i->second->cookie);
-
-		subscriptions_.erase(i);
-	}
-
 	const vector<string> TioTcpSession::GetTokens()
 	{
 		lock_guard<decltype(bigLock_)> lock(bigLock_);
@@ -1474,8 +806,6 @@ namespace tio
 			return TIO_COMMAND_SET;
 		else if(eventName == "insert")
 			return TIO_COMMAND_INSERT;
-		else if(eventName == "wnp_next")
-			return TIO_COMMAND_WAIT_AND_POP_NEXT;
 		else if(eventName == "snapshot_end")
 			return TIO_EVENT_SNAPSHOT_END;
 
@@ -1496,8 +826,6 @@ namespace tio
 			return TIO_COMMAND_SET;
 		else if(eventName == "insert")
 			return TIO_COMMAND_INSERT;
-		else if(eventName == "wnp_next")
-			return TIO_COMMAND_WAIT_AND_POP_NEXT;
 		else if(eventName == "snapshot_end")
 			return TIO_EVENT_SNAPSHOT_END;
 

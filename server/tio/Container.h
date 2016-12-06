@@ -16,6 +16,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 */
 #pragma once
 
+#include "../../client/c/tioclient.h"
+
 //
 // TODO: find a better place to this
 //
@@ -667,7 +669,16 @@ namespace tio
 			*start = *end;
 	}
 
-	typedef std::function<void(const string&, const TioData&, const TioData&, const TioData&)> EventSink;
+	enum ContainerEvent
+	{
+		EVENT_SET = TIO_COMMAND_SET,
+		EVENT_INSERT = TIO_COMMAND_INSERT,
+		EVENT_DELETE = TIO_COMMAND_DELETE,
+		EVENT_CLEAR = TIO_COMMAND_CLEAR,
+	};
+
+	// storage_id, event_id, key, value, metadata
+	typedef std::function<void(uint64_t, ContainerEvent, const TioData&, const TioData&, const TioData&)> EventSink;
 
 	static const TioData TIONULL = TioData();
 
@@ -712,8 +723,10 @@ namespace tio
 
 		virtual string Command(const string& command) = 0;
 
-		virtual unsigned int Subscribe(EventSink sink, const string& start) = 0;
-		virtual void Unsubscribe(unsigned int cookie) = 0;
+		virtual void SetSubscriber(EventSink sink) = 0;
+		virtual void RemoveSubscriber() = 0;
+
+		virtual uint64_t GetId() = 0;
 	};
 
 	INTERFACE ITioPropertyMap
@@ -730,6 +743,8 @@ namespace tio
 
 	INTERFACE ITioStorageManager
 	{
+		virtual void SetSubscriber(EventSink sink) = 0;
+	
 		virtual bool Exists(const string& containerType, const string& containerName) = 0;
 
 		virtual pair<shared_ptr<ITioStorage>, shared_ptr<ITioPropertyMap> > 
@@ -770,52 +785,11 @@ namespace tio
 
 		virtual void SetProperty(const string& key, const string& value) = 0;
  		virtual string GetProperty(const string& key) = 0;
-
-		virtual unsigned int Subscribe(EventSink sink, const string& start) = 0;
-		virtual void Unsubscribe(unsigned int cookie) = 0;
-
+			
 		virtual string GetType() = 0;
 
-		virtual int WaitAndPopNext(EventSink sink) = 0;
-		virtual void CancelWaitAndPopNext(int id) = 0;
+		virtual uint64_t GetStorageId() = 0;
 	};
-
-	//
-	// multiplexes events to several sinks
-	//
-	class EventDispatcher
-	{
-		typedef map<unsigned int, EventSink> SinkMap;
-		SinkMap sinks_;
-		unsigned int lastCookie_;
-	public:
-
-		EventDispatcher()
-			: lastCookie_(0)
-		{
-
-		}
-		unsigned int Subscribe(EventSink sink)
-		{
-			sinks_[++lastCookie_] = sink;
-			return lastCookie_;
-		}
-
-		void Unsubscribe(unsigned int cookie)
-		{
-			sinks_.erase(cookie);
-		}
-
-		void RaiseEvent(const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
-		{
-			for(SinkMap::iterator i = sinks_.begin() ; i != sinks_.end() ; ++i)
-			{
-				EventSink& sink = i->second;
-				sink(eventName, key, value, metadata);
-			}
-		}
-	};
-
 
 	class Container : 
 		public ITioContainer,
@@ -824,31 +798,6 @@ namespace tio
 		shared_ptr<ITioPropertyMap> propertyMap_;
 		shared_ptr<ITioStorage> storage_;
 		tio::recursive_mutex mutex_;
-
-		unsigned int lastPopperId_;
-
-		struct PopperInfo
-		{
-			PopperInfo(){}
-			PopperInfo(EventSink sink, unsigned int id) : sink(sink), id(id) {}
-
-			EventSink sink;
-			unsigned int id;
-		};
-
-		struct FindPopperInfoById
-		{
-			FindPopperInfoById(unsigned int id): id(id) {}
-			
-			bool operator()(const PopperInfo& info) const
-			{
-				return this->id == info.id;
-			}
-
-			unsigned int id;
-		};
-
-		std::list<PopperInfo> poppers_;
 
 		inline size_t GetRealRecordNumber(int recNumber)
 		{
@@ -871,13 +820,18 @@ namespace tio
 
 		Container(shared_ptr<ITioStorage> storage, shared_ptr<ITioPropertyMap> propertyMap) :
 			storage_(storage),
-			propertyMap_(propertyMap),
-			lastPopperId_(0)
+			propertyMap_(propertyMap)
 		{}
 		
 		~Container()
 		{
 			return;
+		}
+
+		virtual uint64_t GetStorageId()
+		{
+			lock_guard<decltype(mutex_)> lock(mutex_);
+			return storage_->GetId();
 		}
 		
 		virtual string GetName()
@@ -915,56 +869,18 @@ namespace tio
 			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PopFront(key, value, metadata);
 		}
-
-		void HandleWaitAndPopNext()
-		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
-
-			//
-			// We are assuming the lock is already held
-			// since it's (supposed to be) a private function
-			//
-
-			if(poppers_.empty())
-				return;
-
-			//
-			// In some previous implementation, I was getting the first
-			// record, calling the callback and then pop_back'ing the record.
-			// It doesn't work because it causes a problem if the callback
-			// calls wait'n'pop again (we must be reentrant)
-			//
-			// That's how it works: THERE'S NO GUARANTEE THAT THE RECORD
-			// FETCHED WITH WAIT_AND_POP WILL NOT GET LOST. That's how it works.
-			// If there is a need for such guarantee, the one who is pushing records
-			// to the list must be able to check for a timeout or something and
-			// push the record to the list again in case the record got lost
-			//
-			TioData key, value, metadata;
-
-			storage_->PopFront(&key, &value, &metadata);
-
-			PopperInfo info = poppers_.front();
-			poppers_.pop_front();
-			
-			info.sink("wnp_next", key, value, metadata);
-		}
-
 				
 		virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		{
 			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushBack(key, value, metadata);
-			HandleWaitAndPopNext();
 		}
 
 		virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 		{
 			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushFront(key, value, metadata);
-			HandleWaitAndPopNext();
 		}
-
 		
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
 		{
@@ -1012,50 +928,6 @@ namespace tio
 		{
 			lock_guard<decltype(mutex_)> lock(mutex_);
 			return propertyMap_->Get(key);
-		}
-
-		virtual unsigned int Subscribe(EventSink sink, const string& start)
-		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
-			return storage_->Subscribe(sink, start);
-		}
-		virtual void Unsubscribe(unsigned int cookie)
-		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
-			storage_->Unsubscribe(cookie);
-		}
-
-		virtual int WaitAndPopNext(EventSink sink)
-		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
-
-			if(storage_->GetRecordCount() > 0)
-			{
-				TioData key, value, metadata;
-
-				//
-				// Disclaimer: THERE'S NO GUARANTEE THAT THE RECORD
-				// FETCHED WITH WAIT_AND_POP WILL NOT GET LOST. That's how it works.
-				// If there is a need for such guarantee, the one who is pushing records
-				// to the list must be able to check for a timeout or something and
-				// push the record to the list again in case the record got lost
-				//
-				storage_->PopFront(&key, &value, &metadata);
-				
-				sink("wnp_next", key, value, metadata);
-
-				return 0;
-			}
-			else
-			{
-				poppers_.push_back(PopperInfo(sink, ++lastPopperId_));
-				return lastPopperId_;
-			}
-		}
-
-		virtual void CancelWaitAndPopNext(int id)
-		{
-			poppers_.remove_if(FindPopperInfoById(id));
 		}
 	};
 
@@ -1272,6 +1144,5 @@ namespace tio
 		string type = container->GetType();
 		return type == "volatile_map" || type == "persistent_map";
 	}
-
 }
 

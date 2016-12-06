@@ -66,7 +66,7 @@ void SetupContainerManager(
 	}
 }
 
-void RunServer(tio::ContainerManager* manager,
+void RunServer(tio::ContainerManager* containerManager,
 			   unsigned short port, 
 			   const vector< pair<string, string> >& users,
 			   const string& logFilePath)
@@ -84,7 +84,7 @@ void RunServer(tio::ContainerManager* manager,
 	//
 	if(users.size())
 	{
-		shared_ptr<ITioContainer> usersContainer = manager->CreateContainer("volatile_map", "__users__");
+		shared_ptr<ITioContainer> usersContainer = containerManager->CreateContainer("volatile_map", "__users__");
 
 		pair<string, string> p;
 		BOOST_FOREACH(p, users)
@@ -95,9 +95,10 @@ void RunServer(tio::ContainerManager* manager,
 
 	asio::io_service::work work(io_service);
 
-	tio::TioTcpServer tioServer(*manager, io_service, e, logFilePath);
+	tio::TioTcpServer tioServer(*containerManager, io_service, e, logFilePath);
 
 	tioServer.Start();
+
 
 	unsigned threadCount = 16;
 	vector<thread> threads;
@@ -534,14 +535,14 @@ protected:
 		try
 		{
 			// adding "this" due to a bug in gcc...
-			cppHandle = container->Subscribe(
+			/*cppHandle = container->Subscribe(
 				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
 				},
 				startString);
 
-			subscriptionHandles_[handle] = cppHandle;
+			subscriptionHandles_[handle] = cppHandle;*/
 		}
 		catch(std::exception&)
 		{
@@ -557,7 +558,7 @@ protected:
 
 		try
 		{
-			container->Unsubscribe(subscriptionHandles_[handle]);
+			//container->Unsubscribe(subscriptionHandles_[handle]);
 		}
 		catch(std::exception&)
 		{
@@ -573,11 +574,11 @@ protected:
 
 		try
 		{
-			container->WaitAndPopNext(
+			/*container->WaitAndPopNext(
 				[this, cookie, event_callback](const string& eventName, const TioData& key, const TioData& value, const TioData& metadata)
 				{
 					LocalContainerManager::SubscribeBridge(cookie, event_callback, eventName, key, value, metadata);
-				});
+				});*/
 		}
 		catch(std::exception&)
 		{

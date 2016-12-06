@@ -74,13 +74,11 @@ struct TIO_CONTAINER
 	int handle;
 	
 	event_callback_t event_callback;
-	event_callback_t wait_and_pop_next_callback;
 	void* subscription_cookie;
 
 	const char* group_name;
 	const char* name;
 
-	void* wait_and_pop_next_cookie;
 	struct TIO_CONNECTION* connection;
 };
 

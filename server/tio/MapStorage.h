@@ -34,7 +34,12 @@ private:
 
 	DataMap data_;
 	string name_, type_;
-	EventDispatcher dispatcher_;
+	EventSink sink_;
+
+	void Publish(const string& eventName, const TioData& k, const TioData& v, const TioData& m)
+	{
+
+	}
 
 	inline pair<const string, ValueAndMetadata> GetInternalRecord(const TioData& key)
 	{
@@ -63,6 +68,11 @@ public:
 		name_(name),
 		type_(type)
 	  {}
+
+		virtual uint64_t GetId()
+		{
+			return reinterpret_cast<uint64_t>(this);
+		}
 
 	  //
 	  // ITioPropertyMap
@@ -143,7 +153,7 @@ public:
 
 		  data_[key.AsSz()] = ValueAndMetadata(value, metadata);
 
-		  dispatcher_.RaiseEvent("set", key, value, metadata);
+		  Publish("set", key, value, metadata);
 	  }
 
 	  virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
@@ -158,7 +168,7 @@ public:
 
 		  data_[keyString] = ValueAndMetadata(value, metadata);
 
-		  dispatcher_.RaiseEvent("insert", key, value, metadata);
+		  Publish("insert", key, value, metadata);
 	  }
 
 	  virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
@@ -175,14 +185,14 @@ public:
 
 		  data_.erase(i);
 
-		  dispatcher_.RaiseEvent("delete", key, value, metadata);
+		  Publish("delete", key, value, metadata);
 	  }
 
 	  virtual void Clear()
 	  {
 		  data_.clear();
 
-		  dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL);
+		  Publish("clear", TIONULL, TIONULL, TIONULL);
 	  }
 
 	  virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
@@ -234,6 +244,17 @@ public:
 			  new VectorResultSet(std::move(resultSetItems), TIONULL));
 	  }
 
+	  virtual void SetSubscriber(EventSink sink)
+	  {
+		  sink_ = sink;
+	  }
+
+	  virtual void RemoveSubscriber()
+	  {
+		  sink_ = nullptr;
+	  }
+
+	  /*
 	  virtual unsigned int Subscribe(EventSink sink, const string& start)
 	  {
 		  //
@@ -300,6 +321,7 @@ public:
 	  {
 		  dispatcher_.Unsubscribe(cookie);
 	  }
+	  */
 
 	  virtual void GetRecord(const TioData& searchKey, TioData* key, TioData* value, TioData* metadata)
 	  {

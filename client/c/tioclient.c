@@ -578,8 +578,6 @@ const char* tio_command_to_string(int i)
 	if(i == TIO_COMMAND_SUBSCRIBE) return "TIO_COMMAND_SUBSCRIBE";
 	if(i == TIO_COMMAND_UNSUBSCRIBE) return "TIO_COMMAND_UNSUBSCRIBE";
 	if(i == TIO_COMMAND_QUERY) return "TIO_COMMAND_QUERY";
-	if(i == TIO_COMMAND_WAIT_AND_POP_NEXT) return "TIO_COMMAND_WAIT_AND_POP_NEXT";
-	if(i == TIO_COMMAND_WAIT_AND_POP_KEY) return "TIO_COMMAND_WAIT_AND_POP_KEY";
 	if(i == TIO_COMMAND_PROPGET ) return "TIO_COMMAND_PROPGET ";
 	if(i == TIO_COMMAND_PROPSET ) return "TIO_COMMAND_PROPSET ";
 
@@ -1416,8 +1414,6 @@ int register_container(struct TIO_CONNECTION* connection, struct PR1_MESSAGE* me
 	new_container->connection = connection;
 	new_container->handle = handle;
 	new_container->event_callback = NULL;
-	new_container->wait_and_pop_next_callback = NULL;
-	new_container->wait_and_pop_next_cookie = 0;
 	new_container->subscription_cookie = NULL;
 	new_container->group_name = group_name_copy;
 	new_container->name = name_copy;
@@ -1783,23 +1779,15 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			container = connection->containers[handle];
 			event_callback = NULL;
 
-			if(event_code == TIO_COMMAND_WAIT_AND_POP_NEXT)
+			if(container->group_name == NULL)
 			{
-				event_callback = container->wait_and_pop_next_callback;
-				cookie = container->wait_and_pop_next_cookie;
+				event_callback = container->event_callback;
+				cookie = container->subscription_cookie;
 			}
 			else
 			{
-				if(container->group_name == NULL)
-				{
-					event_callback = container->event_callback;
-					cookie = container->subscription_cookie;
-				}
-				else
-				{
-					event_callback = connection->group_event_callback;
-					cookie = connection->group_event_cookie;
-				}
+				event_callback = connection->group_event_callback;
+				cookie = connection->group_event_cookie;
 			}
 
 			if(event_callback)
@@ -2112,19 +2100,6 @@ int tio_container_subscribe(struct TIO_CONTAINER* container, struct TIO_DATA* st
 
 	container->event_callback = event_callback;
 	container->subscription_cookie = cookie;
-
-	return TIO_SUCCESS;
-}
-
-int tio_container_wait_and_pop_next(struct TIO_CONTAINER* container, event_callback_t event_callback, void* cookie)
-{
-	int result;
-
-	container->wait_and_pop_next_callback = event_callback;
-	container->wait_and_pop_next_cookie = cookie;
-
-	result = tio_container_input_command(container, TIO_COMMAND_WAIT_AND_POP_NEXT, NULL, NULL, NULL);
-	if(TIO_FAILED(result)) return result;
 
 	return TIO_SUCCESS;
 }

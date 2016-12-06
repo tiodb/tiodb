@@ -34,6 +34,7 @@ namespace tio
 		tio::recursive_mutex bigLock_;
 		ManagerByType managerByType_;
 		AliasesMap aliases_;
+		EventSink sink_;
 
 		OpenContainersMap openContainers_;
 
@@ -52,7 +53,7 @@ namespace tio
 
 		void AddAlias(const string& alias, const string& type);
 		
-		void RegisterFundamentalStorageManagers( shared_ptr<ITioStorageManager> volatileList, shared_ptr<ITioStorageManager> volatileMap);
+		void RegisterFundamentalStorageManagers(shared_ptr<ITioStorageManager> volatileList, shared_ptr<ITioStorageManager> volatileMap);
 		void RegisterStorageManager(const string& type, shared_ptr<ITioStorageManager> manager);
 	
 		shared_ptr<ITioContainer> CreateContainer(const string& type, const string& name);
@@ -63,5 +64,15 @@ namespace tio
 		bool Exists(const string& containerType, const string& containerName);
 
 		string ResolveAlias(const string& type);
+
+		void SetSubscriber(EventSink sink)
+		{
+			sink_ = sink;
+		}
+
+		virtual void RemoveSubscriber()
+		{
+			sink_ = nullptr;
+		}
 	};
 }

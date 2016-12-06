@@ -16,11 +16,9 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 */
 #pragma once
 
-
 namespace tio {
 	namespace MemoryStorage
 {
-
 	using std::make_tuple;
 
 	class VectorStorage : 
@@ -33,7 +31,15 @@ namespace tio {
 		typedef vector<ValueAndMetadata> DataContainerT;
 		DataContainerT data_;
 		string name_, type_;
-		EventDispatcher dispatcher_;
+		EventSink sink_;
+
+		void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+		{
+			if (!sink_)
+				return;
+
+			sink_(GetId(), eventId, k, v, m);
+		}
 
 		inline ValueAndMetadata& GetInternalRecord(const TioData& key)
 		{
@@ -83,6 +89,11 @@ namespace tio {
 			  return;
 		  }
 
+		  virtual uint64_t GetId()
+		  {
+			  return reinterpret_cast<uint64_t>(this);
+		  }
+
 		  virtual string GetName()
 		  {
 			  return name_;
@@ -109,7 +120,7 @@ namespace tio {
 
 			  data_.push_back(ValueAndMetadata(value, metadata));
 
-			  dispatcher_.RaiseEvent("push_back", static_cast<int>(data_.size() - 1), value, metadata);
+			  Publish(EVENT_INSERT, static_cast<int>(data_.size() - 1), value, metadata);
 		  }
 
 		  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -117,7 +128,7 @@ namespace tio {
 			  CheckValue(value);
 			  data_.insert(data_.begin(), ValueAndMetadata(value, metadata));
 
-			  dispatcher_.RaiseEvent("push_front", key, value, metadata);
+			  Publish(EVENT_INSERT, 0, value, metadata);
 		  }
 
 	private:
@@ -145,7 +156,7 @@ namespace tio {
 
 			_Pop(data_.end() - 1, value, metadata);
 
-			dispatcher_.RaiseEvent("pop_back", 
+			Publish(EVENT_DELETE,
 				key ? *key : TIONULL, 
 				value ? *value : TIONULL,
 				metadata ? *metadata : TIONULL);
@@ -158,8 +169,8 @@ namespace tio {
 
 			_Pop(data_.begin(), value, metadata);
 
-			dispatcher_.RaiseEvent("pop_front", 
-				key ? *key : TIONULL, 
+			Publish(EVENT_DELETE,
+				0, 
 				value ? *value : TIONULL,
 				metadata ? *metadata : TIONULL);
 		}
@@ -179,7 +190,7 @@ namespace tio {
 
 			data = ValueAndMetadata(value, metadata);
 
-			dispatcher_.RaiseEvent("set", key, value, metadata);
+			Publish(EVENT_SET, key, value, metadata);
 		}
 
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
@@ -193,7 +204,7 @@ namespace tio {
 
 			data_.insert(data_.begin() + recordNumber, ValueAndMetadata(value, metadata));
 
-			dispatcher_.RaiseEvent("insert", key, value, metadata);
+			Publish(EVENT_INSERT, key, value, metadata);
 		}
 
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
@@ -205,14 +216,14 @@ namespace tio {
 
 			data_.erase(data_.begin() + recordNumber);
 
-			dispatcher_.RaiseEvent("delete", key, value, metadata);
+			Publish(EVENT_DELETE, key, value, metadata);
 		}
 
 		virtual void Clear()
 		{
 			data_.clear();
 
-			dispatcher_.RaiseEvent("clear", TIONULL, TIONULL, TIONULL);
+			Publish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
 		}
 
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
@@ -264,6 +275,17 @@ namespace tio {
 				*metadata = data.metadata;
 		}
 
+		virtual void SetSubscriber(EventSink sink)
+		{
+			sink_ = sink;
+		}
+
+		virtual void RemoveSubscriber()
+		{
+			sink_ = nullptr;
+		}
+
+/*
 		virtual unsigned int Subscribe(EventSink sink, const string& start)
 		{
 			unsigned int cookie = 0;
@@ -309,5 +331,6 @@ namespace tio {
 		{
 			dispatcher_.Unsubscribe(cookie);
 		}
+		*/
 	};
 }}

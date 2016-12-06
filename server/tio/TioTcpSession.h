@@ -358,13 +358,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		typedef std::map<unsigned int, pair<shared_ptr<ITioContainer>, string> > HandleMap;
 
-		//               handle             container                  subscription cookie
-		typedef std::map<unsigned int, pair<shared_ptr<ITioContainer>, unsigned int> > DiffMap;
-
 		HandleMap handles_;
 		
-		DiffMap diffs_;
-
 		unsigned int lastHandle_;
 		int sentBytes_;
         int pendingSendSize_;
@@ -384,37 +379,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		std::vector< asio::const_buffer > beingSendData_;
 		shared_ptr<char> binarySendBuffer_;
 
-		struct SUBSCRIPTION_INFO
-		{
-			SUBSCRIPTION_INFO(unsigned int handle)
-			{
-				this->handle = handle;
-				cookie = 0;
-				nextRecord = 0;
-				binaryProtocol = false;
-				eventFilterStart = 0;
-				eventFilterEnd = -1;
-			}
-
-			int eventFilterStart;
-			int eventFilterEnd;
-
-			unsigned int handle;
-			unsigned int cookie;
-			unsigned int nextRecord;
-			bool binaryProtocol;
-			string event_name;
-			shared_ptr<ITioContainer> container;
-			shared_ptr<ITioResultSet> resultSet;
-		};
-
-		//               handle
-		typedef std::map<unsigned int, shared_ptr<SUBSCRIPTION_INFO> > SubscriptionMap;
-		SubscriptionMap subscriptions_;
-
-		typedef std::map<unsigned int, unsigned int > WaitAndPopNextMap;
-		WaitAndPopNextMap poppers_;
-
 		vector<string> tokens_;
 
 		bool valid_;
@@ -426,7 +390,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		void SendStringNow(const string& str);
 		
         void UnsubscribeAll();
-
 
 		void OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err);
 		void OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err);
@@ -482,37 +445,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendBinaryAnswer();
 
-
-		/*
-		bool SendBinaryAnswer(const TioData* key, const TioData* value, const TioData* metadata)
-		{
-			unsigned int bufferSize = sizeof(unsigned int);
-			unsigned int fieldCount = 1;
-
-			if(key && key->GetDataType() != TioData::None)
-			{
-				fieldCount++;
-				bufferSize += sizeof(MESSAGE_FIELD_HEADER) + key->GetRawSize();
-			}
-				
-
-			if(value && value->GetDataType() != TioData::None)
-			{
-				fieldCount++;
-				bufferSize += sizeof(MESSAGE_FIELD_HEADER) + value->GetRawSize();
-			}
-
-			if(metadata && metadata->GetDataType() != TioData::None)
-			{
-				fieldCount++;
-				bufferSize += sizeof(MESSAGE_FIELD_HEADER) + metadata->GetRawSize();
-			}
-
-			shared_ptr<char> buffer(new char[bufferSize]);
-
-		}
-		*/
-
 		TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id);
 		~TioTcpSession();
 		void LoadDispatchMap();
@@ -544,23 +476,23 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		shared_ptr<ITioContainer> GetRegisteredContainer(unsigned int handle, string* containerName = NULL, string* containerType = NULL);
 		void CloseContainerHandle(unsigned int handle);
 
-		void OnEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
-		void OnPopEvent(unsigned int handle, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
-
 		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
-		void SendEvent(shared_ptr<SUBSCRIPTION_INFO> subscriptionInfo, const string& eventName, const TioData& key, const TioData& value, const TioData& metadata);
 
-		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer=true);
-		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer);
-		void Unsubscribe(unsigned int handle);
+		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer = true)
+		{
+
+		}
+		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
+		{
+
+		}
+		void Unsubscribe(unsigned int handle)
+		{
+
+		}
 
 		const vector<string> GetTokens();
 		void AddToken(const string& token);
-
-		shared_ptr<ITioContainer> GetDiffDestinationContainer(unsigned int handle);
-		void SetupDiffContainer(unsigned int handle, shared_ptr<ITioContainer> destinationContainer);
-		void StopDiffs();
-
 		
 		void SetCommandRunning()
 		{
@@ -572,13 +504,11 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		}
 		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
 		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction, unsigned maxRecords);
-		void BinaryWaitAndPopNext(unsigned int handle);
-		bool ShouldSendEvent(const shared_ptr<SUBSCRIPTION_INFO>& subscriptionInfo, string eventName, const TioData& key, const TioData& value, const TioData& metadata, std::vector<EXTRA_EVENT>* extraEvents);
+
 		bool commandRunning_;
 
 		void InvalidateConnection(const error_code& err);
 
 		void SendHttpResponseAndClose(int statusCode, const string& statusMessage, const string& mimeType, const map<string, string>* responseHeaders, const string& body);
-		
 	};		
 }

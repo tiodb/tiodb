@@ -473,23 +473,6 @@ namespace tio
 	public:
 		typedef std::function<void (Command&, ostream&, size_t*, shared_ptr<TioTcpSession>)> CommandFunction;
 
-		enum DiffSessionType
-		{
-			DiffSessionType_Map,
-			DiffSessionType_List
-		};
-
-		struct DiffSessionInfo
-		{
-			unsigned int diffID;
-			bool firstQuerySent;
-			DiffSessionType diffType;
-			shared_ptr<ITioContainer> source;
-			shared_ptr<ITioContainer> destination;
-			unsigned int subscriptionCookie;
-		};
-
-
 	private:
 
 		struct MetaContainers
@@ -498,63 +481,9 @@ namespace tio
 			shared_ptr<ITioContainer> sessions;
 			shared_ptr<ITioContainer> sessionLastCommand;
 		};
-
-		struct KeyPopperInfo
-		{
-			unsigned int handle;
-			weak_ptr<TioTcpSession> session;
-			string key;
-
-			KeyPopperInfo()
-			{
-				handle = 0;
-			}
-
-			KeyPopperInfo(shared_ptr<TioTcpSession> session, unsigned int handle, const string& key)
-			{
-				this->session = session;
-				this->handle = handle;
-				this->key = key;
-			}
-		};
-
-		typedef map< string /* key */, deque<KeyPopperInfo> > KeyPoppersByKey;
-		typedef map< string /* full qualified name*/, KeyPoppersByKey  > KeyPoppersPerContainerMap;
 		
-		
-		KeyPoppersPerContainerMap keyPoppersPerContainer_;
-		tio::recursive_mutex keyPoppersPerContainerMutex_;
-
-
-		struct NextPopperInfo
-		{
-			unsigned int handle;
-			weak_ptr<TioTcpSession> session;
-
-			NextPopperInfo()
-			{
-				handle = 0;
-			}
-
-			NextPopperInfo(shared_ptr<TioTcpSession> session, unsigned int handle)
-			{
-				this->session = session;
-				this->handle = handle;
-			}
-		};
-		
-		// map<diff handle, DiffSessionInfo >
-		typedef map< unsigned int, DiffSessionInfo > DiffSessions;
-		DiffSessions diffSessions_;
-		tio::recursive_mutex diffSessionsMutex_;
-
 		atomic<unsigned int> lastSessionID_;
 		atomic<unsigned int> lastQueryID_;
-		atomic<unsigned int> lastDiffID_;
-
-		typedef map< string, deque<NextPopperInfo> > NextPoppersMap;
-		NextPoppersMap nextPoppers_;
-		tio::recursive_mutex nextPoppersMutex_;
 
 		typedef void (tio::TioTcpServer::* CommandCallbackFunction)(tio::Command &,std::ostream &,size_t *,std::shared_ptr<TioTcpSession>);
 
@@ -579,6 +508,8 @@ namespace tio
 		BinaryProtocolLogger logger_;
 
 		GroupManager groupManager_;
+
+		unsigned int GenerateSessionId();
 				
 		void DoAccept();
 		void OnAccept(shared_ptr<TioTcpSession> client, const error_code& err);
@@ -595,9 +526,6 @@ namespace tio
 		void OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_QueryEx(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
-
-		void OnCommand_Diff_Start(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
-		void OnCommand_Diff(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_GroupAdd(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		void OnCommand_GroupSubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
@@ -618,9 +546,6 @@ namespace tio
 		void OnCommand_GetRecordCount(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		void OnCommand_SubscribeUnsubscribe(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
-
-		void OnCommand_WnpNext(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
-		void OnCommand_WnpKey(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 
 		string GetFullQualifiedName(shared_ptr<ITioContainer> container);
 
@@ -646,16 +571,14 @@ namespace tio
 
 		shared_ptr<ITioContainer> GetContainerAndParametersFromRequest(const PR1_MESSAGE* message, shared_ptr<TioTcpSession> session, TioData* key, TioData* value, TioData* metadata);
 
-		unsigned int GenerateSessionId();
-		unsigned int GenerateDiffId();
-
-		void HandlePushBackWaitAndPop( shared_ptr<ITioContainer> container, const TioData& key, const TioData& value, const TioData& metadata);
-
-		void HandleKeyValueWaitAndPop(shared_ptr<ITioContainer> container, 
-			const TioData& key, const TioData& value, const TioData& metadata);
+		void OnAnyContainerEvent(
+			uint64_t storageId,
+			ContainerEvent eventId,
+			const TioData& k, const TioData& v, const TioData& m);
 
 	public:
 		TioTcpServer(ContainerManager& containerManager,asio::io_service& io_service, const tcp::endpoint& endpoint, const std::string& logFilePath);
+		~TioTcpServer();
 		void OnClientFailed(shared_ptr<TioTcpSession> client, const error_code& err);
 
 		void PostCallback(function<void()> callback);
@@ -668,6 +591,7 @@ namespace tio
 
 		Auth& GetAuth();
 		unsigned CreateNewQueryId();
+
 	};
 
 	void StartServer();
