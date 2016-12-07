@@ -90,11 +90,7 @@ public:
 
 int vector_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned operations)
 {
-	int ret;
 	TIO_DATA v;
-
-	ret = tio_container_clear(container);
-	if(TIO_FAILED(ret)) return ret;
 
 	tiodata_init(&v);
 	tiodata_set_string_and_size(&v, "01234567890123456789012345678901", 32);
@@ -117,19 +113,22 @@ int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned opera
 	int ret;
 	TIO_DATA k, v;
 
-	ret = tio_container_clear(container);
-	if(TIO_FAILED(ret)) return ret;
-
 	tiodata_init(&k);
-	tiodata_set_string_and_size(&k, "0123456789", 10);
-
 	tiodata_init(&v);
-	tiodata_set_string_and_size(&v, "0123456789", 10);
 
 	tio_begin_network_batch(cn);
 
+	string prefix = to_string(reinterpret_cast<uint64_t>(cn)) + "_";
+
 	for(unsigned a = 0 ; a < operations ; ++a)
 	{
+		char buffer[16];
+		itoa(a, buffer, 10);
+		string keyAsString = prefix + buffer;
+		tiodata_set_string_and_size(&k, keyAsString.c_str(), keyAsString.size());
+
+		tiodata_set_int(&v, a);
+
 		tio_container_set(container, &k, &v, NULL);
 	}
 
@@ -311,15 +310,14 @@ string generate_container_name()
 	return prefix  + "_" + to_string(++seq);
 }
 
-void deadlock_on_disconnect_test()
+void TEST_deadlock_on_disconnect(const char* hostname)
 {
 	static const unsigned PUBLISHER_COUNT = 60;
 	static const unsigned ITEM_COUNT = 2 * 1000;
 
-	const string hostname("localhost");
 	const string container_type("volatile_list");
 
-	cout << "deadlock test start" << endl;
+	cout << "START: deadlock test" << endl;
 
 	tio::Connection subscriberConnection(hostname);
 	
@@ -389,6 +387,91 @@ void deadlock_on_disconnect_test()
 }
 
 
+void TEST_connection_stress(
+	const char* hostname,
+	unsigned connection_count)
+{
+	cout << "START: connection stress test, " << connection_count << " connections" << endl;
+	vector<unique_ptr<tio::Connection>> connections;
+	connections.reserve(connection_count);
+	unsigned log_step = 1000;
+
+	DWORD start = GetTickCount();
+
+	for (unsigned a = 0; a < connection_count; a++)
+	{
+		connections.push_back(make_unique<tio::Connection>(hostname));
+
+		if (a % log_step == 0)
+			cout << a << "  connections" << endl;
+	}
+
+	cout << "disconnecting..." << endl;
+
+	connections.clear();
+
+	DWORD delta = GetTickCount() - start;
+
+	cout << "FINISHED: connection stress test, " << delta << "ms" << endl;
+}
+
+
+void TEST_container_concurrency(
+	const char* hostname,
+	unsigned max_client_count,
+	unsigned item_count,
+	const char* container_type,
+	PERF_FUNCTION_C perf_function
+	)
+{
+	cout << "START: container concurrency test, type=" << container_type << endl;
+
+	for (unsigned client_count = 1; client_count <= max_client_count; client_count *= 2)
+	{
+		TioTestRunner testRunner;
+
+		unsigned items_per_thread = item_count / client_count;
+
+		cout << client_count << " clients, " << items_per_thread << " items per thread... ";
+
+		DWORD start = GetTickCount();
+
+		string container_name = generate_container_name();
+
+		for (unsigned a = 0; a < client_count; a++)
+		{
+			testRunner.add_test(
+				[=]()
+				{
+					tio::Connection connection(hostname);
+					tio::containers::list<string> c;
+
+					c.create(&connection, container_name, container_type);
+
+					perf_function(connection.cnptr(), c.handle(), items_per_thread);
+				}
+			);
+		}
+
+		testRunner.run();
+
+		DWORD delta = GetTickCount() - start;
+		auto persec = (item_count) / delta;
+
+		tio::Connection connection(hostname);
+		tio::containers::list<string> c;
+
+		c.open(&connection, container_name);
+
+		const char* errorMessage = (c.size() != (items_per_thread * client_count)) ? " LOST RECORDS!" : "";
+
+		cout << delta << "ms (" << persec << "k/s)" << errorMessage << endl;
+	}
+
+	cout << "FINISH: container concurrency test" << endl;
+}
+
+
 void TEST_create_lots_of_containers(const char* hostname, 
 	unsigned container_count, 
 	unsigned client_count,
@@ -397,8 +480,6 @@ void TEST_create_lots_of_containers(const char* hostname,
 	tio::Connection connection(hostname);
 	vector<tio::containers::list<string>> containers(container_count);
 
-	unsigned log_step = 10 * 1000;
-	unsigned client_count = 16;
 	TioTestRunner testRunner;
 
 	unsigned containers_per_thread = container_count / client_count;
@@ -455,6 +536,8 @@ int main()
 	unsigned MAX_SUBSCRIBERS = 8;
 	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 50;
+
+	unsigned CONCURRENCY_TEST_ITEM_COUNT = 100 * 1000;
 #else
 	unsigned VOLATILE_TEST_COUNT = 50 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 50 * 1000;
@@ -467,51 +550,54 @@ int main()
 	unsigned MAX_SUBSCRIBERS = 16;
 	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 100;
+
+	unsigned CONCURRENCY_TEST_ITEM_COUNT = 250 * 1000;
 #endif
 
-	const string hostname("localhost");
-
-
-	//
-	// DEADLOCK ON DISCONNECTION TEST
-	//
-	deadlock_on_disconnect_test();
+	auto hostname = "localhost";
 
 	try
 	{
+
 		//
-		// CONTAINER NUMBER TEST
+		// CONCURRENCY
 		//
+		TEST_container_concurrency(
+			hostname,
+			MAX_CLIENTS,
+			CONCURRENCY_TEST_ITEM_COUNT,
+			"volatile_map",
+			map_perf_test_c);
+
+
+		TEST_container_concurrency(
+			hostname,
+			MAX_CLIENTS,
+			CONCURRENCY_TEST_ITEM_COUNT,
+			"volatile_list",
+			vector_perf_test_c);
+
+		return 0;
+
+		//
+		// DEADLOCK ON DISCONNECT
+		//
+		TEST_deadlock_on_disconnect(hostname);
+
+		//
+		// LOTS OF CONNECTIONS
+		//
+		TEST_connection_stress(hostname, CONNECTION_STRESS_TEST_COUNT);
+
+	
+		//
+		// LOTS OF CONTAINERS
+		//
+
+		return 0;
 		
 
-
-		//
-		// CONNECTIONS TEST
-		//
-		{
-			cout << "START: connection stress test, " << CONNECTION_STRESS_TEST_COUNT << " connections" << endl;
-			vector<unique_ptr<tio::Connection>> connections;
-			connections.reserve(CONNECTION_STRESS_TEST_COUNT);
-			unsigned log_step = 1000;
-
-			DWORD start = GetTickCount();
-
-			for (unsigned a = 0; a < CONNECTION_STRESS_TEST_COUNT; a++)
-			{
-				connections.push_back(make_unique<tio::Connection>(hostname));
-
-				if (a % log_step == 0)
-					cout << a << "  connections" << endl;
-			}
-
-			cout << "disconnecting..." << endl;
-
-			connections.clear();
-
-			DWORD delta = GetTickCount() - start;
-
-			cout << "FINISHED: connection stress test, " << delta << "ms" << endl;
-		}
+		
 
 
 		cout << "START: data stress test, MAX_CLIENTS=" << MAX_CLIENTS << 

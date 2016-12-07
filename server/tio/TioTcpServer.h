@@ -459,7 +459,7 @@ namespace tio
 		
 		typedef std::set< shared_ptr<TioTcpSession> > SessionsSet;
 		SessionsSet sessions_;
-		tio_spin_lock sessionsMutex_;
+		tio_fast_lock sessionsMutex_;
 
 		ContainerManager& containerManager_;
 

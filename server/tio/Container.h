@@ -53,7 +53,7 @@ namespace tio
 		std::atomic_flag lck = ATOMIC_FLAG_INIT;
 	};
 
-	typedef ::tio::spin_lock		tio_spin_lock;
+	typedef std::mutex				tio_fast_lock;
 	typedef std::recursive_mutex	tio_recursive_mutex;
 	
 	using std::lock_guard;

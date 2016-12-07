@@ -210,6 +210,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		unsigned int id_;
 
 		asio::io_service& io_service_;
+		asio::strand strand_;
+
 		tcp::socket socket_;
 		TioTcpServer& server_;
 
@@ -264,8 +266,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		AsioCallbackT wrap_callback(AsioCallbackT cb)
 		{
-			return cb;
-			//return strand_.wrap(cb);
+			//return cb;
+			return strand_.wrap(cb);
 		}
 
 

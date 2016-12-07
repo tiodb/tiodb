@@ -63,6 +63,7 @@ namespace tio
 	
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
 		io_service_(io_service),
+		strand_(io_service),
 		socket_(io_service),
 		server_(server),
 		lastHandle_(0),
@@ -132,8 +133,6 @@ namespace tio
 
 	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
 	{
-		lock_guard_t lock(bigLock_);
-
 		// this thing will delete the pointer
 		shared_ptr<PR1_MESSAGE> messageHolder(message, &pr1_message_delete);
 
@@ -723,6 +722,8 @@ namespace tio
 			pendingSendData_.swap(whyDontQueueHaveAMethodNamedClear);
 
 			UnsubscribeAll();
+
+			handles_.clear();
 		}
 
 		server_.OnClientFailed(shared_from_this(), err);

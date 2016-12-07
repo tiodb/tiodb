@@ -109,10 +109,10 @@ namespace tio
 		ContainerEvent eventId,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
-		cout << std::this_thread::get_id() << " - EVENT - "
+		/*cout << std::this_thread::get_id() << " - EVENT - "
 			<< storageId << ", "
 			<< eventId
-			<< endl;
+			<< endl;*/
 	}
 
 	TioTcpServer::~TioTcpServer()

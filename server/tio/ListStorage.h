@@ -37,7 +37,7 @@ namespace tio {
 			const string name_, type_;
 			EventSink sink_;
 
-			typedef tio_spin_lock mutex_t;
+			typedef tio_fast_lock mutex_t;
 			typedef lock_guard<mutex_t> lock_guard_t;
 
 			mutex_t mutex_;
