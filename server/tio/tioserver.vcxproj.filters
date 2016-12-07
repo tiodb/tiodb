@@ -15,15 +15,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auth.h" />
-    <ClInclude Include="BdbStorage.h" />
     <ClInclude Include="buffer.h" />
     <ClInclude Include="Command.h" />
     <ClInclude Include="Container.h" />
     <ClInclude Include="ContainerManager.h" />
-    <ClInclude Include="ListStorage.h" />
     <ClInclude Include="logdb.h" />
-    <ClInclude Include="LogDbStorage.h" />
-    <ClInclude Include="MapStorage.h" />
     <ClInclude Include="MemoryPropertyMap.h" />
     <ClInclude Include="MemoryStorage.h" />
     <ClInclude Include="pch.h" />
@@ -36,6 +32,21 @@
     <ClInclude Include="VectorStorage.h" />
     <ClInclude Include="HttpParser.h">
       <Filter>protocols\http</Filter>
+    </ClInclude>
+    <ClInclude Include="BdbStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="ListStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="FileSystemStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="LogDbStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="MapStorage.h">
+      <Filter>Storage</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -50,6 +61,9 @@
     </Filter>
     <Filter Include="protocols\http">
       <UniqueIdentifier>{b80d2a31-fbc9-4a8c-9fc5-77dde9a43040}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Storage">
+      <UniqueIdentifier>{24d65237-d5c3-4884-a20e-d2321b1a6c08}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

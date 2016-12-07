@@ -190,7 +190,6 @@ namespace tio
 		virtual int container_query(void* handle, int start, int end, query_callback_t query_callback, void* cookie)=0;
 		virtual int container_subscribe(void* handle, struct TIO_DATA* start, event_callback_t event_callback, void* cookie)=0;
 		virtual int container_unsubscribe(void* handle)=0;
-		virtual int container_wait_and_pop_next(void* handle, event_callback_t event_callback, void* cookie)=0;
 		virtual bool connected()=0;
 
 		virtual IContainerManager* container_manager()=0;

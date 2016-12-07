@@ -99,7 +99,6 @@ void RunServer(tio::ContainerManager* containerManager,
 
 	tioServer.Start();
 
-
 	unsigned threadCount = 16;
 	vector<thread> threads;
 

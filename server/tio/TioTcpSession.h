@@ -193,150 +193,14 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 	class TioTcpServer;
 
-#if 0
-	class BinaryProtocolCommand
+	struct HandleInfo
 	{
-		typedef vector< shared_ptr<MESSAGE_FIELD_HEADER> > FieldHeaderVector;
-		FieldHeaderVector fields_;
-
-		const MESSAGE_FIELD_HEADER* GetFieldById(unsigned int id) const
-		{
-			//
-			// Common, I'm not going to create a functor just for this... I wish I could
-			// use C++0x lambda...
-			//
-			for(FieldHeaderVector::const_iterator i = fields_.begin() ; i != fields_.end() ; ++i)
-				if((*i)->field_id == id)
-					return (*i).get();
-			
-			return NULL;
-		}
-
-	public:
-		explicit BinaryProtocolCommand(const FieldHeaderVector& fields)
-			: fields_(fields)
+		shared_ptr<ITioContainer> container;
+		
+		HandleInfo(const shared_ptr<ITioContainer> container)
+			: container(container)
 		{}
-
-		int GetFieldAsIntOrZero(unsigned int fieldId) const
-		{
-			const MESSAGE_FIELD_HEADER* field = GetFieldById(fieldId);
-
-			if(!field || field->data_type != MESSAGE_FIELD_TYPE_INT)
-				return 0;
-
-			return message_field_get_int(field);
-		}
-
-		const char* GetFieldAsCStringOrZero(unsigned int fieldId) const
-		{
-			const MESSAGE_FIELD_HEADER* field = GetFieldById(fieldId);
-
-			if(!field || field->data_type != MESSAGE_FIELD_TYPE_STRING)
-				return 0;
-
-			return message_field_get_string(field);
-		}
-
-		bool GetHandleAndKeyAndValueAndMetadata(unsigned int fieldId, unsigned int* handle, TioData* key, TioData* value, TioData* metadata) const
-		{
-			if(handle)
-				*handle = GetFieldAsIntOrZero(MESSAGE_FIELD_ID_HANDLE);
-
-			if(key)
-				GetFieldAsTioData(MESSAGE_FIELD_ID_KEY, key);
-				
-			if(value)
-				GetFieldAsTioData(MESSAGE_FIELD_ID_VALUE, value);
-
-			if(metadata)
-				GetFieldAsTioData(MESSAGE_FIELD_ID_METADATA, metadata);
-		}
-
-		bool GetFieldAsTioData(unsigned int fieldId, TioData* tioData) const
-		{
-			const MESSAGE_FIELD_HEADER* field;
-			
-			tioData->Clear();
-
-			field = GetFieldById(fieldId);
-
-			if(!field)
-				return false;
-
-			switch(field->data_type)
-			{
-			case MESSAGE_FIELD_TYPE_INT:
-				tioData->Set(message_field_get_int(field));
-				break;
-			case MESSAGE_FIELD_TYPE_STRING:
-				tioData->Set(message_field_get_string(field), true);
-				break;
-			case MESSAGE_FIELD_TYPE_DOUBLE:
-				tioData->Set(message_field_get_double(field));
-				break;
-
-			default:
-				return false;
-			}
-
-			return true;
-		}
 	};
-#endif
-
-	struct EXTRA_EVENT
-	{
-		EXTRA_EVENT(int index, const shared_ptr<ITioContainer>& container, const string& eventName, bool readRecord)
-		{
-			Fill(index, container, eventName, readRecord);
-		}
-
-		EXTRA_EVENT(){}
-
-		TioData key, value, metadata;
-		string eventName;
-
-		void Fill(int index, 
-			const shared_ptr<ITioContainer>& container, 
-			const string& eventName,
-			bool readRecord)
-		{
-			ASSERT((size_t)index <= container->GetRecordCount());
-
-			this->eventName = eventName;
-			this->key.Set(index);
-			
-			if(readRecord)
-				container->GetRecord(index, &key, &value, &metadata);
-		}
-
-	};
-
-	/*
-	class Pr1Message : public boost::noncopyable
-	{
-		PR1_MESSAGE* pr1_message_;
-
-	public:
-		Pr1Message(PR1_MESSAGE_HEADER* header)
-		{
-			pr1_message_ = pr1_message_new_get_buffer_for_receive(header, void** buffer)
-		}
-
-		~Pr1Message()
-		{
-			pr1_message_delete(pr1_message_);
-		}
-
-		PR1_MESSAGE_HEADER* GetHeaderPointer()
-		{
-			if(pr1_message_->stream_buffer->buffer_size < sizeof(PR1_MESSAGE_HEADER))
-				pr1_message_->stream_buffer
-
-		}
-
-	};
-	*/
 
 	class TioTcpSession : 
 		public std::enable_shared_from_this<TioTcpSession>,
@@ -345,10 +209,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	private:
 		unsigned int id_;
 
-		unsigned MAGIC_;
-
 		asio::io_service& io_service_;
-		asio::strand strand_;
 		tcp::socket socket_;
 		TioTcpServer& server_;
 
@@ -356,7 +217,7 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		asio::streambuf buf_;
 
-		typedef std::map<unsigned int, pair<shared_ptr<ITioContainer>, string> > HandleMap;
+		typedef std::map<unsigned int, HandleInfo> HandleMap;
 
 		HandleMap handles_;
 		
@@ -373,7 +234,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
         std::queue<std::string> pendingSendData_;
 
-		recursive_mutex bigLock_;
+		typedef tio_recursive_mutex mutex_t;
+		typedef lock_guard<mutex_t> lock_guard_t;
+
+		mutex_t bigLock_;
 		
 		std::list< shared_ptr<PR1_MESSAGE> > pendingBinarySendData_;
 		std::vector< asio::const_buffer > beingSendData_;
@@ -478,10 +342,13 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 
 		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
 
-		void Subscribe(unsigned int handle, const string& start, int filterEnd, bool sendAnswer = true)
+		void Subscribe(unsigned int handle, const string& start)
 		{
+			auto container = GetRegisteredContainer(handle);
 
+			auto snapshot = container->Query(0, -1, nullptr);
 		}
+
 		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
 		{
 
@@ -502,7 +369,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		{
 			commandRunning_ = false;
 		}
-		void SendBinaryEvent( int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName );
+		void OnContainerEvent(ContainerEvent eventId, const TioData & k, const TioData & v, const TioData & m);
+		void SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
 		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction, unsigned maxRecords);
 
 		bool commandRunning_;

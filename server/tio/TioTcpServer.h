@@ -42,7 +42,6 @@ namespace tio
 	
 	std::string Serialize(const std::list<const TioData*>& fields);
 
-
 	class GroupManager : boost::noncopyable
 	{
 		struct SubscriberInfo
@@ -107,7 +106,7 @@ namespace tio
 					answer += "\r\n";
 
 					session->SendAnswer(answer);
-					session->Subscribe(handle, start, -1, false);
+					session->Subscribe(handle, start);
 				}
 			}
 
@@ -179,45 +178,6 @@ namespace tio
 
 				subscribers_[session->id()] = SubscriberInfo(session, start);
 			}
-
-			/*
-			void DoPendingSubscriptions(const shared_ptr<TioTcpSession>& session, ContainersMap::const_iterator i, const string& start)
-			{
-				if(i == containers_.begin())
-					std::cout << "DoPendingSubscriptions start, " << containers_.size() << " containers" << std::endl; 
-
-				Timer timer;
-				timer.Start();
-				int howMany = 0;
-
-				for( ; i != containers_.end() ; ++i)
-				{
-					SendNewContainerToSubscriber(i->second, session, start);
-					howMany++;
-
-					if(session->IsPendingSendSizeTooBig())
-					{
-						session->RegisterLowPendingBytesCallback(
-							[this, i, start](const shared_ptr<TioTcpSession>& session)
-							{
-								BOOST_ASSERT(valid_);
-								// don't know why, but ++i triggers a const error...
-								auto i2 = i;
-								++i2;
-								this->DoPendingSubscriptions(session, i2, start);
-							});
-
-						return;
-					}
-				}
-
-				long long elapsedMicro = timer.ElapsedInMicroseconds();
-				long long elapsedInSeconds = elapsedMicro / (1000 * 1000);
-				double persec = (containers_.size() * 1000 * 1000) / static_cast<double>(elapsedMicro);
-
-				std::cout << howMany << " snapshots, " << elapsedInSeconds << " seconds, " << persec << " snapshots per second" << std::endl;
-			}
-			*/
 		};
 
 		typedef map<string, GroupInfo> GroupMap;
@@ -499,7 +459,7 @@ namespace tio
 		
 		typedef std::set< shared_ptr<TioTcpSession> > SessionsSet;
 		SessionsSet sessions_;
-		tio::recursive_mutex sessionsMutex_;
+		tio_spin_lock sessionsMutex_;
 
 		ContainerManager& containerManager_;
 
@@ -540,7 +500,6 @@ namespace tio
 
 		void OnCommand_ListHandles(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		
-
 		void OnCommand_Pop(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 		
 		void OnCommand_GetRecordCount(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);

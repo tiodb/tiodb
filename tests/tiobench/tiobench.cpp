@@ -389,6 +389,61 @@ void deadlock_on_disconnect_test()
 }
 
 
+void TEST_create_lots_of_containers(const char* hostname, 
+	unsigned container_count, 
+	unsigned client_count,
+	unsigned item_count)
+{
+	tio::Connection connection(hostname);
+	vector<tio::containers::list<string>> containers(container_count);
+
+	unsigned log_step = 10 * 1000;
+	unsigned client_count = 16;
+	TioTestRunner testRunner;
+
+	unsigned containers_per_thread = container_count / client_count;
+
+	cout << "START: container stress test, " << container_count << " containers, "
+		<< client_count << " clients" << endl;
+
+	DWORD start = GetTickCount();
+
+	for (unsigned a = 0; a < client_count; a++)
+	{
+		testRunner.add_test(
+			[hostname, prefix = "l_" + to_string(a), container_count, item_count]()
+			{
+				tio::Connection connection(hostname);
+				vector<tio::containers::list<string>> containers(container_count);
+
+				for (unsigned a = 0; a < container_count; a++)
+				{
+					auto& c = containers[a];
+					string name = prefix + to_string(a);
+					c.create(&connection, name, "volatile_list");
+				}
+
+				for (unsigned a = 0; a < container_count; a++)
+				{
+					auto& c = containers[a];
+					vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
+				}
+
+				containers.clear();
+			}
+		);
+	}
+
+	testRunner.run();
+
+	DWORD delta = GetTickCount() - start;
+
+	cout << "FINISH: container stress test, " << delta << "ms" << endl;
+
+	containers.clear();
+}
+
+
 int main()
 {
 
@@ -427,62 +482,7 @@ int main()
 		//
 		// CONTAINER NUMBER TEST
 		//
-		{
-			tio::Connection connection(hostname);
-			vector<tio::containers::list<string>> containers(CONTAINER_TEST_COUNT);
-
-			unsigned log_step = 10 * 1000;
-			unsigned client_count = 16;
-			TioTestRunner testRunner;
-
-			unsigned containers_per_thread = CONTAINER_TEST_COUNT / client_count;
-			unsigned items_per_thread = CONTAINER_TEST_ITEM_COUNT;
-
-			cout << "START: container stress test, " << CONTAINER_TEST_COUNT << " containers, "
-				<< client_count << " clients" << endl;
-
-			DWORD start = GetTickCount();
-
-			for (unsigned a = 0; a < client_count; a++)
-			{
-				testRunner.add_test(
-					[hostname, prefix = "l_" + to_string(a), container_count = containers_per_thread, item_count = items_per_thread]()
-					{
-						tio::Connection connection(hostname);
-						vector<tio::containers::list<string>> containers(container_count);
-						TioTesterSubscriber testSubscriber(hostname);
-
-						for (unsigned a = 0; a < container_count; a++)
-						{
-							auto& c = containers[a];
-							string name = prefix + to_string(a);
-							c.create(&connection, name, "volatile_list");
-							testSubscriber.add_container(name, "volatile_list");
-						}
-
-						testSubscriber.start();
-
-						for (unsigned a = 0; a < container_count; a++)
-						{
-							auto& c = containers[a];
-							vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
-						}
-						
-						testSubscriber.stop();
-						testSubscriber.join();
-
-						containers.clear();
-					});
-			}
-
-			testRunner.run();
-
-			DWORD delta = GetTickCount() - start;
-
-			cout << "FINISH: container stress test, " << delta << "ms" << endl;
-
-			containers.clear();
-		}
+		
 
 
 		//

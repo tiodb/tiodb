@@ -65,7 +65,6 @@ namespace tio
 		io_service_(io_service),
 		socket_(io_service),
 		server_(server),
-		strand_(io_service),
 		lastHandle_(0),
 		valid_(true),
         pendingSendSize_(0),
@@ -74,15 +73,12 @@ namespace tio
 		id_(id),
 		binaryProtocol_(false)
 	{
-		MAGIC_ = 0xBABACA;
 		return;
 	}
 	
 	TioTcpSession::~TioTcpSession()
 	{
 		BOOST_ASSERT(handles_.empty());
-
-		MAGIC_ = 0xFEEEFEEE;
 
 		//logstream_ << "session " << id_ << " just died" << endl;
 
@@ -136,7 +132,7 @@ namespace tio
 
 	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		// this thing will delete the pointer
 		shared_ptr<PR1_MESSAGE> messageHolder(message, &pr1_message_delete);
@@ -151,7 +147,7 @@ namespace tio
 
 	void TioTcpSession::ReadHttpCommand(const shared_ptr<HttpParser> httpParser)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if (buf_.size())
 		{
@@ -170,7 +166,7 @@ namespace tio
 
 	void TioTcpSession::OnReadHttpCommand(const shared_ptr<HttpParser>& httpParser, const error_code& err, size_t read)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if (CheckError(err))
 			return;
@@ -216,7 +212,7 @@ namespace tio
 
 	void TioTcpSession::ReadCommand()
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		currentCommand_ = Command();
 
@@ -267,7 +263,7 @@ namespace tio
 		if(CheckError(err))
 			return;
 
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		string str;
 		stringstream answer;
@@ -380,7 +376,7 @@ namespace tio
 		if(CheckError(err))
 			return;
 
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 		
 		BOOST_ASSERT(buf_.size() >= dataSize);
 
@@ -613,7 +609,7 @@ namespace tio
 
     void TioTcpSession::SendString(const string& str)
     {
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if (!valid_)
 			return;
@@ -642,7 +638,7 @@ namespace tio
 
 	void TioTcpSession::SendStringNow(const string& str)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if(!valid_)
 			return;
@@ -670,7 +666,7 @@ namespace tio
 	{
 		delete[] buffer;
 
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
         pendingSendSize_ -= bufferSize;
 
@@ -713,7 +709,7 @@ namespace tio
 	void TioTcpSession::InvalidateConnection(const error_code& err)
 	{
 		{
-			lock_guard<decltype(bigLock_)> lock(bigLock_);
+			lock_guard_t lock(bigLock_);
 
 			if (!IsValid())
 				return;
@@ -736,39 +732,41 @@ namespace tio
 
 	void TioTcpSession::UnsubscribeAll()
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 	}
 
 	unsigned int TioTcpSession::RegisterContainer(const string& containerName, shared_ptr<ITioContainer> container)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		unsigned int handle = ++lastHandle_;
-		handles_[handle] = make_pair(container, containerName);
+		handles_.emplace(make_pair(handle, HandleInfo(container)));
 		return handle;
 	}
 
 	shared_ptr<ITioContainer> TioTcpSession::GetRegisteredContainer(unsigned int handle, string* containerName, string* containerType)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		HandleMap::iterator i = handles_.find(handle);
 
 		if(i == handles_.end())
 			throw std::invalid_argument("invalid handle");
 
-		if(containerName)
-			*containerName = i->second.second;
+		HandleInfo& handleInfo = i->second;
 
-		if(containerType)
-			*containerType = i->second.first->GetType();
+		if (containerName)
+			*containerName = handleInfo.container->GetName();
 
-		return i->second.first;
+		if (containerType)
+			*containerType = handleInfo.container->GetName();
+
+		return handleInfo.container;
 	}
 
 	void TioTcpSession::CloseContainerHandle(unsigned int handle)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		HandleMap::iterator i = handles_.find(handle);
 
@@ -782,13 +780,14 @@ namespace tio
 
 	const vector<string> TioTcpSession::GetTokens()
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 		return tokens_;
 	}
 
 	void TioTcpSession::AddToken(const string& token)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
+		
 		tokens_.push_back(token);
 	}
 
@@ -832,6 +831,13 @@ namespace tio
 		return 0;
 	}
 
+	void TioTcpSession::OnContainerEvent(
+		ContainerEvent eventId,
+		const TioData& k, const TioData& v, const TioData& m)
+	{
+		
+	}
+
 	void TioTcpSession::SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName)
 	{
 		shared_ptr<PR1_MESSAGE> message = Pr1CreateMessage();
@@ -864,7 +870,7 @@ namespace tio
 
 	void TioTcpSession::SendPendingBinaryData()
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if (!valid_)
 			return;
@@ -922,7 +928,7 @@ namespace tio
 			return;
 		}
 
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		DecreasePendingSendSize(sent);
 		sentBytes_ += sent;
@@ -934,7 +940,7 @@ namespace tio
 
 	void TioTcpSession::RegisterLowPendingBytesCallback(std::function<void(shared_ptr<TioTcpSession>)> lowPendingBytesThresholdCallback)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		BOOST_ASSERT(IsPendingSendSizeTooBig());
 
@@ -944,7 +950,7 @@ namespace tio
 
 	void TioTcpSession::DecreasePendingSendSize(int size)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		pendingSendSize_ -= size;
 
@@ -966,7 +972,7 @@ namespace tio
 
 	void TioTcpSession::SendBinaryMessage(const shared_ptr<PR1_MESSAGE>& message)
 	{
-		lock_guard<decltype(bigLock_)> lock(bigLock_);
+		lock_guard_t lock(bigLock_);
 
 		if (!valid_)
 			return;

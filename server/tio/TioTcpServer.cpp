@@ -109,7 +109,10 @@ namespace tio
 		ContainerEvent eventId,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
-
+		cout << std::this_thread::get_id() << " - EVENT - "
+			<< storageId << ", "
+			<< eventId
+			<< endl;
 	}
 
 	TioTcpServer::~TioTcpServer()
@@ -128,7 +131,6 @@ namespace tio
 		lastQueryID_(0),
 		serverPaused_(false)
 	{
-
 		containerManager_.SetSubscriber(
 			[this](uint64_t storageId, ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
 			{
@@ -1348,11 +1350,7 @@ namespace tio
 
 			if (cmd.GetCommand() == "subscribe")
 			{
-				session->Subscribe(handle, start, filterEnd);
-
-				//
-				// we'll NOT send the answer, because session::subscribe already did
-				//
+				session->Subscribe(handle, start);
 			}
 			else if (cmd.GetCommand() == "unsubscribe")
 			{

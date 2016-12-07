@@ -31,7 +31,11 @@ namespace tio
 		typedef map< string, string > AliasesMap;
 		typedef map< string, weak_ptr<ITioContainer> > OpenContainersMap;
 
-		tio::recursive_mutex bigLock_;
+		typedef tio_recursive_mutex mutex_t;
+		typedef lock_guard<mutex_t> lock_guard_t;
+
+		mutex_t mutex_;
+
 		ManagerByType managerByType_;
 		AliasesMap aliases_;
 		EventSink sink_;
@@ -68,11 +72,17 @@ namespace tio
 		void SetSubscriber(EventSink sink)
 		{
 			sink_ = sink;
+
+			for (auto& manager : managerByType_)
+				manager.second->SetSubscriber(sink_);
 		}
 
 		virtual void RemoveSubscriber()
 		{
 			sink_ = nullptr;
+			
+			for (auto& manager : managerByType_)
+				manager.second->SetSubscriber(nullptr);
 		}
 	};
 }

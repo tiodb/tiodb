@@ -34,6 +34,28 @@ namespace tio
 	using std::function;
 	using std::shared_ptr;
 	using std::to_string;
+
+	class spin_lock
+	{
+	public:
+		void lock()
+		{
+			while (lck.test_and_set(std::memory_order_acquire))
+			{}
+		}
+
+		void unlock()
+		{
+			lck.clear(std::memory_order_release);
+		}
+
+	private:
+		std::atomic_flag lck = ATOMIC_FLAG_INIT;
+	};
+
+	typedef ::tio::spin_lock		tio_spin_lock;
+	typedef std::recursive_mutex	tio_recursive_mutex;
+	
 	using std::lock_guard;
 
 	template<typename T1, typename T2>
@@ -577,13 +599,6 @@ namespace tio
 		return stream;
 	}
 
-	template<typename T>
-	T tio_cast(const TioData& data)
-	{
-
-	}
-
-
 
 	inline std::ostream& operator << (std::ostream& stream, const TioData* td)
 	{
@@ -682,7 +697,7 @@ namespace tio
 
 	static const TioData TIONULL = TioData();
 
-	INTERFACE ITioResultSet
+	struct ITioResultSet
 	{
 		virtual bool GetRecord(TioData* key, TioData* value, TioData* metadata) = 0;
 
@@ -698,7 +713,7 @@ namespace tio
 	};
 
 
-	INTERFACE ITioStorage
+	struct ITioStorage
 	{
 		virtual size_t GetRecordCount() = 0;
 		
@@ -726,10 +741,12 @@ namespace tio
 		virtual void SetSubscriber(EventSink sink) = 0;
 		virtual void RemoveSubscriber() = 0;
 
+		//virtual tio_spin_lock GetLock() = 0;
+
 		virtual uint64_t GetId() = 0;
 	};
 
-	INTERFACE ITioPropertyMap
+	struct ITioPropertyMap
 	{
 		virtual string Get(const string& key) = 0;
 		virtual void Set(const string& key, const string& value) = 0;
@@ -741,7 +758,7 @@ namespace tio
 		string type;
 	};
 
-	INTERFACE ITioStorageManager
+	struct ITioStorageManager
 	{
 		virtual void SetSubscriber(EventSink sink) = 0;
 	
@@ -760,7 +777,7 @@ namespace tio
 		virtual std::vector<StorageInfo> GetStorageList() = 0;
 	};
 
-	INTERFACE ITioContainer
+	struct ITioContainer
 	{
 		virtual string GetName() = 0;
 		virtual size_t GetRecordCount() = 0;
@@ -789,6 +806,8 @@ namespace tio
 		virtual string GetType() = 0;
 
 		virtual uint64_t GetStorageId() = 0;
+
+		//virtual tio_spin_lock GetLock() = 0;
 	};
 
 	class Container : 
@@ -797,7 +816,6 @@ namespace tio
 	{
 		shared_ptr<ITioPropertyMap> propertyMap_;
 		shared_ptr<ITioStorage> storage_;
-		tio::recursive_mutex mutex_;
 
 		inline size_t GetRealRecordNumber(int recNumber)
 		{
@@ -830,103 +848,86 @@ namespace tio
 
 		virtual uint64_t GetStorageId()
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetId();
 		}
 		
 		virtual string GetName()
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetName();
 		}
 
 		virtual string GetType()
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetType();
 		}
 
 		virtual size_t GetRecordCount()
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->GetRecordCount();
 		}
 
 		virtual void GetRecord(const TioData& searchKey, TioData* key,  TioData* value, TioData* metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->GetRecord(searchKey, key, value, metadata);
 		}
 
 		virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PopBack(key, value, metadata);
 		}
 
 		virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PopFront(key, value, metadata);
 		}
 				
 		virtual void PushBack(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushBack(key, value, metadata);
 		}
 
 		virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->PushFront(key, value, metadata);
 		}
 		
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Insert(key, value, metadata);
 		}
 
 		virtual void Set(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Set(key, value, metadata);
 		}
 
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Delete(key, value, metadata);
 		}
 
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->Query(startOffset, endOffset, query);
 		}
 
 		virtual void Clear()
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			storage_->Clear();
 		}
 
 		virtual string Command(const string& command)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return storage_->Command(command);
 		}
 
 		virtual void SetProperty(const string& key, const string& value)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			propertyMap_->Set(key, value);
 		}
 
 		virtual string GetProperty(const string& key)
 		{
-			lock_guard<decltype(mutex_)> lock(mutex_);
 			return propertyMap_->Get(key);
 		}
 	};
@@ -939,9 +940,7 @@ namespace tio
 
 		ValueAndMetadata(const TioData& value, const TioData& metadata) 
 			: value(value), metadata(metadata)
-		{
-			
-		}
+		{}
 
 		TioData value;
 		TioData metadata;

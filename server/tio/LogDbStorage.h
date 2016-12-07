@@ -547,11 +547,31 @@ namespace tio {
 			virtual void SetSubscriber(EventSink sink)
 			{
 				sink_ = sink;
+				
+				for (auto& v : containers_)
+				{
+					auto ptr = v.second.first.lock();
+
+					if (!ptr)
+						continue;
+
+					ptr->SetSubscriber(sink);
+				}
 			}
 
 			virtual void RemoveSubscriber()
 			{
 				sink_ = nullptr;
+
+				for (auto& v : containers_)
+				{
+					auto ptr = v.second.first.lock();
+
+					if (!ptr)
+						continue;
+
+					ptr->SetSubscriber(nullptr);
+				}
 			}
 
 			LogDbStorageManager(const string& path) : path_(path)

@@ -124,11 +124,16 @@ namespace MemoryStorage
 		virtual void SetSubscriber(EventSink sink)
 		{
 			sink_ = sink;
+
+			for (auto& v : containers_)
+				v.second.storage->SetSubscriber(sink_);
 		}
 
 		virtual void RemoveSubscriber()
 		{
 			sink_ = nullptr;
+			for (auto& v : containers_)
+				v.second.storage->SetSubscriber(nullptr);
 		}
 
 		MemoryStorageManager()
