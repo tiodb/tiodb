@@ -33,6 +33,8 @@ namespace tio {
 		string name_, type_;
 		EventSink sink_;
 
+		uint64_t revNum_;
+
 		void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
 		{
 			if (!sink_)
@@ -79,14 +81,20 @@ namespace tio {
 
 	public:
 
-		VectorStorage(const string& name, const string& type) :
-			name_(name),
-			type_(type)
+		VectorStorage(const string& name, const string& type) 
+			: name_(name)
+			, type_(type)
+			, revNum_(0)
 		  {}
 
 		  ~VectorStorage()
 		  {
 			  return;
+		  }
+
+		  virtual uint64_t GetRevNum()
+		  {
+			  return revNum_;
 		  }
 
 		  virtual uint64_t GetId()

@@ -37,13 +37,17 @@ namespace tio {
 			const string name_, type_;
 			EventSink sink_;
 
+			uint64_t revNum_;
+
 			typedef tio_fast_lock mutex_t;
 			typedef lock_guard<mutex_t> lock_guard_t;
 
 			mutex_t mutex_;
 
-			void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			void UpdateRevNumAndPublish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
 			{
+				++revNum_;
+
 				if (!sink_)
 					return;
 
@@ -54,12 +58,19 @@ namespace tio {
 
 			ListStorage(const string& name, const string& type) :
 				name_(name),
-				type_(type)
+				type_(type),
+				revNum_(0)
 			{}
 
 			virtual uint64_t GetId()
 			{
 				return reinterpret_cast<uint64_t>(this);
+			}
+
+			virtual uint64_t GetRevNum()
+			{
+				lock_guard_t lock(mutex_);
+				return revNum_;
 			}
 
 			virtual string GetName()
@@ -94,7 +105,7 @@ namespace tio {
 					data_.push_back(ValueAndMetadata(value, metadata));
 					
 					publishKey = static_cast<int>(data_.size() - 1);
-					Publish(EVENT_INSERT, publishKey, value, metadata);
+					UpdateRevNumAndPublish(EVENT_PUSH_BACK, publishKey, value, metadata);
 				}
 			}
 
@@ -107,26 +118,26 @@ namespace tio {
 
 					data_.push_front(ValueAndMetadata(value, metadata));
 
-					Publish(EVENT_INSERT, 0, value, metadata);
+					UpdateRevNumAndPublish(EVENT_PUSH_FRONT, 0, value, metadata);
 				}
 			}
 
 			virtual void PopBack(TioData* key, TioData* value, TioData* metadata)
 			{
-				if (data_.empty())
-					throw std::invalid_argument("empty");
-				
 				ValueAndMetadata data;
 				int index;
 
 				{
 					lock_guard_t lock(mutex_);
 
+					if (data_.empty())
+						throw std::invalid_argument("empty");
+
 					data = data_.back();
 					data_.pop_back();
 					index = static_cast<int>(data_.size());
 
-					Publish(EVENT_DELETE,
+					UpdateRevNumAndPublish(EVENT_DELETE,
 						index,
 						value ? *value : TIONULL,
 						metadata ? *metadata : TIONULL);
@@ -144,18 +155,19 @@ namespace tio {
 
 			virtual void PopFront(TioData* key, TioData* value, TioData* metadata)
 			{
-				if (data_.empty())
-					throw std::invalid_argument("empty");
-
 				ValueAndMetadata data;
 				int index = 0;
 
 				{
 					lock_guard_t lock(mutex_);
+
+					if (data_.empty())
+						throw std::invalid_argument("empty");
+
 					data = data_.front();
 					data_.pop_front();
 
-					Publish(EVENT_DELETE,
+					UpdateRevNumAndPublish(EVENT_DELETE,
 						index,
 						value ? *value : TIONULL,
 						metadata ? *metadata : TIONULL);
@@ -220,7 +232,7 @@ namespace tio {
 				{
 					lock_guard_t lock(mutex_);
 					valueAndMetadata = *GetOffset(key);
-					Publish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
 				}
 
 				if (value)
@@ -246,7 +258,7 @@ namespace tio {
 					else
 						data_.insert(GetOffset(key), valueAndMetadata);
 
-					Publish(EVENT_INSERT, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_INSERT, key, value, metadata);
 				}
 			}
 
@@ -267,7 +279,7 @@ namespace tio {
 
 					data_.erase(i);
 
-					Publish(EVENT_DELETE, realKey, value, metadata);
+					UpdateRevNumAndPublish(EVENT_DELETE, realKey, value, metadata);
 				}
 			}
 
@@ -277,7 +289,7 @@ namespace tio {
 
 				data_.clear();
 
-				Publish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
+				UpdateRevNumAndPublish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
 			}
 
 			virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)

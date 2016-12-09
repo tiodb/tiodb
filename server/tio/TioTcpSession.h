@@ -270,17 +270,21 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			return strand_.wrap(cb);
 		}
 
-
-	public:
-
-		void SendResultSetItem(unsigned int queryID, 
-			const TioData& key, const TioData& value, const TioData& metadata);
-
-		void SendBinaryErrorAnswer(int errorCode, const string& description);
+		void SendTextEvent(unsigned int handle, ContainerEvent eventId, const TioData& key, const TioData& value, const TioData& metadata);
 
 		void SendPendingBinaryData();
 
 		void OnBinaryMessageSent(const error_code& err, size_t sent);
+
+
+	public:
+		void SendTextResultSetItem(unsigned int queryID,
+			const TioData& key, const TioData& value, const TioData& metadata);
+
+		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction, unsigned maxRecords);
+
+		void SendBinaryErrorAnswer(int errorCode, const string& description);
+
 
 		void IncreasePendingSendSize(int size)
 		{
@@ -323,10 +327,10 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		unsigned int id();
 		bool UsesBinaryProtocol() const;
 
-		void SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
+		void SendTextResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID);
 
-		void SendResultSetStart(unsigned int queryID);
-		void SendResultSetEnd(unsigned int queryID);
+		void SendTextResultSetStart(unsigned int queryID);
+		void SendTextResultSetEnd(unsigned int queryID);
 
 		bool IsValid();
 
@@ -342,7 +346,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 		shared_ptr<ITioContainer> GetRegisteredContainer(unsigned int handle, string* containerName = NULL, string* containerType = NULL);
 		void CloseContainerHandle(unsigned int handle);
 
-		void SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
 
 		void Subscribe(unsigned int handle, const string& start)
 		{
@@ -351,10 +354,6 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			auto snapshot = container->Query(0, -1, nullptr);
 		}
 
-		void BinarySubscribe(unsigned int handle, const string& start, bool sendAnswer)
-		{
-
-		}
 		void Unsubscribe(unsigned int handle)
 		{
 
@@ -372,13 +371,20 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 			commandRunning_ = false;
 		}
 		void OnContainerEvent(ContainerEvent eventId, const TioData & k, const TioData & v, const TioData & m);
-		void SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName);
-		void SendBinaryResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID, function<bool(const TioData& key)> filterFunction, unsigned maxRecords);
+
+		void SendBinaryEvent(unsigned handle, ContainerEvent eventId,
+			const TioData& k, const TioData& v, const TioData& m);
+
 
 		bool commandRunning_;
 
 		void InvalidateConnection(const error_code& err);
 
 		void SendHttpResponseAndClose(int statusCode, const string& statusMessage, const string& mimeType, const map<string, string>* responseHeaders, const string& body);
+
+		bool PublishEvent(
+			unsigned handle,
+			ContainerEvent eventId,
+			const TioData& k, const TioData& v, const TioData& m);
 	};		
 }

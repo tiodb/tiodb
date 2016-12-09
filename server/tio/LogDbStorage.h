@@ -18,6 +18,8 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 
 #include "logdb.h"
 
+#if 0
+
 namespace tio {
 	namespace LogDbStorage
 	{
@@ -779,3 +781,4 @@ namespace tio {
 		};
 	}
 }
+#endif

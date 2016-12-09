@@ -55,8 +55,11 @@ namespace tio
 
 	typedef std::mutex				tio_fast_lock;
 	typedef std::recursive_mutex	tio_recursive_mutex;
+
+	using std::condition_variable;
 	
 	using std::lock_guard;
+	using std::unique_lock;
 
 	template<typename T1, typename T2>
 	class __PairAssignDetail__
@@ -690,6 +693,9 @@ namespace tio
 		EVENT_INSERT = TIO_COMMAND_INSERT,
 		EVENT_DELETE = TIO_COMMAND_DELETE,
 		EVENT_CLEAR = TIO_COMMAND_CLEAR,
+		EVENT_PUSH_BACK = TIO_COMMAND_PUSH_BACK,
+		EVENT_PUSH_FRONT = TIO_COMMAND_PUSH_FRONT,
+		EVENT_SNAPSHOT_END = TIO_EVENT_SNAPSHOT_END
 	};
 
 	// storage_id, event_id, key, value, metadata
@@ -729,9 +735,10 @@ namespace tio
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata) = 0;
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata) = 0;
 
-		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
-
 		virtual void Clear() = 0;
+
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
+		virtual uint64_t GetRevNum() = 0;
 
 		virtual string GetType() = 0;
 		virtual string GetName() = 0;
@@ -740,6 +747,8 @@ namespace tio
 
 		virtual void SetSubscriber(EventSink sink) = 0;
 		virtual void RemoveSubscriber() = 0;
+
+		
 
 		//virtual tio_spin_lock GetLock() = 0;
 
@@ -796,9 +805,10 @@ namespace tio
 		virtual void Set(const TioData& key, const TioData& value, const TioData& metadata = TIONULL) = 0;
 		virtual void Delete(const TioData& key, const TioData& value = TIONULL, const TioData& metadata = TIONULL) = 0;
 
-		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
-
 		virtual void Clear() = 0;
+
+		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query) = 0;
+		virtual uint64_t GetRevNum() = 0;
 
 		virtual void SetProperty(const string& key, const string& value) = 0;
  		virtual string GetProperty(const string& key) = 0;
@@ -806,6 +816,8 @@ namespace tio
 		virtual string GetType() = 0;
 
 		virtual uint64_t GetStorageId() = 0;
+
+		
 
 		//virtual tio_spin_lock GetLock() = 0;
 	};
@@ -849,6 +861,11 @@ namespace tio
 		virtual uint64_t GetStorageId()
 		{
 			return storage_->GetId();
+		}
+
+		virtual uint64_t GetRevNum()
+		{
+			return storage_->GetRevNum();
 		}
 		
 		virtual string GetName()

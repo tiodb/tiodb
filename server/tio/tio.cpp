@@ -30,6 +30,7 @@ Copyright 2010 Rodrigo Strauss (http://www.1bit.com.br)
 using namespace tio;
 
 using std::shared_ptr;
+using std::make_shared;
 using boost::scoped_array;
 using std::cout;
 using std::endl;
@@ -37,19 +38,18 @@ using std::queue;
 
 void LoadStorageTypes(ContainerManager* containerManager, const string& dataPath)
 {
-	shared_ptr<ITioStorageManager> mem = 
-		shared_ptr<ITioStorageManager>(new tio::MemoryStorage::MemoryStorageManager());
+	auto mem = make_shared<tio::MemoryStorage::MemoryStorageManager>();
 	
-	shared_ptr<ITioStorageManager> ldb = 
-		shared_ptr<ITioStorageManager>(new tio::LogDbStorage::LogDbStorageManager(dataPath));
+	//shared_ptr<ITioStorageManager> ldb = 
+	//	shared_ptr<ITioStorageManager>(new tio::LogDbStorage::LogDbStorageManager(dataPath));
 
 	containerManager->RegisterFundamentalStorageManagers(mem, mem);
 
 //	containerManager->RegisterStorageManager("bdb_map", bdb);
 //	containerManager->RegisterStorageManager("bdb_vector", bdb);
 
-	containerManager->RegisterStorageManager("persistent_list", ldb);
-	containerManager->RegisterStorageManager("persistent_map", ldb);
+	/*containerManager->RegisterStorageManager("persistent_list", ldb);
+	containerManager->RegisterStorageManager("persistent_map", ldb);*/
 }
 
 void SetupContainerManager(

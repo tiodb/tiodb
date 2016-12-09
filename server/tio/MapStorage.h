@@ -36,13 +36,17 @@ namespace tio {
 			string name_, type_;
 			EventSink sink_;
 
+			uint64_t revNum_;
+
 			typedef tio_fast_lock mutex_t;
 			typedef lock_guard<mutex_t> lock_guard_t;
 
 			mutex_t mutex_;
 
-			void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			void UpdateRevNumAndPublish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
 			{
+				++revNum_;
+
 				if (!sink_)
 					return;
 
@@ -74,8 +78,15 @@ namespace tio {
 
 			MapStorage(const string& name, const string& type) :
 				name_(name),
-				type_(type)
+				type_(type),
+				revNum_(0)
 			{}
+
+			virtual uint64_t GetRevNum()
+			{
+				lock_guard_t lock(mutex_);
+				return revNum_;
+			}
 
 			virtual uint64_t GetId()
 			{
@@ -170,7 +181,7 @@ namespace tio {
 
 					data_[key.AsSz()] = ValueAndMetadata(value, metadata);
 
-					Publish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
 				}
 			}
 
@@ -189,7 +200,7 @@ namespace tio {
 
 					data_[keyString] = ValueAndMetadata(value, metadata);
 
-					Publish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
 				}
 			}
 
@@ -210,7 +221,7 @@ namespace tio {
 
 					data_.erase(i);
 
-					Publish(EVENT_DELETE, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_DELETE, key, value, metadata);
 				}
 			}
 
@@ -220,7 +231,7 @@ namespace tio {
 					lock_guard_t lock(mutex_);
 					data_.clear();
 
-					Publish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
+					UpdateRevNumAndPublish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
 				}
 			}
 

@@ -104,15 +104,89 @@ namespace tio
 		metaContainers_.sessions->Delete(lexical_cast<string>(client->id()), TIONULL, TIONULL);
 	}
 
+	void TioTcpServer::PublisherThread()
+	{
+		for(;;)
+		{
+			EventInfo eventInfo;
+
+			{
+				unique_lock<mutex_t> lock(eventQueueMutex_);
+
+				while (eventQueue_.empty())
+					eventQueueConditionVar_.wait(lock);
+
+				eventInfo = eventQueue_.front();
+				eventQueue_.pop_front();
+			}
+
+			decltype(subscribers_)::mapped_type interestedSubscribers;
+
+			{
+				lock_guard_t lock_(subscribersMutex_);
+
+				auto i = subscribers_.find(eventInfo.storageId);
+
+				if (i == subscribers_.end())
+					continue;
+
+				interestedSubscribers = i->second;
+			}
+
+			for (auto& s : interestedSubscribers)
+			{
+				auto session = s.session.lock();
+
+				if (!session)
+					continue;
+
+				if (eventInfo.eventId == EVENT_SNAPSHOT_END)
+				{
+					auto resultSet = s.container->Query(0, -1, nullptr);
+
+
+					
+				}
+				else
+				{
+					session->PublishEvent(
+						s.handle,
+						eventInfo.eventId,
+						eventInfo.k,
+						eventInfo.v,
+						eventInfo.m);
+				}
+			}
+		}
+	}
+
 	void TioTcpServer::OnAnyContainerEvent(
 		uint64_t storageId,
 		ContainerEvent eventId,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
-		/*cout << std::this_thread::get_id() << " - EVENT - "
-			<< storageId << ", "
-			<< eventId
-			<< endl;*/
+		{
+			lock_guard_t lock(eventQueueMutex_);
+			eventQueue_.push_back({ storageId, eventId, k, v, m });
+		}
+
+		eventQueueConditionVar_.notify_one();
+	}
+
+	void TioTcpServer::SessionSubscribe(const SubscriptionInfo& subscriptionInfo)
+	{
+		lock_guard_t lockEvents(eventQueueMutex_);
+		lock_guard_t lockSubscribers(subscribersMutex_);
+
+		EventInfo ei;
+
+		auto storageId = subscriptionInfo.container->GetStorageId();
+
+		ei.eventId = EVENT_SNAPSHOT_END;
+		ei.storageId = storageId;
+
+		eventQueue_.push_back(ei);
+		subscribers_[storageId].push_back(subscriptionInfo);
 	}
 
 	TioTcpServer::~TioTcpServer()
@@ -828,7 +902,9 @@ namespace tio
 					if (Pr1MessageGetField(message, MESSAGE_FIELD_ID_KEY, &start_int))
 						start_string = lexical_cast<string>(start_int);
 
-				session->BinarySubscribe(handle, start_string, true);
+				auto container = GetContainerAndParametersFromRequest(message, session, nullptr, nullptr, nullptr);
+
+				SessionSubscribe(SubscriptionInfo(container, handle, session, start_string));
 			}
 			break;
 
@@ -1051,7 +1127,7 @@ namespace tio
 
 		unsigned queryId = CreateNewQueryId();
 
-		session->SendResultSetStart(queryId);
+		session->SendTextResultSetStart(queryId);
 
 		for (unsigned a = 0; a < maxRecords; )
 		{
@@ -1069,14 +1145,14 @@ namespace tio
 
 			if (regex_match(key.AsSz(), e))
 			{
-				session->SendResultSetItem(queryId, key, value, metadata);
+				session->SendTextResultSetItem(queryId, key, value, metadata);
 				a++;
 			}
 
 			if (!b) break;
 		}
 
-		session->SendResultSetEnd(queryId);
+		session->SendTextResultSetEnd(queryId);
 
 		return;
 
@@ -1123,7 +1199,7 @@ namespace tio
 
 		try
 		{
-			SendResultSet(session, container->Query(start, end, query));
+			session->SendTextResultSet(container->Query(start, end, query), CreateNewQueryId());
 		}
 		catch (std::exception& ex)
 		{
@@ -1194,13 +1270,6 @@ namespace tio
 			MakeAnswer(error, answer, ex.what());
 		}
 
-	}
-
-
-
-	void TioTcpServer::SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet)
-	{
-		session->SendResultSet(resultSet, CreateNewQueryId());
 	}
 
 
@@ -1328,7 +1397,7 @@ namespace tio
 		{
 			string containerName, containerType;
 
-			session->GetRegisteredContainer(handle, &containerName, &containerType);
+			auto container = session->GetRegisteredContainer(handle, &containerName, &containerType);
 
 			if (!CheckObjectAccess(containerType, containerName, cmd.GetCommand(), answer, session))
 				return;
@@ -1350,7 +1419,9 @@ namespace tio
 
 			if (cmd.GetCommand() == "subscribe")
 			{
-				session->Subscribe(handle, start);
+				SessionSubscribe(SubscriptionInfo(container, handle, session, start));
+
+				MakeAnswer(success, answer);
 			}
 			else if (cmd.GetCommand() == "unsubscribe")
 			{
@@ -1999,6 +2070,13 @@ namespace tio
 
 	void TioTcpServer::Start()
 	{
+		publisherThread_ = make_shared<thread>(
+			[this]()
+			{
+				this->PublisherThread();
+			}
+		);
+
 		DoAccept();
 	}
 

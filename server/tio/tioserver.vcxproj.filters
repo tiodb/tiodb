@@ -3,33 +3,29 @@
   <ItemGroup>
     <ClCompile Include="..\..\client\c\tioclient.c" />
     <ClCompile Include="Command.cpp" />
-    <ClCompile Include="ContainerManager.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="tio.cpp" />
     <ClCompile Include="TioPython.cpp" />
-    <ClCompile Include="TioTcpServer.cpp" />
-    <ClCompile Include="TioTcpSession.cpp" />
     <ClCompile Include="..\..\submodules\http-parser\http_parser.c">
       <Filter>protocols\http</Filter>
+    </ClCompile>
+    <ClCompile Include="ContainerManager.cpp">
+      <Filter>Storage</Filter>
+    </ClCompile>
+    <ClCompile Include="TioTcpServer.cpp">
+      <Filter>protocols</Filter>
+    </ClCompile>
+    <ClCompile Include="TioTcpSession.cpp">
+      <Filter>protocols</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auth.h" />
     <ClInclude Include="buffer.h" />
     <ClInclude Include="Command.h" />
-    <ClInclude Include="Container.h" />
-    <ClInclude Include="ContainerManager.h" />
-    <ClInclude Include="logdb.h" />
-    <ClInclude Include="MemoryPropertyMap.h" />
-    <ClInclude Include="MemoryStorage.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="TioPython.h" />
-    <ClInclude Include="TioTcpClient.h" />
-    <ClInclude Include="TioTcpProtocol.h" />
-    <ClInclude Include="TioTcpServer.h" />
-    <ClInclude Include="TioTcpSession.h" />
-    <ClInclude Include="VectorStorage.h" />
     <ClInclude Include="HttpParser.h">
       <Filter>protocols\http</Filter>
     </ClInclude>
@@ -48,6 +44,36 @@
     <ClInclude Include="MapStorage.h">
       <Filter>Storage</Filter>
     </ClInclude>
+    <ClInclude Include="Container.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="ContainerManager.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="TioTcpClient.h">
+      <Filter>protocols</Filter>
+    </ClInclude>
+    <ClInclude Include="TioTcpProtocol.h">
+      <Filter>protocols</Filter>
+    </ClInclude>
+    <ClInclude Include="TioTcpServer.h">
+      <Filter>protocols</Filter>
+    </ClInclude>
+    <ClInclude Include="TioTcpSession.h">
+      <Filter>protocols</Filter>
+    </ClInclude>
+    <ClInclude Include="VectorStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="logdb.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPropertyMap.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryStorage.h">
+      <Filter>Storage</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="tioserver.rc" />
@@ -64,6 +90,9 @@
     </Filter>
     <Filter Include="Storage">
       <UniqueIdentifier>{24d65237-d5c3-4884-a20e-d2321b1a6c08}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tcp">
+      <UniqueIdentifier>{ec8ad7d0-d20b-4e4c-a304-65ffcc8da64d}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

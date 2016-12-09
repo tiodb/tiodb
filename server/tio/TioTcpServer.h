@@ -30,6 +30,7 @@ namespace tio
 {
 	
 	using std::shared_ptr;
+	using std::make_shared;
 	using boost::system::error_code;
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
@@ -39,19 +40,20 @@ namespace tio
 	using std::map;
 	using std::deque;
 	using std::atomic;
+	using std::thread;
 	
 	std::string Serialize(const std::list<const TioData*>& fields);
 
 	class GroupManager : boost::noncopyable
 	{
-		struct SubscriberInfo
+		struct GroupSubscriberInfo
 		{
 			weak_ptr<TioTcpSession> session;
 			string start;
 
-			SubscriberInfo(){}
+			GroupSubscriberInfo(){}
 
-			SubscriberInfo(shared_ptr<TioTcpSession> session, string start)
+			GroupSubscriberInfo(shared_ptr<TioTcpSession> session, string start)
 				: session(session)
 				, start(start)
 			{
@@ -67,7 +69,7 @@ namespace tio
 			ContainersMap containers_;
 			bool valid_; // we're using member functions as callback
 
-			map<unsigned, SubscriberInfo> subscribers_;
+			map<unsigned, GroupSubscriberInfo> subscribers_;
 
 			void SendNewContainerToSubscriber(const shared_ptr<ITioContainer> container, const shared_ptr<TioTcpSession>& session, const string& start)
 			{
@@ -91,7 +93,7 @@ namespace tio
 
 					session->SendBinaryMessage(answer);
 
-					session->BinarySubscribe(handle, start, false);
+					//session->BinarySubscribe(handle, start, false);
 				}
 				else
 				{
@@ -145,7 +147,7 @@ namespace tio
 
 				for(auto& p: subscribers_)
 				{
-					SubscriberInfo& subscriberInfo = p.second;
+					GroupSubscriberInfo& subscriberInfo = p.second;
 					auto session = subscriberInfo.session.lock();
 					
 					if(!session || ! session->IsValid())
@@ -176,7 +178,7 @@ namespace tio
 					SendNewContainerToSubscriber(i->second, session, start);
 				}
 
-				subscribers_[session->id()] = SubscriberInfo(session, start);
+				subscribers_[session->id()] = GroupSubscriberInfo(session, start);
 			}
 		};
 
@@ -435,6 +437,46 @@ namespace tio
 
 	private:
 
+		struct SubscriptionInfo
+		{
+			unsigned handle;
+			string start;
+
+			weak_ptr<TioTcpSession> session;
+			shared_ptr<ITioContainer> container;
+			uint64_t lastRevNum;
+
+			SubscriptionInfo() {}
+
+			SubscriptionInfo(const shared_ptr<ITioContainer>& container, unsigned handle, const shared_ptr<TioTcpSession>& session, const string& start)
+				: container(container)
+				, handle(handle)
+				, session(session)
+				, start(start)
+				, lastRevNum(0)
+			{}
+		};
+
+		struct EventInfo
+		{
+			uint64_t storageId;
+			ContainerEvent eventId;
+			TioData k;
+			TioData v;
+			TioData m;
+		};
+
+		typedef tio_fast_lock mutex_t;
+		typedef lock_guard<mutex_t> lock_guard_t;
+
+		map<uint64_t, vector<SubscriptionInfo>> subscribers_;
+		mutex_t subscribersMutex_;
+
+		shared_ptr<thread> publisherThread_;
+		deque<EventInfo> eventQueue_;
+		mutex_t eventQueueMutex_;
+		condition_variable eventQueueConditionVar_;
+
 		struct MetaContainers
 		{
 			shared_ptr<ITioContainer> users;
@@ -469,6 +511,9 @@ namespace tio
 
 		GroupManager groupManager_;
 
+		void PublisherThread();
+		void SessionSubscribe(const SubscriptionInfo& subscriptionInfo);
+
 		unsigned int GenerateSessionId();
 				
 		void DoAccept();
@@ -480,8 +525,6 @@ namespace tio
 			TioData* key, TioData* value, TioData* metadata, shared_ptr<TioTcpSession> session, unsigned int* handle = NULL);
 
 		void LoadDispatchMap();
-
-		void SendResultSet(shared_ptr<TioTcpSession> session, shared_ptr<ITioResultSet> resultSet);
 
 		void OnCommand_Query(Command& cmd, ostream& answer, size_t* moreDataSize, shared_ptr<TioTcpSession> session);
 

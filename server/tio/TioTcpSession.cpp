@@ -48,6 +48,44 @@ namespace tio
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 
+	int EventNameToEventCode(const string& eventName)
+	{
+		if (eventName == "push_back")
+			return TIO_COMMAND_PUSH_BACK;
+		else if (eventName == "push_front")
+			return TIO_COMMAND_PUSH_FRONT;
+		else if (eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
+			return TIO_COMMAND_DELETE;
+		else if (eventName == "clear")
+			return TIO_COMMAND_CLEAR;
+		else if (eventName == "set")
+			return TIO_COMMAND_SET;
+		else if (eventName == "insert")
+			return TIO_COMMAND_INSERT;
+		else if (eventName == "snapshot_end")
+			return TIO_EVENT_SNAPSHOT_END;
+
+		return 0;
+	}
+
+	string EventCodeToEventName(ContainerEvent eventId)
+	{
+		switch (eventId)
+		{
+		case TIO_COMMAND_PUSH_BACK: return "push_back";
+		case TIO_COMMAND_PUSH_FRONT: return "push_front";
+		case TIO_COMMAND_SET: return "set";
+		case TIO_COMMAND_DELETE: return "delete";
+		case TIO_COMMAND_INSERT: return "insert";
+		case TIO_COMMAND_CLEAR: return "clear";
+		case TIO_EVENT_SNAPSHOT_END: return "snapshot_end";
+		default:
+			BOOST_ASSERT(false && "**INVALID EVENT**");
+			return "INVALID_EVENT";
+		}
+		return 0;
+	}
+
 	//
 	// I've found those numbers testing with a group containing 50k containers
 	//
@@ -60,7 +98,7 @@ namespace tio
 #endif
 
 	std::ostream& TioTcpSession::logstream_ = std::cout;
-	
+
 	TioTcpSession::TioTcpSession(asio::io_service& io_service, TioTcpServer& server, unsigned int id) :
 		io_service_(io_service),
 		strand_(io_service),
@@ -68,7 +106,7 @@ namespace tio
 		server_(server),
 		lastHandle_(0),
 		valid_(true),
-        pendingSendSize_(0),
+		pendingSendSize_(0),
 		maxPendingSendingSize_(0),
 		sentBytes_(0),
 		id_(id),
@@ -76,7 +114,7 @@ namespace tio
 	{
 		return;
 	}
-	
+
 	TioTcpSession::~TioTcpSession()
 	{
 		BOOST_ASSERT(handles_.empty());
@@ -113,7 +151,7 @@ namespace tio
 
 	void TioTcpSession::OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err)
 	{
-		if(CheckError(err))
+		if (CheckError(err))
 			return;
 
 		void* buffer;
@@ -122,13 +160,13 @@ namespace tio
 		message = pr1_message_new_get_buffer_for_receive(header.get(), &buffer);
 
 		asio::async_read(
-					socket_, 
-					asio::buffer(buffer, header->message_size),
-					wrap_callback(
-					[shared_this = shared_from_this(), message](const error_code& err, size_t read)
-					{
-						shared_this->OnBinaryProtocolMessage(message, err);
-					}));
+			socket_,
+			asio::buffer(buffer, header->message_size),
+			wrap_callback(
+				[shared_this = shared_from_this(), message](const error_code& err, size_t read)
+		{
+			shared_this->OnBinaryProtocolMessage(message, err);
+		}));
 	}
 
 	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
@@ -156,10 +194,10 @@ namespace tio
 		{
 			asio::async_read(socket_, buf_,
 				wrap_callback(
-				[shared_this = shared_from_this(), httpParser](const error_code& err, size_t read)
-				{
-					shared_this->OnReadHttpCommand(httpParser, err, read);
-				}));
+					[shared_this = shared_from_this(), httpParser](const error_code& err, size_t read)
+			{
+				shared_this->OnReadHttpCommand(httpParser, err, read);
+			}));
 		}
 	}
 
@@ -200,13 +238,13 @@ namespace tio
 		auto shared_this = shared_from_this();
 
 		asio::async_read(
-					socket_, 
-					asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
-					wrap_callback(
-					[shared_this, header](const error_code& err, size_t read)
-					{
-						shared_this->OnBinaryProtocolMessageHeader(header, err);
-					}));
+			socket_,
+			asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
+			wrap_callback(
+				[shared_this, header](const error_code& err, size_t read)
+		{
+			shared_this->OnBinaryProtocolMessageHeader(header, err);
+		}));
 	}
 
 	void TioTcpSession::ReadCommand()
@@ -217,12 +255,12 @@ namespace tio
 
 		auto shared_this = shared_from_this();
 
-		asio::async_read_until(socket_, buf_, '\n', 
+		asio::async_read_until(socket_, buf_, '\n',
 			wrap_callback(
-			[shared_this](const error_code& err, size_t read)
-			{
-				shared_this->OnReadCommand(err, read);
-			}));
+				[shared_this](const error_code& err, size_t read)
+		{
+			shared_this->OnReadCommand(err, read);
+		}));
 	}
 
 	void TioTcpSession::SendHttpResponseAndClose(
@@ -238,7 +276,7 @@ namespace tio
 		//
 		// TODO: send headers from responseHeaders parameter
 		//
-		httpAnswer->append("HTTP/1.1 " + to_string(statusCode) + " " + statusMessage +  "\r\n");
+		httpAnswer->append("HTTP/1.1 " + to_string(statusCode) + " " + statusMessage + "\r\n");
 		httpAnswer->append("Server: tiodb\r\n");
 		httpAnswer->append("Content-Type: " + mimeType + "\r\n");
 		httpAnswer->append("Connection: close\r\n");
@@ -250,16 +288,16 @@ namespace tio
 			socket_,
 			asio::buffer(*httpAnswer),
 			wrap_callback(
-			[shared_this = shared_from_this(), httpAnswer](const error_code& err, size_t sent)
-			{
-				shared_this->InvalidateConnection(err);
-			}
+				[shared_this = shared_from_this(), httpAnswer](const error_code& err, size_t sent)
+		{
+			shared_this->InvalidateConnection(err);
+		}
 		));
 	}
 
 	void TioTcpSession::OnReadCommand(const error_code& err, size_t read)
 	{
-		if(CheckError(err))
+		if (CheckError(err))
 			return;
 
 		lock_guard_t lock(bigLock_);
@@ -268,14 +306,14 @@ namespace tio
 		stringstream answer;
 		bool moreDataToRead = false;
 		size_t moreDataSize = 0;
-		istream stream (&buf_);
+		istream stream(&buf_);
 
 		getline(stream, str);
 
 		//
 		// can happen if client send binary data
 		//
-		if(str.empty())
+		if (str.empty())
 		{
 			ReadCommand();
 			return;
@@ -284,21 +322,21 @@ namespace tio
 		//
 		// delete last \r if any
 		//
-		if(*(str.end() - 1) == '\r')
+		if (*(str.end() - 1) == '\r')
 			str.erase(str.end() - 1);
 
 		BOOST_ASSERT(currentCommand_.GetCommand().empty());
-		
+
 		currentCommand_.Parse(str.c_str());
 
 		//
 		// Check for protocol change. 
 		//
-		if(currentCommand_.GetCommand() == "protocol")
+		if (currentCommand_.GetCommand() == "protocol")
 		{
 			const Command::Parameters& parameters = currentCommand_.GetParameters();
 
-			if(parameters.size() == 1 && parameters[0] == "binary")
+			if (parameters.size() == 1 && parameters[0] == "binary")
 			{
 				SendAnswer("going binary");
 				binaryProtocol_ = true;
@@ -310,7 +348,7 @@ namespace tio
 		{
 			auto httpParser = make_shared<HttpParser>();
 			httpParser->FeedBytes(str.c_str(), str.size());
-			
+
 			// we removed line ending before, will need to insert it back
 			httpParser->FeedBytes("\r\n", 2);
 			ReadHttpCommand(httpParser);
@@ -322,20 +360,20 @@ namespace tio
 #endif
 
 		server_.OnTextCommand(currentCommand_, answer, &moreDataSize, shared_from_this());
-		
-		if(moreDataSize)
+
+		if (moreDataSize)
 		{
 			BOOST_ASSERT(moreDataSize < 256 * 1024 * 1024);
 
-			if(buf_.size() >= moreDataSize)
+			if (buf_.size() >= moreDataSize)
 			{
 				auto shared_this = shared_from_this();
 
 				io_service_.post(
 					[shared_this, moreDataSize]()
-					{
-						shared_this->OnCommandData(moreDataSize, boost::system::error_code(), moreDataSize);
-					});
+				{
+					shared_this->OnCommandData(moreDataSize, boost::system::error_code(), moreDataSize);
+				});
 			}
 			else
 			{
@@ -344,39 +382,39 @@ namespace tio
 				asio::async_read(
 					socket_, buf_, asio::transfer_at_least(moreDataSize - buf_.size()),
 					wrap_callback(
-					[shared_this, moreDataSize](const error_code& err, size_t read)
-					{
-						shared_this->OnCommandData(moreDataSize, err, read);
-					}));
+						[shared_this, moreDataSize](const error_code& err, size_t read)
+				{
+					shared_this->OnCommandData(moreDataSize, err, read);
+				}));
 			}
 
 			moreDataToRead = true;
 		}
-	
-		if(!answer.str().empty())
+
+		if (!answer.str().empty())
 		{
-			#ifdef _TIO_DEBUG
+#ifdef _TIO_DEBUG
 			string xx;
 			getline(answer, xx);
 			answer.seekp(0);
 			cout << ">> " << xx << endl;
-			#endif
+#endif
 
 			SendAnswer(answer);
 		}
 
-		if(!moreDataToRead)
+		if (!moreDataToRead)
 			ReadCommand();
-		
+
 	}
 
 	void TioTcpSession::OnCommandData(size_t dataSize, const error_code& err, size_t read)
 	{
-		if(CheckError(err))
+		if (CheckError(err))
 			return;
 
 		lock_guard_t lock(bigLock_);
-		
+
 		BOOST_ASSERT(buf_.size() >= dataSize);
 
 		stringstream answer;
@@ -396,11 +434,11 @@ namespace tio
 
 		SendAnswer(answer);
 
-		#ifdef _TIO_DEBUG
+#ifdef _TIO_DEBUG
 		string xx;
 		getline(answer, xx);
 		cout << ">> " << xx << endl;
-		#endif
+#endif
 
 		ReadCommand();
 	}
@@ -421,7 +459,7 @@ namespace tio
 
 	string TioDataToString(const TioData& data)
 	{
-		if(!data)
+		if (!data)
 			return string();
 
 		stringstream stream;
@@ -431,48 +469,48 @@ namespace tio
 		return stream.str();
 	}
 
-	void TioTcpSession::SendTextEvent(unsigned int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName )
+	void TioTcpSession::SendTextEvent(unsigned int handle, ContainerEvent eventId, const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		stringstream answer;
 
 		string keyString, valueString, metadataString;
 
-		if(key)
+		if (key)
 			keyString = TioDataToString(key);
 
-		if(value)
+		if (value)
 			valueString = TioDataToString(value);
 
-		if(metadata)
+		if (metadata)
 			metadataString = TioDataToString(metadata);
 
-		answer << "event " << handle << " " << eventName;
+		answer << "event " << handle << " " << EventCodeToEventName(eventId);
 
-		if(!keyString.empty())
+		if (!keyString.empty())
 			answer << " key " << GetDataTypeAsString(key) << " " << keyString.length();
 
-		if(!valueString.empty())
+		if (!valueString.empty())
 			answer << " value " << GetDataTypeAsString(value) << " " << valueString.length();
 
-		if(!metadataString.empty())
+		if (!metadataString.empty())
 			answer << " metadata " << GetDataTypeAsString(metadata) << " " << metadataString.length();
 
 		answer << "\r\n";
 
-		if(!keyString.empty())
+		if (!keyString.empty())
 			answer << keyString << "\r\n";
 
-		if(!valueString.empty())
+		if (!valueString.empty())
 			answer << valueString << "\r\n";
 
-		if(!metadataString.empty())
+		if (!metadataString.empty())
 			answer << metadataString << "\r\n";
 
 		SendString(answer.str());
 	}
 
 
-	void TioTcpSession::SendResultSetStart(unsigned int queryID)
+	void TioTcpSession::SendTextResultSetStart(unsigned int queryID)
 	{
 		stringstream answer;
 		answer << "answer ok query " << queryID << "\r\n";
@@ -480,16 +518,16 @@ namespace tio
 		SendAnswer(answer);
 	}
 
-	void TioTcpSession::SendResultSetEnd(unsigned int queryID)
+	void TioTcpSession::SendTextResultSetEnd(unsigned int queryID)
 	{
 		stringstream answer;
 		answer << "query " << queryID << " end\r\n";
 		SendAnswer(answer);
 	}
 
-	void TioTcpSession::SendResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
+	void TioTcpSession::SendTextResultSet(shared_ptr<ITioResultSet> resultSet, unsigned int queryID)
 	{
-		SendResultSetStart(queryID);
+		SendTextResultSetStart(queryID);
 
 		for(;;)
 		{
@@ -499,11 +537,11 @@ namespace tio
 
 			if(!b)
 			{
-				SendResultSetEnd(queryID);
+				SendTextResultSetEnd(queryID);
 				break;
 			}
 
-			SendResultSetItem(queryID, key, value, metadata);
+			SendTextResultSetItem(queryID, key, value, metadata);
 
 			resultSet->MoveNext();
 		}
@@ -556,7 +594,7 @@ namespace tio
 	}
 
 
-	void TioTcpSession::SendResultSetItem(unsigned int queryID, 
+	void TioTcpSession::SendTextResultSetItem(unsigned int queryID, 
 		const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		stringstream answer;
@@ -792,64 +830,32 @@ namespace tio
 		tokens_.push_back(token);
 	}
 
-	int EventNameToEventCode(const string& eventName)
-	{
-		if(eventName == "push_back")
-			return TIO_COMMAND_PUSH_BACK;
-		else if(eventName == "push_front")
-			return TIO_COMMAND_PUSH_FRONT;
-		else if(eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
-			return TIO_COMMAND_DELETE;
-		else if(eventName == "clear")
-			return TIO_COMMAND_CLEAR;
-		else if(eventName == "set")
-			return TIO_COMMAND_SET;
-		else if(eventName == "insert")
-			return TIO_COMMAND_INSERT;
-		else if(eventName == "snapshot_end")
-			return TIO_EVENT_SNAPSHOT_END;
-
-		return 0;
-	}
-
-	int EventCodeToEventName(const string& eventName)
-	{
-		if(eventName == "push_back")
-			return TIO_COMMAND_PUSH_BACK;
-		else if(eventName == "push_front")
-			return TIO_COMMAND_PUSH_FRONT;
-		else if(eventName == "pop_back" || eventName == "pop_front" || eventName == "delete")
-			return TIO_COMMAND_DELETE;
-		else if(eventName == "clear")
-			return TIO_COMMAND_CLEAR;
-		else if(eventName == "set")
-			return TIO_COMMAND_SET;
-		else if(eventName == "insert")
-			return TIO_COMMAND_INSERT;
-		else if(eventName == "snapshot_end")
-			return TIO_EVENT_SNAPSHOT_END;
-
-		return 0;
-	}
-
-	void TioTcpSession::OnContainerEvent(
+	bool TioTcpSession::PublishEvent(
+		unsigned handle,
 		ContainerEvent eventId,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
-		
+		if (binaryProtocol_)
+			SendBinaryEvent(handle, eventId, k, v, m);
+		else
+			SendTextEvent(handle, eventId, k, v, m);
+
+		return true;
 	}
 
-	void TioTcpSession::SendBinaryEvent(int handle, const TioData& key, const TioData& value, const TioData& metadata, const string& eventName)
+	void TioTcpSession::SendBinaryEvent(unsigned handle,
+		ContainerEvent eventId,
+		const TioData& k, const TioData& v, const TioData& m)
 	{
 		shared_ptr<PR1_MESSAGE> message = Pr1CreateMessage();
 
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_EVENT);
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_HANDLE, handle);
-		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT, EventNameToEventCode(eventName));
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT, eventId);
 
-		if(key) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, key);
-		if(value) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, value);
-		if(metadata) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_METADATA, metadata);
+		if(k) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, k);
+		if(v) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, v);
+		if(m) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_METADATA, m);
 
 		SendBinaryMessage(message);
 	}
