@@ -44,14 +44,14 @@ namespace tio {
 
 			mutex_t mutex_;
 
-			void UpdateRevNumAndPublish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			void UpdateRevNumAndPublish(ContainerEventCode eventCode, const TioData& k, const TioData& v, const TioData& m)
 			{
 				++revNum_;
 
 				if (!sink_)
 					return;
 
-				sink_(GetId(), eventId, k, v, m);
+				sink_(GetId(), eventCode, k, v, m);
 			}
 
 		public:
@@ -105,7 +105,7 @@ namespace tio {
 					data_.push_back(ValueAndMetadata(value, metadata));
 					
 					publishKey = static_cast<int>(data_.size() - 1);
-					UpdateRevNumAndPublish(EVENT_PUSH_BACK, publishKey, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_PUSH_BACK, publishKey, value, metadata);
 				}
 			}
 
@@ -118,7 +118,7 @@ namespace tio {
 
 					data_.push_front(ValueAndMetadata(value, metadata));
 
-					UpdateRevNumAndPublish(EVENT_PUSH_FRONT, 0, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_PUSH_FRONT, 0, value, metadata);
 				}
 			}
 
@@ -137,7 +137,7 @@ namespace tio {
 					data_.pop_back();
 					index = static_cast<int>(data_.size());
 
-					UpdateRevNumAndPublish(EVENT_DELETE,
+					UpdateRevNumAndPublish(EVENT_CODE_DELETE,
 						index,
 						value ? *value : TIONULL,
 						metadata ? *metadata : TIONULL);
@@ -167,7 +167,7 @@ namespace tio {
 					data = data_.front();
 					data_.pop_front();
 
-					UpdateRevNumAndPublish(EVENT_DELETE,
+					UpdateRevNumAndPublish(EVENT_CODE_DELETE,
 						index,
 						value ? *value : TIONULL,
 						metadata ? *metadata : TIONULL);
@@ -232,7 +232,7 @@ namespace tio {
 				{
 					lock_guard_t lock(mutex_);
 					valueAndMetadata = *GetOffset(key);
-					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_SET, key, value, metadata);
 				}
 
 				if (value)
@@ -258,7 +258,7 @@ namespace tio {
 					else
 						data_.insert(GetOffset(key), valueAndMetadata);
 
-					UpdateRevNumAndPublish(EVENT_INSERT, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_INSERT, key, value, metadata);
 				}
 			}
 
@@ -279,7 +279,7 @@ namespace tio {
 
 					data_.erase(i);
 
-					UpdateRevNumAndPublish(EVENT_DELETE, realKey, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_DELETE, realKey, value, metadata);
 				}
 			}
 
@@ -289,7 +289,7 @@ namespace tio {
 
 				data_.clear();
 
-				UpdateRevNumAndPublish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
+				UpdateRevNumAndPublish(EVENT_CODE_CLEAR, TIONULL, TIONULL, TIONULL);
 			}
 
 			virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)
@@ -306,14 +306,14 @@ namespace tio {
 					// if client is asking for a negative index that's bigger than the container,
 					// will start from beginning. Ex: if container size is 3 and start = -5, will start from 0
 					//
-					if (GetRecordCount() == 0)
+					if (data_.size() == 0)
 					{
 						begin = end = data_.end();
 						startOffset = 0;
 					}
 					else
 					{
-						int recordCount = GetRecordCount();
+						int recordCount = data_.size();
 
 						NormalizeQueryLimits(&startOffset, &endOffset, recordCount);
 

@@ -440,6 +440,7 @@ namespace tio
 		struct SubscriptionInfo
 		{
 			unsigned handle;
+			bool snapshotPending;
 			string start;
 
 			weak_ptr<TioTcpSession> session;
@@ -454,13 +455,14 @@ namespace tio
 				, session(session)
 				, start(start)
 				, lastRevNum(0)
+				, snapshotPending(true)
 			{}
 		};
 
 		struct EventInfo
 		{
 			uint64_t storageId;
-			ContainerEvent eventId;
+			ContainerEventCode eventCode;
 			TioData k;
 			TioData v;
 			TioData m;
@@ -469,7 +471,14 @@ namespace tio
 		typedef tio_fast_lock mutex_t;
 		typedef lock_guard<mutex_t> lock_guard_t;
 
-		map<uint64_t, vector<SubscriptionInfo>> subscribers_;
+		//
+		// we use a shared_ptr so we can use the SubscriptionInfo
+		// without locking the entire container. The vector memory can
+		// be moved on a resize. If we have a shared_ptr reference
+		// we are safe even if the vector memory was moved or if
+		// the struct was removed from the container
+		//
+		map<uint64_t, vector<shared_ptr<SubscriptionInfo>>> subscribers_;
 		mutex_t subscribersMutex_;
 
 		shared_ptr<thread> publisherThread_;
@@ -512,7 +521,7 @@ namespace tio
 		GroupManager groupManager_;
 
 		void PublisherThread();
-		void SessionSubscribe(const SubscriptionInfo& subscriptionInfo);
+		void SessionSubscribe(const shared_ptr<SubscriptionInfo>& subscriptionInfo);
 
 		unsigned int GenerateSessionId();
 				
@@ -575,7 +584,7 @@ namespace tio
 
 		void OnAnyContainerEvent(
 			uint64_t storageId,
-			ContainerEvent eventId,
+			ContainerEventCode eventCode,
 			const TioData& k, const TioData& v, const TioData& m);
 
 	public:

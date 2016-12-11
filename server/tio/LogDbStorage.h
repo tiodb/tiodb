@@ -106,12 +106,12 @@ namespace tio {
 
 			EventSink sink_;
 
-			void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			void Publish(ContainerEvent eventCode, const TioData& k, const TioData& v, const TioData& m)
 			{
 				if (!sink_)
 					return;
 
-				sink_(GetId(), eventId, k, v, m);
+				sink_(GetId(), eventCode, k, v, m);
 			}
 
 		public:

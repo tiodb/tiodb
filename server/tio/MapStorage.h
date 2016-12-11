@@ -43,14 +43,14 @@ namespace tio {
 
 			mutex_t mutex_;
 
-			void UpdateRevNumAndPublish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			void UpdateRevNumAndPublish(ContainerEventCode eventCode, const TioData& k, const TioData& v, const TioData& m)
 			{
 				++revNum_;
 
 				if (!sink_)
 					return;
 
-				sink_(GetId(), eventId, k, v, m);
+				sink_(GetId(), eventCode, k, v, m);
 			}
 
 			inline pair<const string, ValueAndMetadata> GetInternalRecord(const TioData& key)
@@ -181,7 +181,7 @@ namespace tio {
 
 					data_[key.AsSz()] = ValueAndMetadata(value, metadata);
 
-					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_SET, key, value, metadata);
 				}
 			}
 
@@ -200,7 +200,7 @@ namespace tio {
 
 					data_[keyString] = ValueAndMetadata(value, metadata);
 
-					UpdateRevNumAndPublish(EVENT_SET, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_SET, key, value, metadata);
 				}
 			}
 
@@ -221,7 +221,7 @@ namespace tio {
 
 					data_.erase(i);
 
-					UpdateRevNumAndPublish(EVENT_DELETE, key, value, metadata);
+					UpdateRevNumAndPublish(EVENT_CODE_DELETE, key, value, metadata);
 				}
 			}
 
@@ -231,7 +231,7 @@ namespace tio {
 					lock_guard_t lock(mutex_);
 					data_.clear();
 
-					UpdateRevNumAndPublish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
+					UpdateRevNumAndPublish(EVENT_CODE_CLEAR, TIONULL, TIONULL, TIONULL);
 				}
 			}
 

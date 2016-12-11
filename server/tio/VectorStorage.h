@@ -35,12 +35,12 @@ namespace tio {
 
 		uint64_t revNum_;
 
-		void Publish(ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+		void Publish(ContainerEventCode eventCode, const TioData& k, const TioData& v, const TioData& m)
 		{
 			if (!sink_)
 				return;
 
-			sink_(GetId(), eventId, k, v, m);
+			sink_(GetId(), eventCode, k, v, m);
 		}
 
 		inline ValueAndMetadata& GetInternalRecord(const TioData& key)
@@ -128,7 +128,7 @@ namespace tio {
 
 			  data_.push_back(ValueAndMetadata(value, metadata));
 
-			  Publish(EVENT_INSERT, static_cast<int>(data_.size() - 1), value, metadata);
+			  Publish(EVENT_CODE_INSERT, static_cast<int>(data_.size() - 1), value, metadata);
 		  }
 
 		  virtual void PushFront(const TioData& key, const TioData& value, const TioData& metadata)
@@ -136,7 +136,7 @@ namespace tio {
 			  CheckValue(value);
 			  data_.insert(data_.begin(), ValueAndMetadata(value, metadata));
 
-			  Publish(EVENT_INSERT, 0, value, metadata);
+			  Publish(EVENT_CODE_INSERT, 0, value, metadata);
 		  }
 
 	private:
@@ -164,7 +164,7 @@ namespace tio {
 
 			_Pop(data_.end() - 1, value, metadata);
 
-			Publish(EVENT_DELETE,
+			Publish(EVENT_CODE_DELETE,
 				key ? *key : TIONULL, 
 				value ? *value : TIONULL,
 				metadata ? *metadata : TIONULL);
@@ -177,7 +177,7 @@ namespace tio {
 
 			_Pop(data_.begin(), value, metadata);
 
-			Publish(EVENT_DELETE,
+			Publish(EVENT_CODE_DELETE,
 				0, 
 				value ? *value : TIONULL,
 				metadata ? *metadata : TIONULL);
@@ -198,7 +198,7 @@ namespace tio {
 
 			data = ValueAndMetadata(value, metadata);
 
-			Publish(EVENT_SET, key, value, metadata);
+			Publish(EVENT_CODE_SET, key, value, metadata);
 		}
 
 		virtual void Insert(const TioData& key, const TioData& value, const TioData& metadata)
@@ -212,7 +212,7 @@ namespace tio {
 
 			data_.insert(data_.begin() + recordNumber, ValueAndMetadata(value, metadata));
 
-			Publish(EVENT_INSERT, key, value, metadata);
+			Publish(EVENT_CODE_INSERT, key, value, metadata);
 		}
 
 		virtual void Delete(const TioData& key, const TioData& value, const TioData& metadata)
@@ -224,14 +224,14 @@ namespace tio {
 
 			data_.erase(data_.begin() + recordNumber);
 
-			Publish(EVENT_DELETE, key, value, metadata);
+			Publish(EVENT_CODE_DELETE, key, value, metadata);
 		}
 
 		virtual void Clear()
 		{
 			data_.clear();
 
-			Publish(EVENT_CLEAR, TIONULL, TIONULL, TIONULL);
+			Publish(EVENT_CODE_CLEAR, TIONULL, TIONULL, TIONULL);
 		}
 
 		virtual shared_ptr<ITioResultSet> Query(int startOffset, int endOffset, const TioData& query)

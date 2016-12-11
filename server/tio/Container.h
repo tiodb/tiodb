@@ -687,19 +687,19 @@ namespace tio
 			*start = *end;
 	}
 
-	enum ContainerEvent
+	enum ContainerEventCode
 	{
-		EVENT_SET = TIO_COMMAND_SET,
-		EVENT_INSERT = TIO_COMMAND_INSERT,
-		EVENT_DELETE = TIO_COMMAND_DELETE,
-		EVENT_CLEAR = TIO_COMMAND_CLEAR,
-		EVENT_PUSH_BACK = TIO_COMMAND_PUSH_BACK,
-		EVENT_PUSH_FRONT = TIO_COMMAND_PUSH_FRONT,
-		EVENT_SNAPSHOT_END = TIO_EVENT_SNAPSHOT_END
+		EVENT_CODE_SET = TIO_COMMAND_SET,
+		EVENT_CODE_INSERT = TIO_COMMAND_INSERT,
+		EVENT_CODE_DELETE = TIO_COMMAND_DELETE,
+		EVENT_CODE_CLEAR = TIO_COMMAND_CLEAR,
+		EVENT_CODE_PUSH_BACK = TIO_COMMAND_PUSH_BACK,
+		EVENT_CODE_PUSH_FRONT = TIO_COMMAND_PUSH_FRONT,
+		EVENT_CODE_SNAPSHOT_END = TIO_EVENT_SNAPSHOT_END
 	};
 
 	// storage_id, event_id, key, value, metadata
-	typedef std::function<void(uint64_t, ContainerEvent, const TioData&, const TioData&, const TioData&)> EventSink;
+	typedef std::function<void(uint64_t, ContainerEventCode, const TioData&, const TioData&, const TioData&)> EventSink;
 
 	static const TioData TIONULL = TioData();
 

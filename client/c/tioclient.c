@@ -548,7 +548,7 @@ const char* message_field_id_to_string(int i)
 	if(i == MESSAGE_FIELD_ID_TYPE) return "MESSAGE_FIELD_ID_TYPE";
 	if(i == MESSAGE_FIELD_ID_ERROR_CODE) return "MESSAGE_FIELD_ID_ERROR_CODE";
 	if(i == MESSAGE_FIELD_ID_ERROR_DESC) return "MESSAGE_FIELD_ID_ERROR_DESC";
-	if(i == MESSAGE_FIELD_ID_EVENT) return "MESSAGE_FIELD_ID_EVENT";
+	if(i == MESSAGE_FIELD_ID_EVENT_CODE) return "MESSAGE_FIELD_ID_EVENT_CODE";
 	if(i == MESSAGE_FIELD_ID_START_RECORD) return "MESSAGE_FIELD_ID_START_RECORD";
 	if(i == MESSAGE_FIELD_ID_END) return "MESSAGE_FIELD_ID_END";
 	if(i == MESSAGE_FIELD_ID_QUERY_ID) return "MESSAGE_FIELD_ID_QUERY_ID";
@@ -1762,7 +1762,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			break;
 
 		handle_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_HANDLE);
-		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT);
+		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT_CODE);
 
 		if(handle_field &&
 			handle_field->data_type == TIO_DATA_TYPE_INT &&

@@ -25,6 +25,8 @@ namespace tio
 	using std::shared_ptr;
 	using boost::system::error_code;
 
+	using boost::conversion::try_lexical_convert;
+
 	using boost::lexical_cast;
 	using boost::bad_lexical_cast;
 
@@ -120,7 +122,11 @@ namespace tio
 				eventQueue_.pop_front();
 			}
 
-			decltype(subscribers_)::mapped_type interestedSubscribers;
+			//
+			// we will hold a copy of this vector, so we don't need
+			// to keep it locked
+			//
+			vector<shared_ptr<SubscriptionInfo>> interestedSubscribers;
 
 			{
 				lock_guard_t lock_(subscribersMutex_);
@@ -133,28 +139,75 @@ namespace tio
 				interestedSubscribers = i->second;
 			}
 
-			for (auto& s : interestedSubscribers)
+			if (eventInfo.eventCode == EVENT_CODE_SNAPSHOT_END)
 			{
-				auto session = s.session.lock();
-
-				if (!session)
-					continue;
-
-				if (eventInfo.eventId == EVENT_SNAPSHOT_END)
+				for (auto& s : interestedSubscribers)
 				{
-					auto resultSet = s.container->Query(0, -1, nullptr);
+					if (!s->snapshotPending)
+						continue;
 
+					//
+					// start empty = no snapshot
+					//
+					if (s->start.empty())
+					{
+						s->snapshotPending = false;
+						continue;
+					}
 
-					
+					auto session = s->session.lock();
+
+					if (!session)
+						continue;
+
+					int numericStart = 0;
+
+					try_lexical_convert(s->start, numericStart);
+
+					try
+					{
+						auto resultSet = s->container->Query(numericStart, 0, nullptr);
+
+						ContainerEventCode eventCode =
+							IsMapContainer(s->container) ? EVENT_CODE_SET : EVENT_CODE_PUSH_BACK;
+
+						session->SendSubscriptionSnapshot(resultSet, s->handle, eventCode);
+					}
+					catch (std::exception&)
+					{
+						BOOST_ASSERT(false && "session is not supposed to throw exceptions");
+						cout << "EXCEPTION on SendSubscriptionSnapshot." << endl;
+					}
+
+					s->snapshotPending = false;
 				}
-				else
+			}
+			else
+			{
+				for (auto& s : interestedSubscribers)
 				{
-					session->PublishEvent(
-						s.handle,
-						eventInfo.eventId,
-						eventInfo.k,
-						eventInfo.v,
-						eventInfo.m);
+					if (s->snapshotPending)
+						continue;
+
+					auto session = s->session.lock();
+
+					if (!session)
+						continue;					
+
+					try
+					{
+						session->PublishEvent(
+							s->handle,
+							eventInfo.eventCode,
+							eventInfo.k,
+							eventInfo.v,
+							eventInfo.m);
+					}
+					catch (std::exception&)
+					{
+						BOOST_ASSERT(false && "session->PublishEvent is not supposed to throw exceptions");
+						cout << "EXCEPTION on session->PublishEvent." << endl;
+					}
 				}
 			}
 		}
@@ -162,31 +215,40 @@ namespace tio
 
 	void TioTcpServer::OnAnyContainerEvent(
 		uint64_t storageId,
-		ContainerEvent eventId,
+		ContainerEventCode eventCode,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
 		{
+			lock_guard_t lockSubscribers(subscribersMutex_);
 			lock_guard_t lock(eventQueueMutex_);
-			eventQueue_.push_back({ storageId, eventId, k, v, m });
+
+			if (subscribers_.find(storageId) == subscribers_.end())
+				return;
+
+			eventQueue_.push_back({ storageId, eventCode, k, v, m });
 		}
 
 		eventQueueConditionVar_.notify_one();
 	}
 
-	void TioTcpServer::SessionSubscribe(const SubscriptionInfo& subscriptionInfo)
+	void TioTcpServer::SessionSubscribe(const shared_ptr<SubscriptionInfo>& subscriptionInfo)
 	{
-		lock_guard_t lockEvents(eventQueueMutex_);
-		lock_guard_t lockSubscribers(subscribersMutex_);
+		{
+			lock_guard_t lockSubscribers(subscribersMutex_);
+			lock_guard_t lockEvents(eventQueueMutex_);
 
-		EventInfo ei;
+			EventInfo ei;
 
-		auto storageId = subscriptionInfo.container->GetStorageId();
+			auto storageId = subscriptionInfo->container->GetStorageId();
 
-		ei.eventId = EVENT_SNAPSHOT_END;
-		ei.storageId = storageId;
+			ei.eventCode = EVENT_CODE_SNAPSHOT_END;
+			ei.storageId = storageId;
 
-		eventQueue_.push_back(ei);
-		subscribers_[storageId].push_back(subscriptionInfo);
+			eventQueue_.push_back(ei);
+			subscribers_[storageId].push_back(subscriptionInfo);
+		}
+
+		eventQueueConditionVar_.notify_one();
 	}
 
 	TioTcpServer::~TioTcpServer()
@@ -206,9 +268,9 @@ namespace tio
 		serverPaused_(false)
 	{
 		containerManager_.SetSubscriber(
-			[this](uint64_t storageId, ContainerEvent eventId, const TioData& k, const TioData& v, const TioData& m)
+			[this](uint64_t storageId, ContainerEventCode eventCode, const TioData& k, const TioData& v, const TioData& m)
 			{
-				this->OnAnyContainerEvent(storageId, eventId, k, v, m);
+				this->OnAnyContainerEvent(storageId, eventCode, k, v, m);
 			}
 		);
 
@@ -904,7 +966,9 @@ namespace tio
 
 				auto container = GetContainerAndParametersFromRequest(message, session, nullptr, nullptr, nullptr);
 
-				SessionSubscribe(SubscriptionInfo(container, handle, session, start_string));
+				session->SendBinaryAnswer();
+
+				SessionSubscribe(make_shared<SubscriptionInfo>(container, handle, session, start_string));
 			}
 			break;
 
@@ -1419,7 +1483,7 @@ namespace tio
 
 			if (cmd.GetCommand() == "subscribe")
 			{
-				SessionSubscribe(SubscriptionInfo(container, handle, session, start));
+				SessionSubscribe(make_shared<SubscriptionInfo>(container, handle, session, start));
 
 				MakeAnswer(success, answer);
 			}

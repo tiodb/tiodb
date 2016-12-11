@@ -68,9 +68,9 @@ namespace tio
 		return 0;
 	}
 
-	string EventCodeToEventName(ContainerEvent eventId)
+	string EventCodeToEventName(ContainerEventCode eventCode)
 	{
-		switch (eventId)
+		switch (eventCode)
 		{
 		case TIO_COMMAND_PUSH_BACK: return "push_back";
 		case TIO_COMMAND_PUSH_FRONT: return "push_front";
@@ -469,7 +469,7 @@ namespace tio
 		return stream.str();
 	}
 
-	void TioTcpSession::SendTextEvent(unsigned int handle, ContainerEvent eventId, const TioData& key, const TioData& value, const TioData& metadata)
+	void TioTcpSession::SendTextEvent(unsigned int handle, ContainerEventCode eventCode, const TioData& key, const TioData& value, const TioData& metadata)
 	{
 		stringstream answer;
 
@@ -484,7 +484,7 @@ namespace tio
 		if (metadata)
 			metadataString = TioDataToString(metadata);
 
-		answer << "event " << handle << " " << EventCodeToEventName(eventId);
+		answer << "event " << handle << " " << EventCodeToEventName(eventCode);
 
 		if (!keyString.empty())
 			answer << " key " << GetDataTypeAsString(key) << " " << keyString.length();
@@ -591,6 +591,57 @@ namespace tio
 		Pr1MessageAddField(queryEnd.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_QUERY_ITEM);
 		Pr1MessageAddField(queryEnd.get(), MESSAGE_FIELD_ID_QUERY_ID, queryID);
 		SendBinaryMessage(queryEnd);
+	}
+
+	void TioTcpSession::SendSubscriptionSnapshot(const shared_ptr<ITioResultSet>& resultSet, unsigned int handle, ContainerEventCode eventCode)
+	{
+		if (binaryProtocol_)
+			SendBinarySubscriptionSnapshot(resultSet, handle, eventCode);
+		else
+			SendTextSubscriptionSnapshot(resultSet, handle, eventCode);
+	}
+
+	void TioTcpSession::SendTextSubscriptionSnapshot(const shared_ptr<ITioResultSet>& resultSet, unsigned int handle, ContainerEventCode eventCode)
+	{
+		for (;;)
+		{
+			TioData key, value, metadata;
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);		
+
+			if (!b)
+				break;
+
+			SendTextEvent(handle, eventCode, key, value, metadata);
+
+			resultSet->MoveNext();
+		}
+	}
+
+	void TioTcpSession::SendBinarySubscriptionSnapshot(const shared_ptr<ITioResultSet>& resultSet, unsigned int handle, ContainerEventCode eventCode)
+	{
+		vector<shared_ptr<PR1_MESSAGE>> messages(resultSet->RecordCount());
+
+		for (unsigned a = 0; ; resultSet->MoveNext(), ++a)
+		{
+			TioData key, value, metadata;
+
+			bool b = resultSet->GetRecord(&key, &value, &metadata);
+
+			if (!b)
+				break;
+
+			shared_ptr<PR1_MESSAGE>& item = messages[a];
+			item = Pr1CreateMessage();
+
+			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_EVENT);
+			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_HANDLE, handle);
+			Pr1MessageAddField(item.get(), MESSAGE_FIELD_ID_EVENT_CODE, eventCode);
+
+			Pr1MessageAddFields(item, &key, &value, &metadata);
+		}
+
+		SendBinaryMessages(messages);
 	}
 
 
@@ -832,26 +883,26 @@ namespace tio
 
 	bool TioTcpSession::PublishEvent(
 		unsigned handle,
-		ContainerEvent eventId,
+		ContainerEventCode eventCode,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
 		if (binaryProtocol_)
-			SendBinaryEvent(handle, eventId, k, v, m);
+			SendBinaryEvent(handle, eventCode, k, v, m);
 		else
-			SendTextEvent(handle, eventId, k, v, m);
+			SendTextEvent(handle, eventCode, k, v, m);
 
 		return true;
 	}
 
 	void TioTcpSession::SendBinaryEvent(unsigned handle,
-		ContainerEvent eventId,
+		ContainerEventCode eventCode,
 		const TioData& k, const TioData& v, const TioData& m)
 	{
 		shared_ptr<PR1_MESSAGE> message = Pr1CreateMessage();
 
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_EVENT);
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_HANDLE, handle);
-		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT, eventId);
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT_CODE, eventCode);
 
 		if(k) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, k);
 		if(v) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, v);
@@ -987,6 +1038,22 @@ namespace tio
 		pendingBinarySendData_.push_back(message);
 
 		IncreasePendingSendSize(pr1_message_get_data_size(message.get()));
+
+		SendPendingBinaryData();
+	}
+
+	void TioTcpSession::SendBinaryMessages(const vector<shared_ptr<PR1_MESSAGE>>& messages)
+	{
+		lock_guard_t lock(bigLock_);
+
+		if (!valid_)
+			return;
+
+		for (const auto& message : messages)
+		{
+			pendingBinarySendData_.push_back(message);
+			IncreasePendingSendSize(pr1_message_get_data_size(message.get()));
+		}		
 
 		SendPendingBinaryData();
 	}
