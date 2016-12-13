@@ -77,7 +77,15 @@ public:
 						while(!running_)
 							std::this_thread::yield();
 
-						f();
+						try
+						{
+							f();
+						}
+						catch (std::exception& ex)
+						{
+							__debugbreak();
+
+						}
 
 						finishedThreads_++;
 					}
@@ -166,13 +174,25 @@ class TioTesterSubscriber
 	string host_name_;
 	thread thread_;
 	bool should_stop_;
+	uint64_t eventCount_;
 
 public:
 
 	TioTesterSubscriber(const string& host_name)
 		: host_name_(host_name)
 		, should_stop_(false)
+		, eventCount_(0)
 	{
+	}
+
+	TioTesterSubscriber(const string& host_name,
+		const string& container_name,
+		const string& container_type)
+		: host_name_(host_name)
+		, should_stop_(false)
+		, eventCount_(0)
+	{
+		add_container(container_name, container_type);
 	}
 
 	TioTesterSubscriber(const TioTesterSubscriber&) = delete;
@@ -182,15 +202,6 @@ public:
 	~TioTesterSubscriber()
 	{
 		assert(!thread_.joinable());
-	}
-
-	TioTesterSubscriber(const string& host_name,
-		const string& container_name,
-		const string& container_type)
-		: host_name_(host_name)
-		, should_stop_(false)
-	{
-		add_container(container_name, container_type);
 	}
 
 
@@ -222,7 +233,12 @@ public:
 					container_names_[i].first,
 					container_names_[i].second);
 
-				containers[i].subscribe(std::bind([](){}));
+				containers[i].subscribe(
+					[&](const string& containerName, const string& eventName, const int& key, const string& value)
+					{
+						++this->eventCount_;
+					}
+				);
 			}
 
 			while(!should_stop_)
@@ -526,19 +542,21 @@ void TEST_create_lots_of_containers(const char* hostname,
 
 
 void TEST_data_stress_test(const char* hostname,
-	unsigned container_count,
 	unsigned max_client_count,
 	unsigned max_subscribers,
 	unsigned item_count)
 {
-	cout << "START: data stress test, MAX_CLIENTS=" << max_client_count <<
-		", MAX_SUBSCRIBERS=" << max_subscribers << endl;
-
-	TioTestRunner runner;
+	cout << "START: data stress test, "
+		<< "MAX_CLIENTS=" << max_client_count
+		<< ", MAX_SUBSCRIBERS=" << max_subscribers
+		<< ", ITEM_COUNT=" << item_count
+		<< endl;
 
 	int baseline = 0;
 
 	{
+		TioTestRunner runner;
+
 		string test_description = "single volatile list, one client";
 		unsigned persec;
 
@@ -562,6 +580,8 @@ void TEST_data_stress_test(const char* hostname,
 	{
 		for (unsigned subscriber_count = 0; subscriber_count <= max_subscribers; subscriber_count *= 2)
 		{
+			TioTestRunner runner;
+
 			string test_description = "single volatile list, clients=" + to_string(client_count) +
 				", subscribers=" + to_string(subscriber_count);
 			vector<unique_ptr<TioTesterSubscriber>> subscribers;
@@ -579,15 +599,13 @@ void TEST_data_stress_test(const char* hostname,
 						container_name,
 						container_type,
 						&vector_perf_test_c,
-						item_count / client_count * 2,
+						item_count,
 						&persec[a]));
 			}
 
 			for (unsigned a = 0; a < subscriber_count; a++)
 			{
 				subscribers.emplace_back(new TioTesterSubscriber(hostname, container_name, container_type));
-
-
 				(*subscribers.rbegin())->start();
 			}
 
@@ -625,6 +643,8 @@ void TEST_data_stress_test(const char* hostname,
 
 	for (int client_count = 1; client_count <= 1024; client_count *= 2)
 	{
+		TioTestRunner runner;
+
 		string test_description = "multiple volatile lists, client count=" + to_string(client_count);
 
 		vector<unsigned> persec(client_count);
@@ -666,24 +686,24 @@ int main()
 	unsigned PERSISTEN_TEST_COUNT = 1 * 1000;
 	unsigned MAX_CLIENTS = 128;
 	unsigned CONNECTION_STRESS_TEST_COUNT = 10 * 1000;
-	unsigned MAX_SUBSCRIBERS = 8;
+	unsigned MAX_SUBSCRIBERS = 64;
 	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 50 * 1000;
 
 	unsigned CONCURRENCY_TEST_ITEM_COUNT = 5 * 1000;
 #else
-	unsigned VOLATILE_TEST_COUNT = 50 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 50 * 1000;
-	unsigned MAX_CLIENTS = 512;
+	unsigned MAX_CLIENTS = 64;
 	
 	//
 	// There is a TCP limit on how many connections we can make at same time,
 	// so we can't add much than that
 	//
 	unsigned CONNECTION_STRESS_TEST_COUNT = 5 * 1000;
-	unsigned MAX_SUBSCRIBERS = 16;
+	unsigned MAX_SUBSCRIBERS = 32;
 	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
-	unsigned CONTAINER_TEST_ITEM_COUNT = 5 * 1000;
+	unsigned CONTAINER_TEST_ITEM_COUNT = 100 * 1000;
 
 	unsigned CONCURRENCY_TEST_ITEM_COUNT = 250 * 1000;
 #endif
@@ -692,6 +712,14 @@ int main()
 
 	try
 	{
+		//
+		// LOTS OF CONTAINERS
+		//
+		TEST_data_stress_test(hostname,
+			MAX_CLIENTS,
+			MAX_SUBSCRIBERS,
+			CONTAINER_TEST_ITEM_COUNT);
+
 		//
 		// DEADLOCK ON DISCONNECT
 		//
@@ -719,15 +747,7 @@ int main()
 			"volatile_list",
 			vector_perf_test_c);
 
-	
-		//
-		// LOTS OF CONTAINERS
-		//
-		TEST_data_stress_test(hostname,
-			CONTAINER_TEST_COUNT,
-			MAX_CLIENTS,
-			MAX_SUBSCRIBERS,
-			CONTAINER_TEST_ITEM_COUNT);
+		
 
 		return 0;
 

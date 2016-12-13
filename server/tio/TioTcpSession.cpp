@@ -148,6 +148,20 @@ namespace tio
 		ReadCommand();
 	}
 
+	void TioTcpSession::ReadBinaryProtocolMessage()
+	{
+		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
+
+		asio::async_read(
+			socket_,
+			asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
+			[shared_this = shared_from_this(), header](const error_code& err, size_t read)
+			{
+				shared_this->OnBinaryProtocolMessageHeader(header, err);
+			}
+		);
+	}
+
 
 	void TioTcpSession::OnBinaryProtocolMessageHeader(shared_ptr<PR1_MESSAGE_HEADER> header, const error_code& err)
 	{
@@ -163,10 +177,11 @@ namespace tio
 			socket_,
 			asio::buffer(buffer, header->message_size),
 			wrap_callback(
-				[shared_this = shared_from_this(), message](const error_code& err, size_t read)
-		{
-			shared_this->OnBinaryProtocolMessage(message, err);
-		}));
+			[shared_this = shared_from_this(), message](const error_code& err, size_t read)
+			{
+				shared_this->OnBinaryProtocolMessage(message, err);
+			})
+		);
 	}
 
 	void TioTcpSession::OnBinaryProtocolMessage(PR1_MESSAGE* message, const error_code& err)
@@ -182,6 +197,7 @@ namespace tio
 		ReadBinaryProtocolMessage();
 	}
 
+	
 	void TioTcpSession::ReadHttpCommand(const shared_ptr<HttpParser> httpParser)
 	{
 		lock_guard_t lock(bigLock_);
@@ -231,21 +247,6 @@ namespace tio
 			shared_from_this());
 	}
 
-	void TioTcpSession::ReadBinaryProtocolMessage()
-	{
-		shared_ptr<PR1_MESSAGE_HEADER> header(new PR1_MESSAGE_HEADER);
-
-		auto shared_this = shared_from_this();
-
-		asio::async_read(
-			socket_,
-			asio::buffer(header.get(), sizeof(PR1_MESSAGE_HEADER)),
-			wrap_callback(
-				[shared_this, header](const error_code& err, size_t read)
-		{
-			shared_this->OnBinaryProtocolMessageHeader(header, err);
-		}));
-	}
 
 	void TioTcpSession::ReadCommand()
 	{

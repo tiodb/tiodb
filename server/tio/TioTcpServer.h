@@ -482,7 +482,7 @@ namespace tio
 		mutex_t subscribersMutex_;
 
 		shared_ptr<thread> publisherThread_;
-		deque<EventInfo> eventQueue_;
+		vector<EventInfo> eventQueue_;
 		mutex_t eventQueueMutex_;
 		condition_variable eventQueueConditionVar_;
 

@@ -108,9 +108,11 @@ namespace tio
 
 	void TioTcpServer::PublisherThread()
 	{
+		size_t previousPendingEventsCount = 0;
+
 		for(;;)
 		{
-			EventInfo eventInfo;
+			vector<EventInfo> localEventQueue;
 
 			{
 				unique_lock<mutex_t> lock(eventQueueMutex_);
@@ -118,95 +120,106 @@ namespace tio
 				while (eventQueue_.empty())
 					eventQueueConditionVar_.wait(lock);
 
-				eventInfo = eventQueue_.front();
-				eventQueue_.pop_front();
+				eventQueue_.swap(localEventQueue);
 			}
 
-			//
-			// we will hold a copy of this vector, so we don't need
-			// to keep it locked
-			//
-			vector<shared_ptr<SubscriptionInfo>> interestedSubscribers;
+			auto pendingEventsCount = localEventQueue.size();
 
+			if (pendingEventsCount != previousPendingEventsCount &&
+				pendingEventsCount % 5000 == 0)
 			{
-				lock_guard_t lock_(subscribersMutex_);
-
-				auto i = subscribers_.find(eventInfo.storageId);
-
-				if (i == subscribers_.end())
-					continue;
-
-				interestedSubscribers = i->second;
+				previousPendingEventsCount = pendingEventsCount;
+				cout << "TOO MUCH PENDING EVENTS: " << pendingEventsCount << endl;
 			}
 
-			if (eventInfo.eventCode == EVENT_CODE_SNAPSHOT_END)
+			for (const auto& eventInfo : localEventQueue)
 			{
-				for (auto& s : interestedSubscribers)
+				//
+				// we will hold a copy of this vector, so we don't need
+				// to keep it locked
+				//
+				vector<shared_ptr<SubscriptionInfo>> interestedSubscribers;
+
 				{
-					if (!s->snapshotPending)
+					lock_guard_t lock_(subscribersMutex_);
+
+					auto i = subscribers_.find(eventInfo.storageId);
+
+					if (i == subscribers_.end())
 						continue;
 
-					//
-					// start empty = no snapshot
-					//
-					if (s->start.empty())
-					{
-						s->snapshotPending = false;
-						continue;
-					}
-
-					auto session = s->session.lock();
-
-					if (!session)
-						continue;
-
-					int numericStart = 0;
-
-					try_lexical_convert(s->start, numericStart);
-
-					try
-					{
-						auto resultSet = s->container->Query(numericStart, 0, nullptr);
-
-						ContainerEventCode eventCode =
-							IsMapContainer(s->container) ? EVENT_CODE_SET : EVENT_CODE_PUSH_BACK;
-
-						session->SendSubscriptionSnapshot(resultSet, s->handle, eventCode);
-					}
-					catch (std::exception&)
-					{
-						BOOST_ASSERT(false && "session is not supposed to throw exceptions");
-						cout << "EXCEPTION on SendSubscriptionSnapshot." << endl;
-					}
-
-					s->snapshotPending = false;
+					interestedSubscribers = i->second;
 				}
-			}
-			else
-			{
-				for (auto& s : interestedSubscribers)
+
+				if (eventInfo.eventCode == EVENT_CODE_SNAPSHOT_END)
 				{
-					if (s->snapshotPending)
-						continue;
-
-					auto session = s->session.lock();
-
-					if (!session)
-						continue;					
-
-					try
+					for (auto& s : interestedSubscribers)
 					{
-						session->PublishEvent(
-							s->handle,
-							eventInfo.eventCode,
-							eventInfo.k,
-							eventInfo.v,
-							eventInfo.m);
+						if (!s->snapshotPending)
+							continue;
+
+						//
+						// start empty = no snapshot
+						//
+						if (s->start.empty())
+						{
+							s->snapshotPending = false;
+							continue;
+						}
+
+						auto session = s->session.lock();
+
+						if (!session)
+							continue;
+
+						int numericStart = 0;
+
+						try_lexical_convert(s->start, numericStart);
+
+						try
+						{
+							auto resultSet = s->container->Query(numericStart, 0, nullptr);
+
+							ContainerEventCode eventCode =
+								IsMapContainer(s->container) ? EVENT_CODE_SET : EVENT_CODE_PUSH_BACK;
+
+							session->SendSubscriptionSnapshot(resultSet, s->handle, eventCode);
+						}
+						catch (std::exception&)
+						{
+							BOOST_ASSERT(false && "session is not supposed to throw exceptions");
+							cout << "EXCEPTION on SendSubscriptionSnapshot." << endl;
+						}
+
+						s->snapshotPending = false;
 					}
-					catch (std::exception&)
+				}
+				else
+				{
+					for (auto& s : interestedSubscribers)
 					{
-						BOOST_ASSERT(false && "session->PublishEvent is not supposed to throw exceptions");
-						cout << "EXCEPTION on session->PublishEvent." << endl;
+						if (s->snapshotPending)
+							continue;
+
+						auto session = s->session.lock();
+
+						if (!session)
+							continue;
+
+						try
+						{
+							session->PublishEvent(
+								s->handle,
+								eventInfo.eventCode,
+								eventInfo.k,
+								eventInfo.v,
+								eventInfo.m);
+						}
+						catch (std::exception&)
+						{
+							BOOST_ASSERT(false && "session->PublishEvent is not supposed to throw exceptions");
+							cout << "EXCEPTION on session->PublishEvent." << endl;
+						}
 					}
 				}
 			}
