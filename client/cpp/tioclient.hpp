@@ -594,17 +594,26 @@ namespace tio
 				container_manager()->group_add(groupName.c_str(), tio_container_name(container_));
 			}
 
-			void subscribe(EventCallbackT callback)
+			void subscribe(EventCallbackT callback, int* start = nullptr)
 			{
 				int result;
 
 				eventCallback_ = callback;
 
+				TIO_DATA tioDataStart;
+
+				tiodata_init(&tioDataStart);
+
+				if (start)
+					tiodata_set_int(&tioDataStart, *start);
+
 				result = container_manager()->container_subscribe(
 					container_,
-					nullptr,
+					start ? &tioDataStart : nullptr,
 					&this_type::EventCallback,
 					this);
+
+				tiodata_free(&tioDataStart);
 			}
 
 			void unsubscribe()
