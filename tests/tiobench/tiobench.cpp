@@ -1,7 +1,10 @@
- 
+
 #include "stdafx.h"
 #include "../../client/c/tioclient.h"
 #include "../../client/cpp/tioclient.hpp"
+#include "../../client/c/tioclient_internals.h"
+#include <iostream>     // std::cout
+#include <sstream>      // std::stringstream
 
 using std::thread;
 using std::function;
@@ -18,6 +21,7 @@ using std::atomic;
 using std::cout;
 using std::endl;
 
+static int assertiveEventCount = 0;
 
 class TioTestRunner
 {
@@ -68,27 +72,27 @@ public:
 
 	void start()
 	{
-		for(auto f : tests_)
+		for (auto f : tests_)
 		{
 			threads_.emplace_back(
 				thread(
 					[f, this]()
-					{
-						while(!running_)
-							std::this_thread::yield();
+			{
+				while (!running_)
+					std::this_thread::yield();
 
-						try
-						{
-							f();
-						}
-						catch (std::exception& ex)
-						{
-							__debugbreak();
+				try
+				{
+					f();
+				}
+				catch (std::exception& ex)
+				{
+					__debugbreak();
 
-						}
+				}
 
-						finishedThreads_++;
-					}
+				finishedThreads_++;
+			}
 			));
 		}
 
@@ -96,17 +100,30 @@ public:
 	}
 };
 
+string get_seq_value(string container_name, int operation)
+{
+	std::stringstream ss;
+	ss << container_name << ";" << operation << ";" << "_01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901";
+	string val = ss.str();
+	val = val.substr(0, 48);
+	//snprintf(value, bufferCount, "(%s)(%i)_01234567890123456789012345678901234567890123456789012345678901", container_name, operation);
+	return val;
+}
+
 int vector_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned operations)
 {
 	TIO_DATA v;
 
 	tiodata_init(&v);
-	tiodata_set_string_and_size(&v, "01234567890123456789012345678901", 32);
 
 	tio_begin_network_batch(cn);
 
-	for(unsigned a = 0 ; a < operations ; ++a)
+	for (unsigned a = 0; a < operations; ++a)
 	{
+		string val = get_seq_value(container->name, a);
+
+		tiodata_set_string_and_size(&v, val.c_str(), val.size());
+
 		tio_container_push_back(container, NULL, &v, NULL);
 	}
 
@@ -114,7 +131,6 @@ int vector_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned op
 	tiodata_free(&v);
 	return 0;
 }
-
 
 int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned operations)
 {
@@ -128,7 +144,7 @@ int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned opera
 
 	string prefix = to_string(reinterpret_cast<uint64_t>(cn)) + "_";
 
-	for(unsigned a = 0 ; a < operations ; ++a)
+	for (unsigned a = 0; a < operations; ++a)
 	{
 		char buffer[16];
 		itoa(a, buffer, 10);
@@ -152,7 +168,7 @@ int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned opera
 typedef int(*PERF_FUNCTION_C)(TIO_CONNECTION*, TIO_CONTAINER *, unsigned int);
 
 
-int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count, 
+int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	PERF_FUNCTION_C perf_function, unsigned* persec)
 {
 	int ret;
@@ -160,7 +176,7 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	DWORD start = GetTickCount();
 
 	ret = perf_function(cn, container, test_count);
-	if(TIO_FAILED(ret)) return ret;
+	if (TIO_FAILED(ret)) return ret;
 
 	DWORD delta = GetTickCount() - start;
 	*persec = (test_count * 1000) / delta;
@@ -168,14 +184,29 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	return ret;
 }
 
+void _stdcall tes(const std::string &s1, const std::string &s2, const int &s3, const std::string &s4)
+{
+
+}
+struct ContainerData
+{
+	string name;
+	string type;
+	int index = 0;
+	ContainerData(string p_name, string p_type)
+	{
+		name = p_name;
+		type = p_type;
+	}
+};
 class TioTesterSubscriber
 {
-	vector<pair<string, string>> container_names_;
+	vector<ContainerData> container_names_;
 	string host_name_;
 	thread thread_;
 	bool should_stop_;
 	uint64_t eventCount_;
-
+	bool run_sequence_test = true;
 public:
 
 	TioTesterSubscriber(const string& host_name)
@@ -204,7 +235,6 @@ public:
 		assert(!thread_.joinable());
 	}
 
-
 	void add_container(const string& name, const string& type)
 	{
 		container_names_.push_back(decltype(container_names_)::value_type(name, type));
@@ -226,22 +256,54 @@ public:
 			vector<tio::containers::list<string>> containers(container_names_.size());
 
 			size_t count = container_names_.size();
-			for(size_t i = 0; i < count; i++)
+
+			for (size_t i = 0; i < count; i++)
 			{
 				containers[i].create(
 					&connection,
-					container_names_[i].first,
-					container_names_[i].second);
+					container_names_[i].name,
+					container_names_[i].type);
+				
+				int startPosition = 0;
 
-				containers[i].subscribe(
-					[&](const string& containerName, const string& eventName, const int& key, const string& value)
+				auto eventHandler = [&](const string& containerName, const string& eventName, const int& key, const string& value)
+				{
+					++this->eventCount_;
+					if (run_sequence_test)
 					{
-						++this->eventCount_;
+						bool notFindContainer = true;
+						for (int j = 0; j < container_names_.size(); j++)
+						{
+							size_t name_position = value.find(containerName);
+							if (name_position != string::npos)
+							{
+								assertiveEventCount++;
+								notFindContainer = false;
+								string expectedValue = get_seq_value(container_names_[j].name, container_names_[j].index++);
+								if (value.compare(expectedValue) != 0)
+								{
+									run_sequence_test = false;
+									printf("\r\nSequence error:Expected \"%s\"", expectedValue.c_str());
+									printf("\r\nbut found              \"%s\"", value.c_str());
+									printf("\r\nCorrect sequence found until:%i", assertiveEventCount);
+									break;
+								}
+							}
+							if (notFindContainer)
+							{
+								run_sequence_test = false;
+								printf("\r\nNot found container information in \"%s\"!", value.c_str());
+								printf("\r\n\"Correct sequece found:%i\"", assertiveEventCount);
+								break;
+							}
+						}
 					}
-				);
+				};
+
+				containers[i].subscribe(eventHandler, &startPosition);
 			}
 
-			while(!should_stop_)
+			while (!should_stop_)
 			{
 				connection.WaitForNextEventAndDispatch(1);
 			}
@@ -259,7 +321,7 @@ public:
 
 	void stop()
 	{
-		if(!thread_.joinable())
+		if (!thread_.joinable())
 			return;
 
 		should_stop_ = true;
@@ -267,7 +329,7 @@ public:
 
 	void join()
 	{
-		if(!thread_.joinable())
+		if (!thread_.joinable())
 			return;
 
 		should_stop_ = true;
@@ -323,7 +385,7 @@ string generate_container_name()
 	static unsigned seq = 0;
 	static string prefix = "_test_" + to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 
-	return prefix  + "_" + to_string(++seq);
+	return prefix + "_" + to_string(++seq) + "_";
 }
 
 void TEST_deadlock_on_disconnect(const char* hostname)
@@ -336,7 +398,7 @@ void TEST_deadlock_on_disconnect(const char* hostname)
 	cout << "START: deadlock test" << endl;
 
 	tio::Connection subscriberConnection(hostname);
-	
+
 	vector<tio::containers::list<string>> containers(PUBLISHER_COUNT);
 	vector<unsigned> persec(PUBLISHER_COUNT);
 
@@ -373,7 +435,7 @@ void TEST_deadlock_on_disconnect(const char* hostname)
 		if (runner.finished())
 			break;
 
-		
+
 		cout << "creating new subscribers... ";
 
 		tio::Connection newConnection(hostname);
@@ -438,7 +500,7 @@ void TEST_container_concurrency(
 	unsigned item_count,
 	const char* container_type,
 	PERF_FUNCTION_C perf_function
-	)
+)
 {
 	cout << "START: container concurrency test, type=" << container_type << endl;
 
@@ -458,14 +520,14 @@ void TEST_container_concurrency(
 		{
 			testRunner.add_test(
 				[=]()
-				{
-					tio::Connection connection(hostname);
-					tio::containers::list<string> c;
+			{
+				tio::Connection connection(hostname);
+				tio::containers::list<string> c;
 
-					c.create(&connection, container_name, container_type);
+				c.create(&connection, container_name, container_type);
 
-					perf_function(connection.cnptr(), c.handle(), items_per_thread);
-				}
+				perf_function(connection.cnptr(), c.handle(), items_per_thread);
+			}
 			);
 		}
 
@@ -488,8 +550,8 @@ void TEST_container_concurrency(
 }
 
 
-void TEST_create_lots_of_containers(const char* hostname, 
-	unsigned container_count, 
+void TEST_create_lots_of_containers(const char* hostname,
+	unsigned container_count,
 	unsigned client_count,
 	unsigned item_count)
 {
@@ -509,25 +571,25 @@ void TEST_create_lots_of_containers(const char* hostname,
 	{
 		testRunner.add_test(
 			[hostname, prefix = "l_" + to_string(a), container_count, item_count]()
+		{
+			tio::Connection connection(hostname);
+			vector<tio::containers::list<string>> containers(container_count);
+
+			for (unsigned a = 0; a < container_count; a++)
 			{
-				tio::Connection connection(hostname);
-				vector<tio::containers::list<string>> containers(container_count);
-
-				for (unsigned a = 0; a < container_count; a++)
-				{
-					auto& c = containers[a];
-					string name = prefix + to_string(a);
-					c.create(&connection, name, "volatile_list");
-				}
-
-				for (unsigned a = 0; a < container_count; a++)
-				{
-					auto& c = containers[a];
-					vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
-				}
-
-				containers.clear();
+				auto& c = containers[a];
+				string name = prefix + to_string(a);
+				c.create(&connection, name, "volatile_list");
 			}
+
+			for (unsigned a = 0; a < container_count; a++)
+			{
+				auto& c = containers[a];
+				vector_perf_test_c(connection.cnptr(), c.handle(), item_count);
+			}
+
+			containers.clear();
+		}
 		);
 	}
 
@@ -684,9 +746,9 @@ int main()
 #ifdef _DEBUG
 	unsigned VOLATILE_TEST_COUNT = 1 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 1 * 1000;
-	unsigned MAX_CLIENTS = 128;
+	unsigned MAX_CLIENTS = 8;
 	unsigned CONNECTION_STRESS_TEST_COUNT = 10 * 1000;
-	unsigned MAX_SUBSCRIBERS = 64;
+	unsigned MAX_SUBSCRIBERS = 16;
 	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 50 * 1000;
 
@@ -695,7 +757,7 @@ int main()
 	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 50 * 1000;
 	unsigned MAX_CLIENTS = 64;
-	
+
 	//
 	// There is a TCP limit on how many connections we can make at same time,
 	// so we can't add much than that
@@ -747,11 +809,11 @@ int main()
 			"volatile_list",
 			vector_perf_test_c);
 
-		
+
 
 		return 0;
 
-		
+
 	}
 	catch (std::exception& ex)
 	{
@@ -788,4 +850,3 @@ int main()
 
 	return 0;
 }
-

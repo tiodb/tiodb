@@ -42,7 +42,7 @@ EXPORTS
 	tio_container_subscribe
 	tio_container_unsubscribe
 
-	tio_container_wait_and_pop_next
+	
 
 	tio_group_add
 	tio_group_subscribe
