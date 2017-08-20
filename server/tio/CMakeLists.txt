@@ -12,10 +12,12 @@ INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 
 
 set(SOURCE_FILES
+        Container.h
+
+        ../../submodules/http-parser/http_parser.c
         ../../client/c/tioclient.c
         Command.cpp
         ContainerManager.cpp
-        tiotcpclient.cpp
         TioTcpServer.cpp
         TioTcpSession.cpp
         tio.cpp
