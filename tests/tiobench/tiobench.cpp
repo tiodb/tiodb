@@ -21,6 +21,10 @@ using std::atomic;
 using std::cout;
 using std::endl;
 
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::milliseconds;
+
 static int assertiveEventCount = 0;
 
 class TioTestRunner
@@ -87,7 +91,7 @@ public:
 				}
 				catch (std::exception& ex)
 				{
-					__debugbreak();
+					//__debugbreak();
 
 				}
 
@@ -147,7 +151,7 @@ int map_perf_test_c(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned opera
 	for (unsigned a = 0; a < operations; ++a)
 	{
 		char buffer[16];
-		itoa(a, buffer, 10);
+        sprintf(buffer, "%d", a);
 		string keyAsString = prefix + buffer;
 		tiodata_set_string_and_size(&k, keyAsString.c_str(), keyAsString.size());
 
@@ -173,21 +177,22 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 {
 	int ret;
 
-	DWORD start = GetTickCount();
+    auto start = std::chrono::high_resolution_clock::now();
 
 	ret = perf_function(cn, container, test_count);
 	if (TIO_FAILED(ret)) return ret;
 
-	DWORD delta = GetTickCount() - start;
-	*persec = (test_count * 1000) / delta;
+	auto delta = std::chrono::high_resolution_clock::now() - start;
+	*persec = (test_count * 1000) / std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
 
 	return ret;
 }
 
-void _stdcall tes(const std::string &s1, const std::string &s2, const int &s3, const std::string &s4)
-{
+//void _stdcall tes(const std::string &s1, const std::string &s2, const int &s3, const std::string &s4)
+//{
+//
+//}
 
-}
 struct ContainerData
 {
 	string name;
@@ -315,7 +320,8 @@ public:
 
 	void clear()
 	{
-		thread_.swap(thread());
+        thread t;
+		thread_.swap(t);
 		container_names_.clear();
 	}
 
@@ -424,7 +430,7 @@ void TEST_deadlock_on_disconnect(const char* hostname)
 
 	runner.start();
 
-	Sleep(100);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
 	subscriberConnection.Disconnect();
 
@@ -456,7 +462,7 @@ void TEST_deadlock_on_disconnect(const char* hostname)
 
 		cout << "not yet. Publication count = " << publicationCount << (a > 10 ? " PROBABLY DEADLOCK" : "") << endl;
 
-		Sleep(500);
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
 	}
 
 	cout << "no deadlock" << endl;
@@ -474,7 +480,7 @@ void TEST_connection_stress(
 	connections.reserve(connection_count);
 	unsigned log_step = 1000;
 
-	DWORD start = GetTickCount();
+    auto start = std::chrono::high_resolution_clock::now();
 
 	for (unsigned a = 0; a < connection_count; a++)
 	{
@@ -488,9 +494,9 @@ void TEST_connection_stress(
 
 	connections.clear();
 
-	DWORD delta = GetTickCount() - start;
+	auto delta = std::chrono::high_resolution_clock::now() - start;
 
-	cout << "FINISHED: connection stress test, " << delta << "ms" << endl;
+	cout << "FINISHED: connection stress test, " << std::chrono::duration_cast<std::chrono::milliseconds>(delta).count() << "ms" << endl;
 }
 
 
@@ -512,7 +518,7 @@ void TEST_container_concurrency(
 
 		cout << client_count << " clients, " << items_per_thread << " items per thread... ";
 
-		DWORD start = GetTickCount();
+        auto start = high_resolution_clock::now();
 
 		string container_name = generate_container_name();
 
@@ -533,8 +539,8 @@ void TEST_container_concurrency(
 
 		testRunner.run();
 
-		DWORD delta = GetTickCount() - start;
-		auto persec = (item_count) / delta;
+		auto delta_ms = duration_cast<milliseconds>(high_resolution_clock::now() - start).count();
+		auto persec = item_count / delta_ms;
 
 		tio::Connection connection(hostname);
 		tio::containers::list<string> c;
@@ -543,7 +549,7 @@ void TEST_container_concurrency(
 
 		const char* errorMessage = (c.size() != (items_per_thread * client_count)) ? " LOST RECORDS!" : "";
 
-		cout << delta << "ms (" << persec << "k/s)" << errorMessage << endl;
+		cout << delta_ms << "ms (" << persec << "k/s)" << errorMessage << endl;
 	}
 
 	cout << "FINISH: container concurrency test" << endl;
@@ -565,7 +571,7 @@ void TEST_create_lots_of_containers(const char* hostname,
 	cout << "START: container stress test, " << container_count << " containers, "
 		<< client_count << " clients" << endl;
 
-	DWORD start = GetTickCount();
+	auto start = high_resolution_clock::now();
 
 	for (unsigned a = 0; a < client_count; a++)
 	{
@@ -595,7 +601,7 @@ void TEST_create_lots_of_containers(const char* hostname,
 
 	testRunner.run();
 
-	DWORD delta = GetTickCount() - start;
+	auto delta = duration_cast<milliseconds>(high_resolution_clock::now() - start).count();
 
 	cout << "FINISH: container stress test, " << delta << "ms" << endl;
 

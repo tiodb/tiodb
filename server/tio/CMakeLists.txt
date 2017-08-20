@@ -13,6 +13,22 @@ INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
 
 set(SOURCE_FILES
         Container.h
+        FileSystemStorage.h
+        HttpParser.h
+        ListStorage.h
+        VectorStorage.h
+        logdb.h
+        LogDbStorage.h
+        MapStorage.h
+        MemoryPropertyMap.h
+        MemoryStorage.h
+        TioPython.h
+        TioTcpProtocol.h
+        VectorStorage.h
+
+
+
+        TioPython.cpp
 
         ../../submodules/http-parser/http_parser.c
         ../../client/c/tioclient.c
