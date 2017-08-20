@@ -182,6 +182,16 @@ namespace tio
 
 		virtual void Modify(const TioData& key, TioData* value);
 
+		virtual int WaitAndPopNext(EventSink sink)
+		{
+			throw std::runtime_error("not implemented");
+
+		}
+		virtual void CancelWaitAndPopNext(int id)
+		{
+			throw std::runtime_error("not implemented");
+		}
+
 	};
 
 	class FieldParser
@@ -267,7 +277,7 @@ namespace tio
 			
 			switch(value.GetDataType())
 			{
-			case TioData::Sz:
+			case TioData::String:
 				fields_[key] = value.AsSz();
 				break;
 			case TioData::Int:

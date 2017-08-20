@@ -266,7 +266,7 @@ namespace tio
 
 		BinaryProtocolLogger()
 			: lastGlobalHandle_(0)
-			, f_(NULL)
+			, f_()
 		{
 		}
 
@@ -325,7 +325,8 @@ namespace tio
 			logLine.reserve(100);
 
 			unsigned& globalHandle = globalContainerHandle_[container->GetName()];
-			
+
+			/*
 			SYSTEMTIME now;
 			char timeString[64];
 			GetLocalTime(&now);
@@ -344,6 +345,7 @@ namespace tio
 				now.wMilliseconds);
 
 			logLine.append(timeString);
+			*/
 
 			bool logCommand = true;
 
