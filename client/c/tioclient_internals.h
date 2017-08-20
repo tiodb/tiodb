@@ -82,6 +82,10 @@ struct TIO_CONTAINER
 	struct TIO_CONNECTION* connection;
 };
 
+#ifndef SOCKET
+#define SOCKET int
+#endif
+
 struct TIO_CONNECTION
 {
 	SOCKET socket;

@@ -47,3 +47,5 @@ EXPORTS
 	tio_group_add
 	tio_group_subscribe
 	tio_group_set_subscription_callback
+
+	tio_get_last_error_description

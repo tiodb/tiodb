@@ -294,9 +294,7 @@ namespace tio
 		{
 			string finalFilePath = logFilePath;
 
-			SYSTEMTIME now;
-
-			GetLocalTime(&now);
+			auto now = boost::posix_time::second_clock::local_time();
 
 			//
 			// Given c:\tio.log this will change it
@@ -307,9 +305,9 @@ namespace tio
 			std::stringstream dateString;
 
 			dateString << "_" << std::setfill('0') <<
-				std::setw(4) << now.wYear <<
-				std::setw(2) << now.wMonth <<
-				std::setw(2) << now.wDay;
+				std::setw(4) << now.date().year() <<
+				std::setw(2) << now.date().month() <<
+				std::setw(2) << now.date().day();
 
 			ri = std::find(finalFilePath.rbegin(), finalFilePath.rend(), '.');
 

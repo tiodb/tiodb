@@ -1,4 +1,5 @@
 
+#include "pch.h"
 #include "TioTcpClient.h"
 
 namespace tio
@@ -212,7 +213,7 @@ namespace tio
 			else if(e.name == "wnp_key")
 			{
 				KeyPoppersMap::iterator i = keyPoppers_.find(e.handle);
-				if(i != keyPoppers_.end() && e.key.GetDataType() == TioData::Sz)
+				if(i != keyPoppers_.end() && e.key.GetDataType() == TioData::String)
 				{
 					std::map< std::string, queue<EventSink> >& sinksPerKey = i->second;
 					std::map< std::string, queue<EventSink> >::iterator i2 = sinksPerKey.find(e.key.AsSz());
@@ -522,7 +523,8 @@ namespace tio
 
 	void RemoteContainer::SetProperty(const string& key, const string& value)
 	{
-		SendDataCommand("set_property", &TioData(key), &TioData(value));
+        TioData k(key), v(value);
+		SendDataCommand("set_property", &k, &v);
 	}
 	string RemoteContainer::GetProperty(const string& key)
 	{
@@ -534,7 +536,7 @@ namespace tio
 		if(answer.error)
 			throw std::runtime_error(answer.errorMessage.c_str());
 
-		if(answer.value.GetDataType() != TioData::Sz)
+		if(answer.value.GetDataType() != TioData::String)
 			throw std::runtime_error("invalid answer from server");
 
 		return answer.value.AsSz();
