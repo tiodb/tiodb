@@ -401,7 +401,7 @@ namespace logdb
 
 			_file.Write(buffer, bytes);
 
-			delete buffer;
+			delete[] buffer;
 
 			_file.FlushMetadata();
 		}

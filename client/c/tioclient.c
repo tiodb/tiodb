@@ -198,10 +198,8 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 	time_t start;
 	int time_left;
 
-#if _WIN32
-	FD_SET recvset;
+	fd_set recvset;
 	struct timeval tv;
-#endif
 
 
 #ifdef _DEBUG
@@ -230,7 +228,7 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 
 			ret = select(0, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
 
-			if(ret == SOCKET_ERROR)
+			if(ret != 0)
 			{
 				pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
 				return TIO_ERROR_NETWORK;
@@ -1730,7 +1728,7 @@ clean_up_and_return:
 unsigned long get_n_readable_bytes(SOCKET sock) 
 {
 	unsigned long n = (unsigned long)(-1);
-	if (ioctlsocket(sock, FIONREAD, &n) < 0) 
+	if (ioctl(sock, FIONREAD, &n) < 0)
 	{
 		/* look in WSAGetLastError() for the error code */
 		return 0;
