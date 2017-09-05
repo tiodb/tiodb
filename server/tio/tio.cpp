@@ -673,7 +673,7 @@ void LoadPlugins(const std::vector<std::string>& plugins, const map<string, stri
 int main(int argc, char* argv[])
 {
 	namespace po = boost::program_options;
-
+    
 	cout << "Tio, The Information Overlord. Copyright Rodrigo Strauss (www.1bit.com.br)" << endl;
 
 	try

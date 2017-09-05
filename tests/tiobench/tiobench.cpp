@@ -760,8 +760,8 @@ int main()
 
 	unsigned CONCURRENCY_TEST_ITEM_COUNT = 5 * 1000;
 #else
-	unsigned VOLATILE_TEST_COUNT = 100 * 1000;
-	unsigned PERSISTEN_TEST_COUNT = 50 * 1000;
+	unsigned VOLATILE_TEST_COUNT = 1 * 1000;
+	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
 	unsigned MAX_CLIENTS = 64;
 
 	//
@@ -769,7 +769,7 @@ int main()
 	// so we can't add much than that
 	//
 	unsigned CONNECTION_STRESS_TEST_COUNT = 5 * 1000;
-	unsigned MAX_SUBSCRIBERS = 32;
+	unsigned MAX_SUBSCRIBERS = 64;
 	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
 	unsigned CONTAINER_TEST_ITEM_COUNT = 100 * 1000;
 
