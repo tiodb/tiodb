@@ -1,8 +1,11 @@
 #include <iostream>
+#include <string>
 #include <vector>
 #include <list>
 #include <chrono>
 #include <thread>
+#include <mutex>
+#include <atomic>
 
 using std::cout;
 using std::endl;
@@ -105,7 +108,7 @@ public:
 
         tailHint_ = newNode;
 
-        return newNode;
+        return newNode->data;
     }
 
     void Clear()
@@ -210,7 +213,11 @@ public:
                         }
                         catch (std::exception& ex)
                         {
+#ifdef _WIN32
+							//__debugbreak
+#else
                             __builtin_debugtrap();
+#endif
 
                         }
 
