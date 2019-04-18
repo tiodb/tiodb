@@ -845,7 +845,7 @@ namespace tio
 
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_COMMAND, TIO_COMMAND_EVENT);
 		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_HANDLE, handle);
-		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT, EventNameToEventCode(eventName));
+		Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_EVENT_CODE, EventNameToEventCode(eventName));
 
 		if(key) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_KEY, key);
 		if(value) Pr1MessageAddField(message.get(), MESSAGE_FIELD_ID_VALUE, value);

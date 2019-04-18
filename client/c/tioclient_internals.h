@@ -20,7 +20,7 @@ extern "C" {
 #define MESSAGE_FIELD_ID_TYPE			0x7
 #define MESSAGE_FIELD_ID_ERROR_CODE		0x8
 #define MESSAGE_FIELD_ID_ERROR_DESC		0x9
-#define MESSAGE_FIELD_ID_EVENT			0xA
+#define MESSAGE_FIELD_ID_EVENT_CODE		0xA
 #define MESSAGE_FIELD_ID_START_RECORD	0xB
 #define MESSAGE_FIELD_ID_END			0xC
 #define MESSAGE_FIELD_ID_QUERY_ID		0xD
@@ -81,6 +81,10 @@ struct TIO_CONTAINER
 
 	struct TIO_CONNECTION* connection;
 };
+
+#ifndef SOCKET
+#define SOCKET int
+#endif
 
 struct TIO_CONNECTION
 {

@@ -42,8 +42,10 @@ EXPORTS
 	tio_container_subscribe
 	tio_container_unsubscribe
 
-	tio_container_wait_and_pop_next
+	
 
 	tio_group_add
 	tio_group_subscribe
 	tio_group_set_subscription_callback
+
+	tio_get_last_error_description

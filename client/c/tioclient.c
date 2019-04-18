@@ -198,10 +198,8 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 	time_t start = 0;
 	int time_left;
 
-#if _WIN32
-	FD_SET recvset;
+	fd_set recvset;
 	struct timeval tv;
-#endif
 
 
 #ifdef _DEBUG
@@ -548,7 +546,7 @@ const char* message_field_id_to_string(int i)
 	if(i == MESSAGE_FIELD_ID_TYPE) return "MESSAGE_FIELD_ID_TYPE";
 	if(i == MESSAGE_FIELD_ID_ERROR_CODE) return "MESSAGE_FIELD_ID_ERROR_CODE";
 	if(i == MESSAGE_FIELD_ID_ERROR_DESC) return "MESSAGE_FIELD_ID_ERROR_DESC";
-	if(i == MESSAGE_FIELD_ID_EVENT) return "MESSAGE_FIELD_ID_EVENT";
+	if(i == MESSAGE_FIELD_ID_EVENT_CODE) return "MESSAGE_FIELD_ID_EVENT_CODE";
 	if(i == MESSAGE_FIELD_ID_START_RECORD) return "MESSAGE_FIELD_ID_START_RECORD";
 	if(i == MESSAGE_FIELD_ID_END) return "MESSAGE_FIELD_ID_END";
 	if(i == MESSAGE_FIELD_ID_QUERY_ID) return "MESSAGE_FIELD_ID_QUERY_ID";
@@ -1726,7 +1724,7 @@ clean_up_and_return:
 unsigned long get_n_readable_bytes(SOCKET sock) 
 {
 	unsigned long n = (unsigned long)(-1);
-	if (ioctlsocket(sock, FIONREAD, &n) < 0) 
+	if (ioctlsocket(sock, FIONREAD, &n) < 0)
 	{
 		/* look in WSAGetLastError() for the error code */
 		return 0;
@@ -1762,7 +1760,7 @@ int tio_dispatch_pending_events(struct TIO_CONNECTION* connection, unsigned int 
 			break;
 
 		handle_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_HANDLE);
-		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT);
+		event_code_field = pr1_message_field_find_by_id(event_message, MESSAGE_FIELD_ID_EVENT_CODE);
 
 		if(handle_field &&
 			handle_field->data_type == TIO_DATA_TYPE_INT &&

@@ -209,8 +209,8 @@ inline bool Pr1MessageGetField(const PR1_MESSAGE* message, unsigned int fieldId,
 	private:
 		unsigned int id_;
 
-		asio::io_service& io_service_;
-		asio::strand strand_;
+		asio::io_context& io_service_;
+		asio::io_context::strand strand_;
 
 		tcp::socket socket_;
 		TioTcpServer& server_;
