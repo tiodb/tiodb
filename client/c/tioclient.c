@@ -228,7 +228,7 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 
 			ret = select(0, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
 
-			if(ret != 0)
+			if(ret == SOCKET_ERROR)
 			{
 				pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
 				return TIO_ERROR_NETWORK;
@@ -1724,7 +1724,7 @@ clean_up_and_return:
 unsigned long get_n_readable_bytes(SOCKET sock) 
 {
 	unsigned long n = (unsigned long)(-1);
-	if (ioctl(sock, FIONREAD, &n) < 0)
+	if (ioctlsocket(sock, FIONREAD, &n) < 0)
 	{
 		/* look in WSAGetLastError() for the error code */
 		return 0;

@@ -69,14 +69,15 @@ void SetupContainerManager(
 void RunServer(tio::ContainerManager* containerManager,
 			   unsigned short port, 
 			   const vector< pair<string, string> >& users,
-			   const string& logFilePath)
+			   const string& logFilePath,
+			   unsigned threadCount)
 {
 	namespace asio = boost::asio;
 	using namespace boost::asio::ip;
 	using std::thread;
 	using std::vector;
 
-	asio::io_service io_service;
+	asio::io_context io_service;
 	tcp::endpoint e(tcp::v4(), port);
 
 	//
@@ -99,7 +100,6 @@ void RunServer(tio::ContainerManager* containerManager,
 
 	tioServer.Start();
 
-	unsigned threadCount = 16;
 	vector<thread> threads;
 
 	for (unsigned a = 0; a < threadCount; a++)
@@ -733,6 +733,13 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		unsigned threadCount = 16;
+
+		if (vm.count("threads"))
+		{
+			threadCount = vm["threads"].as<unsigned>();
+		}
+
 		{
 			cout << "Starting infrastructure... " << endl;
 			tio::ContainerManager containerManager;
@@ -805,7 +812,8 @@ int main(int argc, char* argv[])
 				&containerManager,
 				port,
 				users,
-				logFilePath);
+				logFilePath,
+				threadCount);
 		}
 	}
 	catch(std::exception& ex)

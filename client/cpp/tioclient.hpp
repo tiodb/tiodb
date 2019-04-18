@@ -534,8 +534,8 @@ namespace tio
 				const struct TIO_DATA* key, const struct TIO_DATA* value, const struct TIO_DATA*)
 			{
 				this_type* me = (this_type*)cookie;
-				TKey typedKey;
-				TValue typedValue;
+				TKey typedKey{};
+				TValue typedValue{};
 
 				if(key->data_type != TIO_DATA_TYPE_NONE)
 					FromTioData(key, &typedKey);

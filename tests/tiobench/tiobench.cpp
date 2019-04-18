@@ -271,7 +271,7 @@ public:
 				
 				int startPosition = 0;
 
-				auto eventHandler = [&](const string& containerName, const string& eventName, const int& key, const string& value)
+				auto eventHandler = [this](const string& containerName, const string& eventName, const int& key, const string& value)
 				{
 					++this->eventCount_;
 					if (run_sequence_test)
@@ -756,9 +756,9 @@ int main()
 	unsigned CONNECTION_STRESS_TEST_COUNT = 10 * 1000;
 	unsigned MAX_SUBSCRIBERS = 16;
 	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
-	unsigned CONTAINER_TEST_ITEM_COUNT = 50 * 1000;
+	unsigned CONTAINER_TEST_ITEM_COUNT = 5 * 1000;
 
-	unsigned CONCURRENCY_TEST_ITEM_COUNT = 5 * 1000;
+	unsigned CONCURRENCY_TEST_ITEM_COUNT = 50 * 1000;
 #else
 	unsigned VOLATILE_TEST_COUNT = 1 * 1000;
 	unsigned PERSISTEN_TEST_COUNT = 5 * 1000;
