@@ -29,26 +29,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
@@ -118,14 +118,16 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>..\..\..\lib\boost\boost_1_52_0</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <AdditionalOptions>-Zm200 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>..\..\..\lib\boost\boost_1_52_0\stage\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <ProgramDatabaseFile>$(OutDir)$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
@@ -138,7 +140,8 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>..\..\..\lib\boost\boost_1_59_0</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>
+      </AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
@@ -155,7 +158,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>..\..\..\lib\boost\boost_1_59_0\lib32-msvc-12.0</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <ProgramDatabaseFile>$(OutDir)$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
@@ -184,7 +188,8 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalLibraryDirectories>..\..\..\lib\boost\boost_1_52_0\stage\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>
+      </AdditionalLibraryDirectories>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <ProgramDatabaseFile>$(OutDir)$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
@@ -241,31 +246,5 @@
   <ItemGroup>
     <ResourceCompile Include="tioserver.rc" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets">
-    <Import Project="packages\boost.1.61.0.0\build\native\boost.targets" Condition="Exists('packages\boost.1.61.0.0\build\native\boost.targets')" />
-    <Import Project="packages\boost_system-vc140.1.61.0.0\build\native\boost_system-vc140.targets" Condition="Exists('packages\boost_system-vc140.1.61.0.0\build\native\boost_system-vc140.targets')" />
-    <Import Project="packages\boost_date_time-vc140.1.61.0.0\build\native\boost_date_time-vc140.targets" Condition="Exists('packages\boost_date_time-vc140.1.61.0.0\build\native\boost_date_time-vc140.targets')" />
-    <Import Project="packages\boost_regex-vc140.1.61.0.0\build\native\boost_regex-vc140.targets" Condition="Exists('packages\boost_regex-vc140.1.61.0.0\build\native\boost_regex-vc140.targets')" />
-    <Import Project="packages\boost_filesystem-vc140.1.61.0.0\build\native\boost_filesystem-vc140.targets" Condition="Exists('packages\boost_filesystem-vc140.1.61.0.0\build\native\boost_filesystem-vc140.targets')" />
-    <Import Project="packages\boost_thread-vc140.1.61.0.0\build\native\boost_thread-vc140.targets" Condition="Exists('packages\boost_thread-vc140.1.61.0.0\build\native\boost_thread-vc140.targets')" />
-    <Import Project="packages\boost_chrono-vc140.1.61.0.0\build\native\boost_chrono-vc140.targets" Condition="Exists('packages\boost_chrono-vc140.1.61.0.0\build\native\boost_chrono-vc140.targets')" />
-    <Import Project="packages\boost_program_options-vc140.1.61.0.0\build\native\boost_program_options-vc140.targets" Condition="Exists('packages\boost_program_options-vc140.1.61.0.0\build\native\boost_program_options-vc140.targets')" />
-  </ImportGroup>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('packages\boost.1.61.0.0\build\native\boost.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost.1.61.0.0\build\native\boost.targets'))" />
-    <Error Condition="!Exists('packages\boost_system-vc140.1.61.0.0\build\native\boost_system-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_system-vc140.1.61.0.0\build\native\boost_system-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_date_time-vc140.1.61.0.0\build\native\boost_date_time-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_date_time-vc140.1.61.0.0\build\native\boost_date_time-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_regex-vc140.1.61.0.0\build\native\boost_regex-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_regex-vc140.1.61.0.0\build\native\boost_regex-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_filesystem-vc140.1.61.0.0\build\native\boost_filesystem-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_filesystem-vc140.1.61.0.0\build\native\boost_filesystem-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_thread-vc140.1.61.0.0\build\native\boost_thread-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_thread-vc140.1.61.0.0\build\native\boost_thread-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_chrono-vc140.1.61.0.0\build\native\boost_chrono-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_chrono-vc140.1.61.0.0\build\native\boost_chrono-vc140.targets'))" />
-    <Error Condition="!Exists('packages\boost_program_options-vc140.1.61.0.0\build\native\boost_program_options-vc140.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\boost_program_options-vc140.1.61.0.0\build\native\boost_program_options-vc140.targets'))" />
-  </Target>
 </Project>

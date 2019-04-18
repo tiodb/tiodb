@@ -42,9 +42,6 @@
     <ResourceCompile Include="tioserver.rc" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <Filter Include="protocols">
       <UniqueIdentifier>{53bf1fc2-18f5-4921-bff4-6535d7f01f80}</UniqueIdentifier>
     </Filter>
