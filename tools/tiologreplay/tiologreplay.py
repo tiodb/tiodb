@@ -8,11 +8,9 @@ import datetime
 import argparse
 import bz2
 from collections import defaultdict
-from win32com.client import Dispatch
 
 import time
 import datetime
-import pywintypes
 import os.path
 
 if sys.platform == 'win32':
@@ -38,7 +36,7 @@ class LogEntry(object):
     t, command, handle, key_info, rest = fields
 
     size, key = self.__deserialize(key_info, rest)
-    rest = rest[size+1:]
+    rest = rest[size + 1:]
     value_info, rest = rest.split(',',1)
     size, value = self.__deserialize(value_info, rest)
 
@@ -171,12 +169,22 @@ class TioLoadToMemorySink(object):
 
 
 class TioReplaySink(object):
-  def __init__(self, hub_address, batch_size = 1):
+  def __init__(self, hub_address, batch_size=1, pause_server_on_load=False):
     self.tio = tioclient.connect(hub_address)
+
+    self.pause_server_on_load = pause_server_on_load
+
+    if self.pause_server_on_load:
+        self.tio.server_pause()
+
     self.containers = {}
     self.batch_size = batch_size
     if self.batch_size > 1:
       self.tio.wait_for_answers = False
+
+  def __del__(self):
+    if self.pause_server_on_load:
+        self.tio.server_resume()
 
   def on_log_entry(self, log_entry):
     if log_entry.command == 'create':
@@ -336,7 +344,7 @@ def change_speed_via_keyboard(current_speed):
         
         
 class TioLogParser(object):
-  def __init__(self, sink, keyboard_control = False):
+  def __init__(self, sink, keyboard_control=False):
     self.speed = 10
     self.sink = sink
     self.keyboard_control = keyboard_control
@@ -416,7 +424,7 @@ class TioLogParser(object):
           delta = time.time() - last_timestamp
           
           if delta < 1:
-            time.sleep(1-delta)
+            time.sleep(1 - delta)
 
           last_timestamp = time.time()
 
@@ -431,8 +439,7 @@ def main():
   argparser.add_argument('--speed', default=0, type=int, help='speed that messages will be send to tio. 0 = as fast as possible')
   argparser.add_argument('--keyboard-control', action='store_true', help='allow speed to be controlled via keyboard')
   argparser.add_argument('--log-step', default=10000, type=int, help='message interval that will be used to log progress on terminal')
-  argparser.add_argument('--delay', default=0, type=int, help='Message delay relative to original message time. ' +
-    'We will wait if necessary to make sure the message will be replicated XX second after the time message was written to log')
+  argparser.add_argument('--delay', default=0, type=int, help='Message delay relative to original message time. ' + 'We will wait if necessary to make sure the message will be replicated XX second after the time message was written to log')
   argparser.add_argument('--follow', action='store_true')
   argparser.add_argument('--pause', action='store_true', help='Pauses the server while loading. **This will disconnect all client during load time**')
 
@@ -442,16 +449,11 @@ def main():
     (params.file_path, params.tio, params.speed,
      '(follow file)' if params.follow else '', ' (pause server while loading)' if params.pause else '')
 
-  parser = TioLogParser(
-      TioReplaySink(params.tio, batch_size = params.log_step),
+  parser = TioLogParser(TioReplaySink(params.tio, batch_size = params.log_step),
       keyboard_control = params.keyboard_control)
 
-  if params.pause:
-    hub_sink.tio.pause()
-
   try:
-    parser.replay(
-      params.file_path,
+    parser.replay(params.file_path,
       params.delay,
       params.speed,
       params.delay,
