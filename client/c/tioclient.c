@@ -1728,7 +1728,9 @@ clean_up_and_return:
 unsigned long get_n_readable_bytes(SOCKET sock) 
 {
 	unsigned long n = (unsigned long)(-1);
-	if (ioctl(sock, FIONREAD, &n) < 0)
+
+
+	if (ioctlsocket(sock, FIONREAD, &n) < 0)
 	{
 		/* look in WSAGetLastError() for the error code */
 		return 0;
