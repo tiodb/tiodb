@@ -307,7 +307,35 @@ namespace tio
 			return tio_container_wait_and_pop_next((TIO_CONTAINER*)handle, event_callback, cookie);
 		}
 
+		void BeginNetworkBatch()
+		{
+			tio_begin_network_batch(connection_);
+		}
+
+		void FinishNetworkBatch()
+		{
+			tio_finish_network_batch(connection_);
+		}
+
 	public:
+
+		class TioScopedNetworkBatch : boost::noncopyable
+		{
+			Connection& connection_;
+		public:
+			TioScopedNetworkBatch(Connection& connection)
+				: connection_(connection)
+			{
+				connection_.BeginNetworkBatch();
+			}
+
+			~TioScopedNetworkBatch()
+			{
+				connection_.FinishNetworkBatch();
+			}
+		};
+
+
 		Connection() : connection_(nullptr), port_(0)
 		{
 			tio_initialize();
