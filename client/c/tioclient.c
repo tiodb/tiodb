@@ -1601,6 +1601,16 @@ int tio_container_send_command_and_get_data_response(
 	struct PR1_MESSAGE* response = NULL;
 	int result;
 
+	BOOL inside_network_batch = !container->connection->wait_for_answer;
+
+	//
+	// We must finish the network batch (i.e. get all server
+	// pending responses) before sending a command that will
+	// wait for a response
+	//
+	if (inside_network_batch)
+		tio_finish_network_batch(container->connection);
+
 	if(key) tiodata_set_as_none(key);
 	if(value) tiodata_set_as_none(value);
 	if(metadata) tiodata_set_as_none(metadata);
@@ -1627,6 +1637,10 @@ int tio_container_send_command_and_get_data_response(
 		pr1_message_field_get_as_tio_data(response, MESSAGE_FIELD_ID_METADATA, metadata);
 
 clean_up_and_return:
+	
+	if (inside_network_batch)
+		tio_begin_network_batch(container->connection);
+
 	pr1_message_delete(response);
 	return result;
 }
