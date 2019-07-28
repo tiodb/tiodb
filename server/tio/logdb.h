@@ -710,13 +710,13 @@ namespace logdb
 			return true;
 		}
 
-		std::auto_ptr<LDB_LOG_RECORD> LoadLogRecords(const LDB_BLOCK_HEADER_INFO& blockHeaderInfo)
+		std::unique_ptr<LDB_LOG_RECORD> LoadLogRecords(const LDB_BLOCK_HEADER_INFO& blockHeaderInfo)
 		{
 			if(blockHeaderInfo.blockHeader.usedCount == 0)
-				return std::auto_ptr<LDB_LOG_RECORD>();
+				return std::unique_ptr<LDB_LOG_RECORD>();
 
 			DWORD recordBufferSize = blockHeaderInfo.blockHeader.usedCount * sizeof(LDB_LOG_RECORD);
-			std::auto_ptr<LDB_LOG_RECORD> logRecords(new LDB_LOG_RECORD[blockHeaderInfo.blockHeader.usedCount]);
+			std::unique_ptr<LDB_LOG_RECORD> logRecords(new LDB_LOG_RECORD[blockHeaderInfo.blockHeader.usedCount]);
 
 			memset(logRecords.get(), 0, recordBufferSize);
 
@@ -763,7 +763,7 @@ namespace logdb
 			tableInfo.lastBlockHeaderInfo.blockHeader.size = _defaultBlockSize;
 			tableInfo.lastBlockHeaderInfo.blockHeader.usedCount = 0;
 
-			std::auto_ptr<unsigned char> buffer(new unsigned char[_defaultBlockSize]);
+			std::unique_ptr<unsigned char> buffer(new unsigned char[_defaultBlockSize]);
 			memset(buffer.get(), LOGDB_UNINITIALIZED_BYTE, _defaultBlockSize);
 			*((LDB_BLOCK_HEADER*)buffer.get()) = tableInfo.lastBlockHeaderInfo.blockHeader;
 
@@ -799,7 +799,7 @@ namespace logdb
 			//
 			// read log records to memory
 			//
-			std::auto_ptr<LDB_LOG_RECORD> logRecords = LoadLogRecords(tableInfo->lastBlockHeaderInfo);
+			std::unique_ptr<LDB_LOG_RECORD> logRecords = LoadLogRecords(tableInfo->lastBlockHeaderInfo);
 
 			LDB_LOG_RECORD* logRecord = NULL;
 
