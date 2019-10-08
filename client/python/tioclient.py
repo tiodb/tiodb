@@ -281,7 +281,8 @@ class TioServerConnection(object):
                 return None
             finally:
                 # this call with put the socket in blocking mode again
-                self.s.settimeout(None)
+                if timeout is not None:
+                    self.s.settimeout(None)
 
             i = self.receiveBuffer.find('\r\n')
 
