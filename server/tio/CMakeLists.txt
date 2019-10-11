@@ -1,45 +1,41 @@
-cmake_minimum_required(VERSION 3.8)
-project(tiodb)
+cmake_minimum_required (VERSION 3.15)
 
-set(CMAKE_CXX_STANDARD 17)
-set(Boost_USE_STATIC_LIBS   ON)
-set(BOOST_ROOT /Users/rodrigostrauss/Downloads/boost_1_64_0)
+include(LibBoost)
+include(Pch)
 
-find_package(Boost 1.64 COMPONENTS filesystem regex program_options system REQUIRED)
+set(CMAKE_CXX_STANDARD 11)
+set(Boost_USE_STATIC_LIBS ON)
+set(BOOST_ROOT ${CMAKE_SOURCE_DIR}/third_party/boost/boostlib)
 
+find_package(Boost 1.70 REQUIRED COMPONENTS filesystem regex program_options system date_time thread)
 
-INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
+# allow the source files to find headers in /src
+include_directories(${PROJECT_SOURCE_DIR}/src/server/tio)
 
+file(GLOB
+	SOURCE_FILES
+	*.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/*.h
+	${CMAKE_SOURCE_DIR}/submodules/http-parser/http_parser.c
+ 	${CMAKE_SOURCE_DIR}/client/c/tioclient.c
+)
 
-set(SOURCE_FILES
-        Container.h
-        FileSystemStorage.h
-        HttpParser.h
-        ListStorage.h
-        VectorStorage.h
-        logdb.h
-        LogDbStorage.h
-        MapStorage.h
-        MemoryPropertyMap.h
-        MemoryStorage.h
-        TioPython.h
-        TioTcpProtocol.h
-        VectorStorage.h
+set(PCH_EXCLUDE_FILES 
+	${CMAKE_SOURCE_DIR}/submodules/http-parser/http_parser.c
+	${CMAKE_SOURCE_DIR}/client/c/tioclient.c
+)
 
+add_executable(tio ${SOURCE_FILES})
 
+add_pch(tio pch.h pch.cpp SOURCE_FILES PCH_EXCLUDE_FILES)
 
-        TioPython.cpp
-
-        ../../submodules/http-parser/http_parser.c
-        ../../client/c/tioclient.c
-        Command.cpp
-        ContainerManager.cpp
-        TioTcpServer.cpp
-        TioTcpSession.cpp
-        tio.cpp
-        )
-
-
-add_executable(tiodb ${SOURCE_FILES})
-
-TARGET_LINK_LIBRARIES(tiodb ${Boost_LIBRARIES})
+target_link_libraries(tio
+	PUBLIC
+		Boost::filesystem
+		Boost::regex
+		Boost::program_options
+		Boost::system
+		Boost::date_time
+		Boost::thread
+		tioclient
+)

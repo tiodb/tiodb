@@ -1,0 +1,30 @@
+cmake_minimum_required (VERSION 3.5.1)
+project(libboost-download NONE)
+
+include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
+
+set(BOOSTLIB_PATH ${PROJECT_SOURCE_DIR})
+
+message("BOOST TOOLSET: @BOOST_TOOLSET@")
+
+message("Looking for Boost Lib sources in ${BOOSTLIB_PATH}")
+if(EXISTS "${BOOSTLIB_PATH}/boostlib"	AND IS_DIRECTORY "${BOOSTLIB_PATH}/boostlib")
+	message("Found Boost Lib")
+else()
+	message("Did not find Boost Lib! Fetching from web...")
+	ExternalProject_Add(
+		boostlib
+                URL                     https://dl.bintray.com/boostorg/release/1.70.0/source/boost_1_70_0.zip
+                PREFIX                  "${BOOSTLIB_PATH}"
+                SOURCE_DIR              "${BOOSTLIB_PATH}/boostlib"
+                TMP_DIR			"${BOOSTLIB_PATH}/download/tmp"
+                STAMP_DIR		"${BOOSTLIB_PATH}/download/stamp"
+		DOWNLOAD_DIR		"${BOOSTLIB_PATH}/download"
+                BINARY_DIR		"${BOOSTLIB_PATH}/download/build"
+                LOG_DIR			"${BOOSTLIB_PATH}/download/log"
+                CONFIGURE_COMMAND 	cd ${BOOSTLIB_PATH}/boostlib && call .\\bootstrap.bat
+                BUILD_COMMAND           cd ${BOOSTLIB_PATH}/boostlib && .\\b2 toolset=@BOOST_TOOLSET@ variant=debug,release threading=multi address-model=32,64 link=shared,static -j 8
+		INSTALL_COMMAND   	""
+		TEST_COMMAND      	""
+        )
+endif()

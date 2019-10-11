@@ -170,3 +170,5 @@ intelihubclient.sln
 intelihubclient.vcxproj
 intelihubclient.vcxproj.filters
 
+third_party/
+.vs/
