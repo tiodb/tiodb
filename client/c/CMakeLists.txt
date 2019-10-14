@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.5.1)
+cmake_minimum_required (VERSION 3.10)
 project(tioclient C)
 
 add_compile_definitions(WIN32 _WINDOWS _USRDLL tioclientdll_EXPORTS)

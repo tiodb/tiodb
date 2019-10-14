@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.5.1)
+cmake_minimum_required (VERSION 3.10)
 project (tiodb CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -17,3 +17,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
 
 add_subdirectory(client/c)
 add_subdirectory(server/tio)
+
+# tests
+add_subdirectory(tests/Integration/SubscribeTest)
+
+# submodules
+add_subdirectory(submodules/googletest)
