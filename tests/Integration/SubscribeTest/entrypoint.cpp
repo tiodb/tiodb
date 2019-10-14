@@ -11,7 +11,7 @@ TEST(SubscribeTest, ReceiveCallbackFromSubscription)
 	tio::Connection cn("127.0.0.1");
 	tio::containers::list<std::string> mycontainer;
 
-	mycontainer.create(&cn, "my_container", "volatile_list");
+	mycontainer.create(&cn, "test_subscribe_container", "volatile_list");
 	mycontainer.clear();
 
 	uint16_t eventsArrivedCount{};
@@ -31,6 +31,8 @@ TEST(SubscribeTest, ReceiveCallbackFromSubscription)
 
 	cn.WaitForNextEventAndDispatch(1);
 
+	cn.Disconnect();
+
 	ASSERT_THAT(eventsArrivedCount, testing::Eq(expectedEventsArrivedCount));
 }
 
@@ -39,6 +41,4 @@ int main(int argc, char** argv)
 	testing::InitGoogleMock(&argc, argv);
 
 	return RUN_ALL_TESTS();
-
-	return 0;
 }

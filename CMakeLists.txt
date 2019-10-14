@@ -20,6 +20,7 @@ add_subdirectory(server/tio)
 
 # tests
 add_subdirectory(tests/Integration/SubscribeTest)
+add_subdirectory(tests/Integration/TioBench)
 
 # submodules
 add_subdirectory(submodules/googletest)
