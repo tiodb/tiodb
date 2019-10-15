@@ -19,8 +19,12 @@ add_subdirectory(client/c)
 add_subdirectory(server/tio)
 
 # tests
-add_subdirectory(tests/Integration/SubscribeTest)
+add_subdirectory(tests/Integration/SubscriberTest)
 add_subdirectory(tests/Integration/TioBench)
+
+# benchmarks
+#add_subdirectory(benchmarks/SubscriberBench)
 
 # submodules
 add_subdirectory(submodules/googletest)
+add_subdirectory(submodules/benchmark)

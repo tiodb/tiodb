@@ -9,9 +9,8 @@ include_directories(${CMAKE_SOURCE_DIR}/client/cpp)
 include_directories(${CMAKE_SOURCE_DIR}/submodules/googletest/googlemock/include)
 
 set(SOURCE_FILES
-    entrypoint.cpp
+    subscribertest.cpp
     ${CMAKE_SOURCE_DIR}/client/c/tioclient.c
-    
 )
 
 # force gtest dynamically

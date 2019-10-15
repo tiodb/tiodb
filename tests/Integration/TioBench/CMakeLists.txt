@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-# TODO: Divide TioBench(Bechmark, Integration Test)
+# TODO: Divide TioBench(Bechmark, Integration Test...)
 
 project(TioBench)
 
@@ -9,11 +9,9 @@ include_directories(${CMAKE_SOURCE_DIR}/client/c)
 include_directories(${CMAKE_SOURCE_DIR}/client/cpp)
 
 set(SOURCE_FILES
-    entrypoint.cpp
+    tiobench.cpp
     ${CMAKE_SOURCE_DIR}/client/c/tioclient.c
 )
-
-# force gtest dynamically
 
 add_executable(TioBench ${SOURCE_FILES})
 

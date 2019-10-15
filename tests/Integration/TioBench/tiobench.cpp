@@ -11,6 +11,7 @@
 #include <utility>
 #include <atomic>
 #include <numeric>
+#include <map>
 
 using std::thread;
 using std::function;
@@ -32,6 +33,8 @@ using std::chrono::duration_cast;
 using std::chrono::milliseconds;
 
 static int assertiveEventCount = 0;
+
+using chrono_tp = std::chrono::high_resolution_clock::time_point;
 
 class TioTestRunner
 {
@@ -179,7 +182,7 @@ typedef int(*PERF_FUNCTION_C)(TIO_CONNECTION*, TIO_CONTAINER *, unsigned int);
 
 
 int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
-	PERF_FUNCTION_C perf_function, unsigned* persec)
+	PERF_FUNCTION_C perf_function, unsigned* persec, const std::string& container_name)
 {
 	int ret;
 
@@ -189,7 +192,13 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	if (TIO_FAILED(ret)) return ret;
 
 	auto delta = std::chrono::high_resolution_clock::now() - start;
-	*persec = (test_count * 1000) / std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+	auto time_elpased_in_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+	*persec = (test_count * 1000) / time_elpased_in_milliseconds;
+
+	std::cout 
+		<< "Container: " << container_name << "\n"
+		<< "Insertions elpased time: " << time_elpased_in_milliseconds << " ms" 
+		<< std::endl;
 
 	return ret;
 }
@@ -207,16 +216,13 @@ struct ContainerData
 };
 class TioTesterSubscriber
 {
-	using chrono_tp = std::chrono::high_resolution_clock::time_point;
-
 	vector<ContainerData> container_names_;
 	string host_name_;
 	thread thread_;
 	bool should_stop_;
 	uint64_t eventCount_;
-	bool run_sequence_test = true;
-	chrono_tp timerStart_;
-	chrono_tp timerEnd_;
+	bool run_sequence_test = false;
+	std::map<string, chrono_tp> containers_start_times_;
 public:
 	explicit TioTesterSubscriber(const string& host_name)
 		: host_name_(host_name)
@@ -258,8 +264,6 @@ public:
 	{
 		should_stop_ = false;
 
-		timerStart_ = std::chrono::high_resolution_clock::now();
-
 		thread_ = std::move(
 			thread([&]()
 		{
@@ -277,7 +281,8 @@ public:
 				
 				int startPosition = 0;
 
-				auto eventHandler = [this](const string& containerName, const string& eventName, const int& key, const string& value)
+				auto eventHandler = 
+					[this](const string& containerName, const string& eventName, const int& key, const string& value)
 				{
 					++this->eventCount_;
 					if (run_sequence_test)
@@ -309,8 +314,10 @@ public:
 							}
 						}
 					}
+
 				};
 
+				containers_start_times_.insert({ container_names_[i].name, std::chrono::high_resolution_clock::now() });
 				containers[i].subscribe(eventHandler, &startPosition);
 			}
 
@@ -319,18 +326,22 @@ public:
 				connection.WaitForNextEventAndDispatch(1);
 			}
 
-			timerEnd_ = std::chrono::high_resolution_clock::now();
-
-			connection.Disconnect();
-
-			auto timeDiff = std::chrono::duration_cast<std::chrono::milliseconds>(timerEnd_ - timerStart_);
-
+			// ostream not sync
 			for (auto& c : container_names_)
 			{
-				std::cout << "Container: " << c.name << ", ";
+				auto timer_end = std::chrono::high_resolution_clock::now();
+				auto timer_start = containers_start_times_[c.name];
+
+				auto delta = 
+					std::chrono::duration_cast<std::chrono::milliseconds>(timer_end - timer_start).count();
+
+				std::cout
+					<< "Container: " << c.name << ". "
+					<< "Callback elpased time: " << delta << " ms"
+					<< std::endl;
 			}
-			
-			std::cout << "Elpased time: " << timeDiff.count() << " ms" << std::endl;
+
+			connection.Disconnect();
 		}));
 	}
 
@@ -396,7 +407,7 @@ public:
 		tio::containers::list<string> container;
 		container.create(&connection, container_name_, container_type_);
 
-		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_);
+		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_, container_name_);
 
 		container.clear();
 	}
@@ -660,6 +671,10 @@ void TEST_data_stress_test(const char* hostname,
 		cout << test_description << ": " << persec << " ops/sec (baseline)" << endl;
 	}
 
+	cout <<
+		"====================================================================================\n";
+
+	// Other test
 	for (unsigned client_count = 1; client_count <= max_client_count; client_count *= 2)
 	{
 		for (unsigned subscriber_count = 0; subscriber_count <= max_subscribers; subscriber_count *= 2)
@@ -721,10 +736,13 @@ void TEST_data_stress_test(const char* hostname,
 
 			if (subscriber_count == 0)
 				subscriber_count = 1;
+
+			cout <<
+				"====================================================================================\n";
 		}
 	}
 
-
+	// Other test
 	for (int client_count = 1; client_count <= 1024; client_count *= 2)
 	{
 		TioTestRunner runner;
@@ -758,6 +776,9 @@ void TEST_data_stress_test(const char* hostname,
 		}
 
 		cout << "total " << total << " ops/sec" << endl;
+
+		cout <<
+			"====================================================================================\n";
 	}
 }
 
@@ -804,34 +825,32 @@ int main()
 			MAX_SUBSCRIBERS,
 			CONTAINER_TEST_ITEM_COUNT);
 
-		////
-		//// DEADLOCK ON DISCONNECT
-		////
-		//TEST_deadlock_on_disconnect(hostname);
+		//
+		// DEADLOCK ON DISCONNECT
+		//
+		TEST_deadlock_on_disconnect(hostname);
 
-		////
-		//// LOTS OF CONNECTIONS
-		////
-		//TEST_connection_stress(hostname, CONNECTION_STRESS_TEST_COUNT);
+		//
+		// LOTS OF CONNECTIONS
+		//
+		TEST_connection_stress(hostname, CONNECTION_STRESS_TEST_COUNT);
 
-		////
-		//// CONCURRENCY
-		////
-		//TEST_container_concurrency(
-		//	hostname,
-		//	MAX_CLIENTS,
-		//	CONCURRENCY_TEST_ITEM_COUNT,
-		//	"volatile_map",
-		//	map_perf_test_c);
+		//
+		// CONCURRENCY
+		//
+		TEST_container_concurrency(
+			hostname,
+			MAX_CLIENTS,
+			CONCURRENCY_TEST_ITEM_COUNT,
+			"volatile_map",
+			map_perf_test_c);
 
-		//TEST_container_concurrency(
-		//	hostname,
-		//	MAX_CLIENTS,
-		//	CONCURRENCY_TEST_ITEM_COUNT,
-		//	"volatile_list",
-		//	vector_perf_test_c);
-
-
+		TEST_container_concurrency(
+			hostname,
+			MAX_CLIENTS,
+			CONCURRENCY_TEST_ITEM_COUNT,
+			"volatile_list",
+			vector_perf_test_c);
 
 		return 0;
 
