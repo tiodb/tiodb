@@ -9,14 +9,14 @@
 TEST(SubscriberTest, ReceiveCallbackFromSubscription)
 {
 	tio::Connection cn("127.0.0.1");
-	tio::containers::list<std::string> mycontainer;
+	tio::containers::list<std::string> listContainer;
 
-	mycontainer.create(&cn, "test_subscribe_container", "volatile_list");
-	mycontainer.clear();
+	listContainer.create(&cn, "test_subscribe_container", "volatile_list");
+	listContainer.clear();
 
 	uint16_t eventsArrivedCount{};
 
-	mycontainer.subscribe(
+	listContainer.subscribe(
 	[&eventsArrivedCount](const std::string& containerName, const std::string& eventName, const int& key, const std::string& value)
 	{
 		eventsArrivedCount++;
@@ -26,7 +26,7 @@ TEST(SubscriberTest, ReceiveCallbackFromSubscription)
 
 	for (uint16_t i = 1; i <= expectedEventsArrivedCount; ++i)
 	{
-		mycontainer.push_back("v_" + std::to_string(i));
+		listContainer.push_back("v_" + std::to_string(i));
 	}
 
 	cn.WaitForNextEventAndDispatch(1);

@@ -47,9 +47,9 @@ static void BM_InsertionsOnListWithOneClient(benchmark::State& state)
 	
 	cn.Disconnect();
 }
-BENCHMARK(BM_InsertionsOnListWithOneClient)->Arg(1);
-//->RangeMultiplier(2)
-//->Range(8, 8 << 10);
+BENCHMARK(BM_InsertionsOnListWithOneClient)
+->RangeMultiplier(2)
+->Range(8, 8 << 10);
 
 static void BM_InsertionsOnListWithTwoClients(benchmark::State& state)
 {
