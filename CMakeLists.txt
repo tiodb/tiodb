@@ -23,7 +23,10 @@ add_subdirectory(tests/Integration/SubscriberTest)
 add_subdirectory(tests/Integration/TioBench)
 
 # benchmarks
-#add_subdirectory(benchmarks/SubscriberBench)
+set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+add_subdirectory(benchmarks/Integration/InsertionsBench)
+add_subdirectory(benchmarks/Integration/SubscriberBench)
 
 # submodules
 add_subdirectory(submodules/googletest)

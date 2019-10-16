@@ -196,8 +196,8 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	*persec = (test_count * 1000) / time_elpased_in_milliseconds;
 
 	std::cout 
-		<< "Container: " << container_name << "\n"
-		<< "Insertions elpased time: " << time_elpased_in_milliseconds << " ms" 
+		<< "Container: " << container_name
+		<< ". Insertions elpased time: " << time_elpased_in_milliseconds << " ms"
 		<< std::endl;
 
 	return ret;
@@ -576,7 +576,7 @@ void TEST_container_concurrency(
 
 		const char* errorMessage = (c.size() != (items_per_thread * client_count)) ? " LOST RECORDS!" : "";
 
-		cout << delta_ms << "ms (" << persec << "k/s)" << errorMessage << endl;
+		cout << delta_ms << "ms (" << "items_per_second= " << persec << "k/s)" << errorMessage << endl;
 	}
 
 	cout << "FINISH: container concurrency test" << endl;
