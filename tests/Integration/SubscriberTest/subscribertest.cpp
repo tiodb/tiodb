@@ -6,7 +6,7 @@
 #include "tioclient.hpp"
 #include "gmock/gmock.h"
 
-TEST(SubscribeTest, ReceiveCallbackFromSubscription)
+TEST(SubscriberTest, ReceiveCallbackFromSubscription)
 {
 	tio::Connection cn("127.0.0.1");
 	tio::containers::list<std::string> mycontainer;
