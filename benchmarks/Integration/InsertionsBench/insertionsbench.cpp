@@ -16,7 +16,7 @@ static void BM_InsertionsOnListWithOneClient(benchmark::State& state)
 
 	// work loop
 	for (auto _ : state) {
-		for (uint16_t i = 0; i < state.range(0); ++i)
+		for (uint32_t i = 0; i < state.range(0); ++i)
 		{
 			listContainer.push_back("v_" + std::to_string(i));
 		}
@@ -47,9 +47,9 @@ static void BM_InsertionsOnListWithOneClient(benchmark::State& state)
 	
 	cn.Disconnect();
 }
-BENCHMARK(BM_InsertionsOnListWithOneClient)
-->RangeMultiplier(2)
-->Range(8, 8 << 10);
+BENCHMARK(BM_InsertionsOnListWithOneClient)->Arg(1);
+//->RangeMultiplier(2)
+//->Range(8, 8 << 10);
 
 static void BM_InsertionsOnListWithTwoClients(benchmark::State& state)
 {
@@ -64,7 +64,7 @@ static void BM_InsertionsOnListWithTwoClients(benchmark::State& state)
 
 	// work loop
 	for (auto _ : state) {
-		for (uint16_t i = 0; i < state.range(0); ++i)
+		for (uint32_t i = 0; i < state.range(0); ++i)
 		{
 			listContainer.push_back("v_" + std::to_string(i));
 		}

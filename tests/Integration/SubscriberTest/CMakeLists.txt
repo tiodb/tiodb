@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(SubscribeTest)
+project(SubscriberTest)
 
 # allow the source files to find headers
 include_directories(${CMAKE_SOURCE_DIR}/client/c)
@@ -16,9 +16,9 @@ set(SOURCE_FILES
 # force gtest dynamically
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 
-add_executable(SubscribeTest ${SOURCE_FILES})
+add_executable(SubscriberTest ${SOURCE_FILES})
 
-target_link_libraries(SubscribeTest
+target_link_libraries(SubscriberTest
     PUBLIC
         tioclient
         gmock
