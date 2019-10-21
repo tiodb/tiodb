@@ -5,12 +5,14 @@
 #include "../../client/c/tioclient_internals.h"
 #include <iostream>     // std::cout
 #include <sstream>      // std::stringstream
+#include <map>
 
 using std::thread;
 using std::function;
 using std::vector;
 using std::string;
 using std::pair;
+using std::map;
 using std::to_string;
 using std::unique_ptr;
 using std::make_unique;
@@ -24,6 +26,8 @@ using std::endl;
 using std::chrono::high_resolution_clock;
 using std::chrono::duration_cast;
 using std::chrono::milliseconds;
+
+using chrono_tp = std::chrono::high_resolution_clock::time_point;
 
 static int assertiveEventCount = 0;
 
@@ -173,7 +177,7 @@ typedef int(*PERF_FUNCTION_C)(TIO_CONNECTION*, TIO_CONTAINER *, unsigned int);
 
 
 int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
-	PERF_FUNCTION_C perf_function, unsigned* persec)
+	PERF_FUNCTION_C perf_function, unsigned* persec, const std::string& container_name)
 {
 	int ret;
 
@@ -183,7 +187,13 @@ int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
 	if (TIO_FAILED(ret)) return ret;
 
 	auto delta = std::chrono::high_resolution_clock::now() - start;
-	*persec = (test_count * 1000) / std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+	auto time_elpased_in_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+	*persec = (test_count * 1000) / time_elpased_in_milliseconds;
+
+	std::cout
+		<< "Container: " << container_name
+		<< ". Insertions elpased time: " << time_elpased_in_milliseconds << " ms"
+		<< std::endl;
 
 	return ret;
 }
@@ -212,8 +222,8 @@ class TioTesterSubscriber
 	bool should_stop_;
 	uint64_t eventCount_;
 	bool run_sequence_test = true;
+	map<string, chrono_tp> containers_start_times_;
 public:
-
 	TioTesterSubscriber(const string& host_name)
 		: host_name_(host_name)
 		, should_stop_(false)
@@ -305,12 +315,28 @@ public:
 					}
 				};
 
+				containers_start_times_.insert({ container_names_[i].name, std::chrono::high_resolution_clock::now() });
 				containers[i].subscribe(eventHandler, &startPosition);
 			}
 
 			while (!should_stop_)
 			{
 				connection.WaitForNextEventAndDispatch(1);
+			}
+
+			// ostream not sync
+			for (auto& c : container_names_)
+			{
+				auto timer_end = std::chrono::high_resolution_clock::now();
+				auto timer_start = containers_start_times_[c.name];
+
+				auto delta =
+					std::chrono::duration_cast<std::chrono::milliseconds>(timer_end - timer_start).count();
+
+				std::cout
+					<< "Container: " << c.name << ". "
+					<< "Callback elpased time: " << delta << " ms"
+					<< std::endl;
 			}
 
 			connection.Disconnect();
@@ -380,7 +406,7 @@ public:
 		tio::containers::list<string> container;
 		container.create(&connection, container_name_, container_type_);
 
-		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_);
+		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_, container_name_);
 
 		container.clear();
 	}
@@ -549,7 +575,7 @@ void TEST_container_concurrency(
 
 		const char* errorMessage = (c.size() != (items_per_thread * client_count)) ? " LOST RECORDS!" : "";
 
-		cout << delta_ms << "ms (" << persec << "k/s)" << errorMessage << endl;
+		cout << delta_ms << "ms (" << "items_per_second= " << persec << "k/s)" << errorMessage << endl;
 	}
 
 	cout << "FINISH: container concurrency test" << endl;
