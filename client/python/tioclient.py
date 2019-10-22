@@ -784,7 +784,7 @@ def test_async_ping():
     tio = connect('tio://127.0.0.1')
     ret = tio.ping(5)
     if ret is None:
-        print("Tio not answer")
+        print("Tio did not answer")
     else:
         print("OK")
 
