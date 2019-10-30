@@ -2,39 +2,40 @@
 #include "tioclient.h"
 #include "tioclient.hpp"
 #include "tioclient_internals.h"
-#include <iostream>     // std::cout
-#include <sstream>      // std::stringstream
-#include <thread>
-#include <vector>
-#include <algorithm>
-#include <unordered_map>
-#include <utility>
 #include <atomic>
-#include <numeric>
+#include <chrono>
+#include <functional>
+#include <iostream> // std::cout
 #include <map>
+#include <sstream> // std::stringstream
+#include <thread>
+#include <unordered_map>
+#include <numeric>
+#include <vector>
 
-using std::thread;
-using std::function;
-using std::vector;
-using std::string;
-using std::pair;
-using std::to_string;
-using std::unique_ptr;
-using std::make_unique;
-using std::unordered_map;
 using std::accumulate;
 using std::atomic;
+using std::function;
+using std::make_unique;
+using std::map;
+using std::pair;
+using std::string;
+using std::thread;
+using std::to_string;
+using std::unique_ptr;
+using std::unordered_map;
+using std::vector;
 
 using std::cout;
 using std::endl;
 
-using std::chrono::high_resolution_clock;
 using std::chrono::duration_cast;
+using std::chrono::high_resolution_clock;
 using std::chrono::milliseconds;
 
-static int assertiveEventCount = 0;
-
 using chrono_tp = std::chrono::high_resolution_clock::time_point;
+
+static int assertiveEventCount = 0;
 
 class TioTestRunner
 {
@@ -182,23 +183,27 @@ typedef int(*PERF_FUNCTION_C)(TIO_CONNECTION*, TIO_CONTAINER *, unsigned int);
 
 
 int measure(TIO_CONNECTION* cn, TIO_CONTAINER* container, unsigned test_count,
-	PERF_FUNCTION_C perf_function, unsigned* persec, const std::string& container_name)
+	PERF_FUNCTION_C perf_function, unsigned* persec, const std::string& container_name, 
+	chrono_tp* start_time = nullptr, chrono_tp* end_time = nullptr)
 {
 	int ret;
-
-    auto start = std::chrono::high_resolution_clock::now();
-
+	
+	auto start = std::chrono::high_resolution_clock::now();
+	if (start_time != nullptr) {
+		*start_time = start;
+	}
+    
 	ret = perf_function(cn, container, test_count);
 	if (TIO_FAILED(ret)) return ret;
 
-	auto delta = std::chrono::high_resolution_clock::now() - start;
+	auto end = std::chrono::high_resolution_clock::now();
+	auto delta = end - start;
 	auto time_elpased_in_milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
 	*persec = (test_count * 1000) / time_elpased_in_milliseconds;
 
-	std::cout 
-		<< "Container: " << container_name
-		<< ". Insertions elpased time: " << time_elpased_in_milliseconds << " ms"
-		<< std::endl;
+	if (end_time != nullptr) {
+		*end_time = end;
+	}
 
 	return ret;
 }
@@ -222,9 +227,10 @@ class TioTesterSubscriber
 	bool should_stop_;
 	uint64_t eventCount_;
 	bool run_sequence_test = false;
-	std::map<string, chrono_tp> containers_start_times_;
+	map<string, chrono_tp> containers_start_times_;
+	map<string, size_t> deltas_;
 public:
-	explicit TioTesterSubscriber(const string& host_name)
+	TioTesterSubscriber(const string& host_name)
 		: host_name_(host_name)
 		, should_stop_(false)
 		, eventCount_(0)
@@ -249,6 +255,8 @@ public:
 	{
 		assert(!thread_.joinable());
 	}
+
+	map<string, size_t> deltas() const { return deltas_; }
 
 	void add_container(const string& name, const string& type)
 	{
@@ -281,8 +289,7 @@ public:
 				
 				int startPosition = 0;
 
-				auto eventHandler = 
-					[this](const string& containerName, const string& eventName, const int& key, const string& value)
+				auto eventHandler = [this](const string& containerName, const string& eventName, const int& key, const string& value)
 				{
 					++this->eventCount_;
 					if (run_sequence_test)
@@ -314,7 +321,6 @@ public:
 							}
 						}
 					}
-
 				};
 
 				containers_start_times_.insert({ container_names_[i].name, std::chrono::high_resolution_clock::now() });
@@ -326,22 +332,19 @@ public:
 				connection.WaitForNextEventAndDispatch(1);
 			}
 
-			// ostream not sync
 			for (auto& c : container_names_)
 			{
 				auto timer_end = std::chrono::high_resolution_clock::now();
 				auto timer_start = containers_start_times_[c.name];
 
-				auto delta = 
+				auto delta =
 					std::chrono::duration_cast<std::chrono::milliseconds>(timer_end - timer_start).count();
 
-				std::cout
-					<< "Container: " << c.name << ". "
-					<< "Callback elpased time: " << delta << " ms"
-					<< std::endl;
+				deltas_.insert({ c.name, delta });
 			}
 
 			connection.Disconnect();
+
 		}));
 	}
 
@@ -382,6 +385,9 @@ class TioStressTest
 	PERF_FUNCTION_C perf_function_;
 	unsigned test_count_;
 	unsigned* persec_;
+
+	chrono_tp* start_time_;
+	chrono_tp* end_time_;
 public:
 
 	TioStressTest(
@@ -390,13 +396,17 @@ public:
 		const string& container_type,
 		PERF_FUNCTION_C perf_function,
 		unsigned test_count,
-		unsigned* persec)
+		unsigned* persec,
+		chrono_tp* start_time = nullptr,
+		chrono_tp* end_time = nullptr)
 		: host_name_(host_name)
 		, container_name_(container_name)
 		, container_type_(container_type)
 		, perf_function_(perf_function)
 		, test_count_(test_count)
 		, persec_(persec)
+		, start_time_(start_time)
+		, end_time_(end_time)
 	{
 
 	}
@@ -407,7 +417,7 @@ public:
 		tio::containers::list<string> container;
 		container.create(&connection, container_name_, container_type_);
 
-		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_, container_name_);
+		measure(connection.cnptr(), container.handle(), test_count_, perf_function_, persec_, container_name_, start_time_, end_time_);
 
 		container.clear();
 	}
@@ -635,17 +645,22 @@ void TEST_create_lots_of_containers(const char* hostname,
 	containers.clear();
 }
 
+struct BenchTimer {
+	chrono_tp start_time;
+	chrono_tp end_time;
+};
 
 void TEST_data_stress_test(const char* hostname,
 	unsigned max_client_count,
 	unsigned max_subscribers,
 	unsigned item_count)
-{
-	cout << "START: data stress test, "
+{	
+	cout << "==================================" << " BEGIN TEST " << "==================================\n";
+	cout << "data stress test, "
 		<< "MAX_CLIENTS=" << max_client_count
 		<< ", MAX_SUBSCRIBERS=" << max_subscribers
 		<< ", ITEM_COUNT=" << item_count
-		<< endl;
+		<< "\n";
 
 	int baseline = 0;
 
@@ -655,6 +670,8 @@ void TEST_data_stress_test(const char* hostname,
 		string test_description = "single volatile list, one client";
 		unsigned persec;
 
+		BenchTimer bench_timer;
+
 		runner.add_test(
 			TioStressTest(
 				hostname,
@@ -662,30 +679,27 @@ void TEST_data_stress_test(const char* hostname,
 				"volatile_list",
 				&vector_perf_test_c,
 				item_count,
-				&persec));
+				&persec,
+				&bench_timer.start_time,
+				&bench_timer.end_time));
 
 		runner.run();
 
 		baseline = persec;
 
-		cout << test_description << ": " << persec << " ops/sec (baseline)" << endl;
+		cout << test_description << ": " << persec << " ops/sec (baseline)" << "\n";
 	}
 
-	cout <<
-		"====================================================================================\n";
-
-	// Other test
 	for (unsigned client_count = 1; client_count <= max_client_count; client_count *= 2)
 	{
 		for (unsigned subscriber_count = 0; subscriber_count <= max_subscribers; subscriber_count *= 2)
 		{
 			TioTestRunner runner;
 
-			string test_description = "single volatile list, clients=" + to_string(client_count) +
-				", subscribers=" + to_string(subscriber_count);
 			vector<unique_ptr<TioTesterSubscriber>> subscribers;
 
 			vector<unsigned> persec(client_count);
+			vector<BenchTimer> bench_timers(client_count);
 
 			string container_name = generate_container_name();
 			string container_type = "volatile_list";
@@ -699,7 +713,9 @@ void TEST_data_stress_test(const char* hostname,
 						container_type,
 						&vector_perf_test_c,
 						item_count,
-						&persec[a]));
+						&persec[a],
+						&bench_timers[a].start_time,
+						&bench_timers[a].end_time));
 			}
 
 			for (unsigned a = 0; a < subscriber_count; a++)
@@ -720,29 +736,51 @@ void TEST_data_stress_test(const char* hostname,
 				subscriber->join();
 			}
 
-			cout << test_description << ": ";
+			int inserts_ms{};
+			for (const auto& inserts : bench_timers) {
+				const auto delta = inserts.end_time - inserts.start_time;
+				inserts_ms += std::chrono::duration_cast<std::chrono::milliseconds>(delta).count();
+			}
+			auto inserts_average = inserts_ms / bench_timers.size();
 
+			int callbacks_ms{};
+			for (const auto& s : subscribers) {
+				const auto ms = s->deltas()[container_name];
+
+				callbacks_ms += ms;
+			}
+			int callbacks_average{};
+			if(subscribers.size() > 0)
+				callbacks_average= callbacks_ms / subscribers.size();
+
+			cout 
+				<< "single volatile list " << "\n" 
+				<< "Clients: " << client_count << "\n"
+				<< "Subscribers: " << subscriber_count << "\n";
+				
 			int total = accumulate(cbegin(persec), cend(persec), 0);
 
 			float vs_baseline = ((float)total / baseline) * 100.0f;
+			
+			cout
+				<< "Average of inserts: " << inserts_average << " ms" << "\n"
+				<< "Average of callbacks: " << callbacks_average << " ms" << "\n";
 
-			cout << "total " << total << " ops/sec"
-				<< ", perf vs baseline=" << vs_baseline << "% - ";
+			cout 
+				<< "Total: " << total << " ops/sec" << "\n"
+				<< "perf vs baseline: " << vs_baseline << "% - ";
 
 			for (unsigned p : persec)
 				cout << p << ",";
 
-			cout << endl;
+			cout << "\n----------------------------------------\n";
 
 			if (subscriber_count == 0)
 				subscriber_count = 1;
-
-			cout <<
-				"====================================================================================\n";
 		}
 	}
 
-	// Other test
+
 	for (int client_count = 1; client_count <= 1024; client_count *= 2)
 	{
 		TioTestRunner runner;
@@ -776,10 +814,9 @@ void TEST_data_stress_test(const char* hostname,
 		}
 
 		cout << "total " << total << " ops/sec" << endl;
-
-		cout <<
-			"====================================================================================\n";
 	}
+
+	cout << "==================================" << " END TEST " << "==================================\n";
 }
 
 
@@ -807,10 +844,10 @@ int main()
 	//
 	unsigned CONNECTION_STRESS_TEST_COUNT = 5 * 1000;
 	unsigned MAX_SUBSCRIBERS = 64;
-	unsigned CONTAINER_TEST_COUNT = 10 * 1000;
-	unsigned CONTAINER_TEST_ITEM_COUNT = 100 * 1000;
+	unsigned CONTAINER_TEST_COUNT = 1 * 1000;
+	unsigned CONTAINER_TEST_ITEM_COUNT = 5 * 1000;
 
-	unsigned CONCURRENCY_TEST_ITEM_COUNT = 250 * 1000;
+	unsigned CONCURRENCY_TEST_ITEM_COUNT = 50 * 1000;
 #endif
 
 	auto hostname = "localhost";
@@ -852,6 +889,8 @@ int main()
 			"volatile_list",
 			vector_perf_test_c);
 
+
+
 		return 0;
 
 
@@ -889,5 +928,5 @@ int main()
 
 	//measure(cn, TEST_COUNT, &map_perf_test, "map_perf_test");
 
-	return 0;
+    return 0;
 }

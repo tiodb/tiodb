@@ -22,7 +22,7 @@ TEST(SubscriberTest, ReceiveCallbackFromSubscription)
 		eventsArrivedCount++;
 	});
 
-	const uint16_t expectedEventsArrivedCount = 5;
+	constexpr uint16_t expectedEventsArrivedCount = 5;
 
 	for (uint16_t i = 1; i <= expectedEventsArrivedCount; ++i)
 	{

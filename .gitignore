@@ -172,3 +172,5 @@ intelihubclient.vcxproj.filters
 
 third_party/
 .vs/
+.cquery
+compile_commands.json
