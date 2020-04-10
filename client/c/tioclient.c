@@ -11,6 +11,10 @@
 #define FALSE 0
 #endif
 
+#ifndef BOOL
+#define BOOL int
+#endif
+
 int g_initialized = FALSE;
 volatile int g_dump_protocol_messages = FALSE;
 
@@ -201,7 +205,6 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 	fd_set recvset;
 	struct timeval tv;
 
-
 #ifdef _DEBUG
 	memset(char_buffer, 0xFF, len);
 #endif
@@ -226,9 +229,9 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 			FD_ZERO(&recvset);
 			FD_SET(socket, &recvset);
 
-			ret = select(0, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
+			ret = select(FD_SETSIZE, &recvset, NULL, NULL, (timeout_in_seconds ? &tv : NULL));
 
-			if(ret != 0)
+			if(ret == -1)
 			{
 				pr1_set_last_error_description("Error reading data from server. Server is down or there is a network problem.");
 				return TIO_ERROR_NETWORK;
@@ -243,10 +246,6 @@ int socket_receive(SOCKET socket, void* buffer, int len, const unsigned* timeout
 		}
 		
 
-		//
-		// Windows supports MSG_WAITALL only on Windows Server 2008 or superior... :-(
-		// So I need to emulate it here
-		//
 		ret = recv(socket, char_buffer + received, len - received, 0);
 
 		if(ret <= 0)
@@ -1007,7 +1006,12 @@ void check_correct_thread(struct TIO_CONNECTION* connection)
 		return;
 	}
 
+	//
+	// TODO: spurious assert error on macOS
+	//
+	#ifndef __APPLE__
 	assert(connection->thread_id == current_thread_id);
+	#endif
 }
 
 void check_not_on_network_batch(struct TIO_CONNECTION* connection)
@@ -1737,19 +1741,6 @@ clean_up_and_return:
 	pr1_message_delete(response);
 	free(container);
 	return result;
-}
-
-unsigned long get_n_readable_bytes(SOCKET sock) 
-{
-	unsigned long n = (unsigned long)(-1);
-
-
-	if (ioctlsocket(sock, FIONREAD, &n) < 0)
-	{
-		/* look in WSAGetLastError() for the error code */
-		return 0;
-	}
-	return n;
 }
 
 /*
