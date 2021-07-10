@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(Boost_USE_STATIC_LIBS   ON)
 set(BOOST_ROOT /Users/rodrigostrauss/Downloads/boost_1_64_0)
 
-find_package(Boost 1.64 COMPONENTS filesystem regex program_options system REQUIRED)
+find_package(Boost 1.64 COMPONENTS filesystem regex program_options system date_time REQUIRED)
 
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR})
